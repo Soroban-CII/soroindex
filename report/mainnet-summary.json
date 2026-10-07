@@ -130,5 +130,11 @@
     },
     "undeclared_gap": 72
   },
+  "instance_archival": {
+    "archived": 74959,
+    "of": 156173,
+    "ledger": 64818399,
+    "source": "seeding the census population"
+  },
   "decision": "\u003c 1%: README headline \"Interface index + adoption tracker\" with outreach in \"How to help\"; Phase 2 deferred."
 }

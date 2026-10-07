@@ -26,7 +26,7 @@ Run: 2026-10-07T12:09:34Z, latest ledger 64817831. Parser version 1; rules sep41
 | Wasm by CAP-85 reference | 0 | 0.00% |
 | … distinct references they share | 0 | |
 | … references unresolved | 0 | |
-| Instances archived (sample only) | 0 | 0.00% |
+| Instances archived (measured by seeding the census population at ledger 64818399) | 74959 of 156173 | 48.00% |
 | Instance rows that failed to decode | 0 | |
 | Wasm contracts whose code is archived or missing | 10154 | |
 | Wasm contracts measured (by-contract denominator) | 141977 | |
@@ -101,7 +101,7 @@ Run: 2026-10-07T06:37:37Z, latest ledger 5066292. Parser version 1; rules sep41-
 | Wasm by CAP-85 reference | 9 | 0.45% |
 | … distinct references they share | 9 | |
 | … references unresolved | 0 | |
-| Instances archived (sample only) | 37 | 1.85% |
+| Instances archived | 37 | 1.85% |
 | Instance rows that failed to decode | 0 | |
 | Wasm contracts whose code is archived or missing | 76 | |
 | Wasm contracts measured (by-contract denominator) | 1775 | |
