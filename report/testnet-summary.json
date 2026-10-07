@@ -1,12 +1,12 @@
 {
   "network": "testnet",
-  "generated_at": "2026-10-07T03:12:23Z",
-  "latest_ledger": 5063829,
+  "generated_at": "2026-10-07T06:37:37Z",
+  "latest_ledger": 5066292,
   "parser_version": "1",
   "ruleset_versions": [
     "sep41-v0.5.2"
   ],
-  "method": "Sample, not a census: Hubble does not cover testnet. The RPC retention window (ledgers 4942229–5063188) was split into 20 equal strata; each was scanned from its start with getLedgers until it gave its share of contracts not seen before. A contract enters the sample when its instance entry is created or updated in a scanned ledger, so active contracts are more likely to be drawn than idle ones. Each sampled contract's current instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.",
+  "method": "Sample, not a census: Hubble does not cover testnet. The RPC retention window (ledgers 4944777–5065736) was split into 20 equal strata; each was scanned from its start with getLedgers until it gave its share of contracts not seen before. A contract enters the sample when its instance entry is created or updated in a scanned ledger, so active contracts are more likely to be drawn than idle ones. Each sampled contract's current instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.",
   "limits": {
     "MaxWasmBytes": 1048576,
     "MaxSectionBytes": 262144,
@@ -15,45 +15,45 @@
   },
   "contracts": {
     "total": 2000,
-    "sac": 114,
-    "wasm": 1820,
-    "wasm_ref": 10,
-    "wasm_ref_distinct_refs": 10,
+    "sac": 112,
+    "wasm": 1842,
+    "wasm_ref": 9,
+    "wasm_ref_distinct_refs": 9,
     "wasm_ref_unresolved": 0,
-    "archived_instances": 56,
+    "archived_instances": 37,
     "instance_decode_errors": 0,
-    "measured": 1758
+    "measured": 1775
   },
   "hashes": {
     "code_entries": 0,
     "code_deleted": 0,
-    "population": 576,
-    "archived": 11,
-    "measured": 565,
-    "parse_ok": 565,
+    "population": 505,
+    "archived": 26,
+    "measured": 479,
+    "parse_ok": 479,
     "parse_partial": 0,
     "parse_error": 0,
-    "used_by_a_contract": 565
+    "used_by_a_contract": 479
   },
   "declares_any": {
     "by_hash": {
       "n": 0,
-      "of": 565,
+      "of": 479,
       "pct": 0
     },
     "by_contract": {
       "n": 0,
-      "of": 1758,
+      "of": 1775,
       "pct": 0
     },
     "wilson95_by_contract": {
       "low_pct": 0,
-      "high_pct": 0.21803657766490767
+      "high_pct": 0.21595284962836822
     }
   },
   "with_spec_by_hash": {
-    "n": 565,
-    "of": 565,
+    "n": 479,
+    "of": 479,
     "pct": 100
   },
   "per_sep": [],
@@ -61,38 +61,38 @@
   "sep41": {
     "status": {
       "match": {
-        "hashes": 34,
-        "contracts": 121
+        "hashes": 17,
+        "contracts": 100
       },
       "mismatch": {
-        "hashes": 507,
-        "contracts": 1517
+        "hashes": 441,
+        "contracts": 1510
       },
       "no_spec": {
         "hashes": 0,
         "contracts": 0
       },
       "partial": {
-        "hashes": 24,
-        "contracts": 120
+        "hashes": 21,
+        "contracts": 165
       }
     },
     "ok_histogram": [
-      460,
-      29,
-      11,
-      1,
+      405,
+      24,
+      6,
+      0,
       6,
       2,
-      1,
       0,
-      21,
       0,
-      34
+      15,
+      4,
+      17
     ],
     "undeclared_gap": {
-      "hashes": 34,
-      "contracts": 121
+      "hashes": 17,
+      "contracts": 100
     },
     "declared_41_by_status": {
       "match": {
@@ -113,11 +113,20 @@
       }
     }
   },
+  "used_hashes": {
+    "declaring": 0,
+    "sep41_status": {
+      "match": 17,
+      "mismatch": 441,
+      "partial": 21
+    },
+    "undeclared_gap": 17
+  },
   "sample": {
-    "OldestLedger": 4942229,
-    "LatestLedger": 5063188,
+    "OldestLedger": 4944777,
+    "LatestLedger": 5065736,
     "Strata": 20,
-    "LedgersScanned": 22950,
+    "LedgersScanned": 19600,
     "PerStratum": [
       100,
       100,
