@@ -25,7 +25,7 @@ import (
 
 func init() {
 	commands["sync"] = command{
-		summary: "seed the index or recompute matches (incremental sync: stage F)",
+		summary: "seed the index or recompute matches (incremental sync is planned)",
 		run:     runSync,
 	}
 }
@@ -51,7 +51,7 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 	if *seed == "" && !*recompute {
-		errorf(stderr, "sep47idx sync: pass --seed and/or --recompute (incremental sync from --start-ledger arrives with stage F)\n")
+		errorf(stderr, "sep47idx sync: pass --seed and/or --recompute (incremental sync from --start-ledger is not built yet)\n")
 		return exitError
 	}
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
