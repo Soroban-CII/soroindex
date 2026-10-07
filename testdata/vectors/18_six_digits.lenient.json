@@ -1,0 +1,14 @@
+{
+  "seps": [
+    999999
+  ],
+  "tokens": [
+    {
+      "raw": "999999",
+      "sep": 999999,
+      "anomaly": "",
+      "accepted": true
+    }
+  ],
+  "entry_count": 1
+}
