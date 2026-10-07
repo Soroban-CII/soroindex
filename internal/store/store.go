@@ -29,6 +29,9 @@ var (
 	ErrNotFound = errors.New("not found")
 	// ErrReadOnlyUninitialized means a read-only open found no schema.
 	ErrReadOnlyUninitialized = errors.New("database has no schema; run sync first")
+	// ErrSchemaTooOld means a read-only open found a schema older than the
+	// binary; only a read-write open (sync) can migrate it.
+	ErrSchemaTooOld = errors.New("database schema is older than this binary; run sync to migrate it")
 )
 
 // sync_state keys (CLAUDE.md §5.8).
@@ -149,6 +152,9 @@ func (s *Store) init(ctx context.Context, passphrase string) error {
 	if s.readOnly {
 		if current == 0 {
 			return ErrReadOnlyUninitialized
+		}
+		if current < len(ms) {
+			return fmt.Errorf("%w: database is at %d, binary knows %d", ErrSchemaTooOld, current, len(ms))
 		}
 	} else if current < len(ms) {
 		if err := s.migrate(ctx, ms[current:]); err != nil {

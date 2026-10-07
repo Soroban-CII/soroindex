@@ -2,11 +2,15 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Soroban-CII/soroindex/migrations"
 )
 
 const testnet = "Test SDF Network ; September 2015"
@@ -134,11 +138,46 @@ func TestOpen(t *testing.T) {
 		s, _ := openTest(t)
 		v, err := s.State(ctx, KeySchemaVersion)
 		want, _ := SchemaVersion()
-		if err != nil || v != "1" || want != 1 {
+		if err != nil || v != fmt.Sprint(want) || want < 2 {
 			t.Fatalf("schema_version = %q, %v (binary knows %d)", v, err, want)
 		}
 		if p, err := s.State(ctx, KeyNetworkPassphrase); err != nil || p != testnet {
 			t.Fatalf("passphrase = %q, %v", p, err)
+		}
+	})
+	t.Run("a version 1 database migrates to the latest and keeps its rows", func(t *testing.T) {
+		p := filepath.Join(t.TempDir(), "v1.db")
+		db, err := sql.Open("sqlite", "file:"+p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v1, err := fs.ReadFile(migrations.FS, "0001_init.sql")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, q := range []string{string(v1),
+			`INSERT INTO sync_state VALUES ('schema_version','1'), ('network_passphrase','` + testnet + `')`,
+			`INSERT INTO wasm (hash, parse_status, parser_version, has_spec) VALUES ('aa','ok','1',1)`} {
+			if _, err := db.Exec(q); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_ = db.Close()
+		if _, err := Open(ctx, p, Options{Passphrase: testnet, ReadOnly: true}); !errors.Is(err, ErrSchemaTooOld) {
+			t.Fatalf("read-only open of a v1 database: err = %v, want ErrSchemaTooOld", err)
+		}
+		s, err := Open(ctx, p, Options{Passphrase: testnet})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = s.Close() }()
+		want, _ := SchemaVersion()
+		if v, _ := s.State(ctx, KeySchemaVersion); v != fmt.Sprint(want) {
+			t.Fatalf("schema_version = %s, want %d", v, want)
+		}
+		var fns sql.NullString
+		if err := s.DB.QueryRow(`SELECT functions_json FROM wasm WHERE hash = 'aa'`).Scan(&fns); err != nil || fns.Valid {
+			t.Fatalf("old row after migration: functions_json %v, err %v (want NULL)", fns, err)
 		}
 	})
 	t.Run("reopening is idempotent", func(t *testing.T) {

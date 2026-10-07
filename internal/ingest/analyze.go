@@ -26,7 +26,8 @@ type WasmResult struct {
 	HasMeta     bool
 	HasSpec     bool
 	Claims      sepmeta.SEPClaims
-	Matches     []match.Result // one per rule file, in rule order
+	Functions   []sepmeta.FnSig // from the spec section; nil without one
+	Matches     []match.Result  // one per rule file, in rule order
 }
 
 // Analyze parses one Wasm and matches it against every rule file. Malformed
@@ -61,6 +62,7 @@ func Analyze(hash string, code []byte, rules []match.RuleFile, m match.Matcher, 
 			errs = append(errs, err)
 		}
 		fns = sepmeta.Functions(entries)
+		r.Functions = fns
 	}
 	for _, rf := range rules {
 		if !r.HasSpec {

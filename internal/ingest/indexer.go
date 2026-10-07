@@ -72,9 +72,17 @@ func (ix *Indexer) writeAnalysis(ctx context.Context, tx *store.Tx, hash string,
 	if err != nil {
 		return err
 	}
+	fnJSON := ""
+	if r.HasSpec {
+		b, err := json.Marshal(r.Functions)
+		if err != nil {
+			return fmt.Errorf("encode functions of %s: %w", hash, err)
+		}
+		fnJSON = string(b)
+	}
 	if err := tx.UpsertWasm(ctx, store.WasmRow{
 		Hash: hash, SizeBytes: r.Size, FirstSeenLedger: seenLedger, HasMeta: r.HasMeta, HasSpec: r.HasSpec,
-		SEPEntryCount: r.Claims.EntryCount, MetaJSON: metaJSON, ParseStatus: r.ParseStatus, ParseError: r.ParseError,
+		SEPEntryCount: r.Claims.EntryCount, MetaJSON: metaJSON, FunctionsJSON: fnJSON, ParseStatus: r.ParseStatus, ParseError: r.ParseError,
 		ParserVersion: sepmeta.ParserVersion,
 	}); err != nil {
 		return err

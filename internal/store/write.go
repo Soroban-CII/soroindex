@@ -83,6 +83,7 @@ type WasmRow struct {
 	HasSpec         bool
 	SEPEntryCount   int
 	MetaJSON        string // JSON array of {"key","value"}; "" for NULL
+	FunctionsJSON   string // JSON array of sepmeta.FnSig; "" for NULL
 	ParseStatus     string
 	ParseError      string
 	ParserVersion   string
@@ -94,8 +95,8 @@ type WasmRow struct {
 // (CLAUDE.md §5.9).
 func (t *Tx) UpsertWasm(ctx context.Context, w WasmRow) error {
 	return t.exec(ctx, "upsert wasm "+w.Hash, `
-INSERT INTO wasm (hash, size_bytes, first_seen_ledger, has_meta, has_spec, sep_entry_count, meta_json, parse_status, parse_error, parser_version)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO wasm (hash, size_bytes, first_seen_ledger, has_meta, has_spec, sep_entry_count, meta_json, functions_json, parse_status, parse_error, parser_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (hash) DO UPDATE SET
   first_seen_ledger = CASE
     WHEN wasm.first_seen_ledger IS NULL THEN excluded.first_seen_ledger
@@ -106,11 +107,12 @@ ON CONFLICT (hash) DO UPDATE SET
   has_spec        = CASE WHEN excluded.parse_status = 'archived' THEN wasm.has_spec        ELSE excluded.has_spec END,
   sep_entry_count = CASE WHEN excluded.parse_status = 'archived' THEN wasm.sep_entry_count ELSE excluded.sep_entry_count END,
   meta_json       = CASE WHEN excluded.parse_status = 'archived' THEN wasm.meta_json       ELSE excluded.meta_json END,
+  functions_json  = CASE WHEN excluded.parse_status = 'archived' THEN wasm.functions_json  ELSE excluded.functions_json END,
   parse_error     = CASE WHEN excluded.parse_status = 'archived' AND wasm.parse_status <> 'archived' THEN wasm.parse_error ELSE excluded.parse_error END,
   parser_version  = CASE WHEN excluded.parse_status = 'archived' AND wasm.parse_status <> 'archived' THEN wasm.parser_version ELSE excluded.parser_version END,
   parse_status    = CASE WHEN excluded.parse_status = 'archived' AND wasm.parse_status <> 'archived' THEN wasm.parse_status ELSE excluded.parse_status END`,
 		w.Hash, nullInt(w.SizeBytes, w.ParseStatus != "archived"), nullLedger(w.FirstSeenLedger), w.HasMeta, w.HasSpec, w.SEPEntryCount,
-		nullStr(w.MetaJSON), w.ParseStatus, nullStr(w.ParseError), w.ParserVersion)
+		nullStr(w.MetaJSON), nullStr(w.FunctionsJSON), w.ParseStatus, nullStr(w.ParseError), w.ParserVersion)
 }
 
 // ClaimRow is one wasm_claims row.
