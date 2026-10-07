@@ -267,3 +267,50 @@ func TestSeedFileSource(t *testing.T) {
 		})
 	}
 }
+
+// TestSeedFetchesArchivedCodeOnce: code the node returns with a passed TTL
+// is stored as archived once; neither later batches nor a replay fetch it
+// again. (A resumed mainnet seed re-fetched archived code in every batch
+// before this: "fetched 7501 wasm" for 5,261 hashes.)
+func TestSeedFetchesArchivedCodeOnce(t *testing.T) {
+	ctx := context.Background()
+	code, h := wasmFixture(t, "not_token.wasm")
+	f := &entryRPC{t: t, latest: 5000, code: map[string][]byte{h: code}, data: map[string]xdr.ContractDataEntry{},
+		lastMod: map[string]uint32{}, expired: map[string]bool{}}
+	codeKey, _ := ContractCodeKey(h)
+	f.expired[codeKey] = true
+	var csvIn strings.Builder
+	csvIn.WriteString("contract_id\n")
+	for i := 0; i < 450; i++ { // three batches of up to 200, all on the archived code
+		var raw [32]byte
+		raw[0], raw[1] = byte(i%250), byte(i/250)
+		id, err := strkey.Encode(strkey.VersionByteContract, raw[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		k, err := InstanceKey(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cd := instanceEntry(t, execWasm(h), nil)
+		cd.Contract = contractAddr(t, id)
+		f.data[k] = cd
+		csvIn.WriteString(id + "\n")
+	}
+	ix, s := newIndexer(t, f)
+	st, err := ix.Seed(ctx, SeedFileSource{R: strings.NewReader(csvIn.String())})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Seeded != 450 || st.WasmFetched != 1 {
+		t.Fatalf("stats = %+v, want 450 seeded and the archived code fetched once", st)
+	}
+	again, err := ix.Seed(ctx, SeedFileSource{R: strings.NewReader(csvIn.String())})
+	if err != nil || again.WasmFetched != 0 {
+		t.Fatalf("replay fetched %d wasm, err %v", again.WasmFetched, err)
+	}
+	var status string
+	if err := s.DB.QueryRow(`SELECT parse_status FROM wasm WHERE hash = ?`, h).Scan(&status); err != nil || status != "archived" {
+		t.Fatalf("status = %q, %v", status, err)
+	}
+}

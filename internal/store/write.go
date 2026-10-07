@@ -321,11 +321,13 @@ ON CONFLICT (owner_contract_id, tag) DO UPDATE SET
 		owner, tag, nullStr(hash), nullLedger(ledger), archived)
 }
 
-// HasWasm reports whether a Wasm row exists with a parsed (non-archived)
-// status, so the indexer fetches each hash once.
+// HasWasm reports whether a Wasm row exists in any status, archived
+// included, so the indexer fetches each hash once. Re-fetching code that
+// comes back from the archive is driven by the ledger's Restored change
+// (incremental sync), not by every batch that mentions the hash.
 func (t *Tx) HasWasm(ctx context.Context, hash string) (bool, error) {
 	var n int
-	err := t.tx.QueryRowContext(ctx, `SELECT count(*) FROM wasm WHERE hash = ? AND parse_status <> 'archived'`, hash).Scan(&n)
+	err := t.tx.QueryRowContext(ctx, `SELECT count(*) FROM wasm WHERE hash = ?`, hash).Scan(&n)
 	return n > 0, err
 }
 
