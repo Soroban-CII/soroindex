@@ -10,6 +10,9 @@ import (
 // escape it.
 var fixtures = os.DirFS("../../testdata/wasm")
 
+// vectorFS is rooted at testdata/vectors.
+var vectorFS = os.DirFS("../../testdata/vectors")
+
 // fixture reads a golden Wasm from testdata/wasm (built by
 // scripts/build-fixtures.sh).
 func fixture(t testing.TB, name string) []byte {
