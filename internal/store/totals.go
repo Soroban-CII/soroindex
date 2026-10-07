@@ -5,6 +5,16 @@ import (
 	"fmt"
 )
 
+// InstanceArchivalCounts returns how many stored contracts have an archived
+// instance, out of all stored contracts.
+func (s *Store) InstanceArchivalCounts(ctx context.Context) (archived, total int, err error) {
+	err = s.DB.QueryRowContext(ctx, `SELECT COALESCE(sum(archived), 0), count(*) FROM contracts`).Scan(&archived, &total)
+	if err != nil {
+		return 0, 0, fmt.Errorf("instance archival: %w", err)
+	}
+	return archived, total, nil
+}
+
 // Totals are the adoption numbers recomputed from stored rows, with the
 // same definitions phase0 uses, so `phase0 --verify-db` can show that the
 // index stores what the census measured (CLAUDE.md §7 step 20).

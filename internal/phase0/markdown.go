@@ -40,7 +40,14 @@ func RenderAdoption(sums []Summary) string {
 		p("| Wasm by CAP-85 reference | %d | %s |\n", s.Contracts.WasmRef, pct(s.Contracts.WasmRef, total))
 		p("| … distinct references they share | %d | |\n", s.Contracts.WasmRefDistinct)
 		p("| … references unresolved | %d | |\n", s.Contracts.WasmRefUnresolved)
-		p("| Instances archived (sample only) | %d | %s |\n", s.Contracts.ArchivedInstances, pct(s.Contracts.ArchivedInstances, total))
+		switch ia := s.InstanceArchival; {
+		case InstanceArchivalChecked(s):
+			p("| Instances archived | %d | %s |\n", s.Contracts.ArchivedInstances, pct(s.Contracts.ArchivedInstances, total))
+		case ia != nil:
+			p("| Instances archived (measured by %s at ledger %d) | %d of %d | %s |\n", ia.Source, ia.Ledger, ia.Archived, ia.Of, pct(ia.Archived, ia.Of))
+		default:
+			p("| Instances archived | not measured: the census source carries no instance TTLs | |\n")
+		}
 		p("| Instance rows that failed to decode | %d | |\n", s.Contracts.InstanceDecodeErrors)
 		p("| Wasm contracts whose code is archived or missing | %d | |\n", s.Contracts.Wasm+s.Contracts.WasmRef-s.Contracts.WasmRefUnresolved-s.Contracts.Measured)
 		p("| Wasm contracts measured (by-contract denominator) | %d | |\n\n", s.Contracts.Measured)

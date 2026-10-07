@@ -48,6 +48,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	out := flags.String("out", "report/", "output directory")
 	rulesDir := flags.String("rules", "", "load rule files from this directory instead of the embedded set")
 	verifyDB := flags.String("verify-db", "", "compare <out>/<network>-summary.json with a database seeded from <network>-contracts.csv; exit 1 on any difference")
+	archivalDB := flags.String("record-instance-archival", "", "record instance archival measured in a database seeded from <network>-contracts.csv into the summary, then rebuild ADOPTION.md")
 	renderOnly := flags.Bool("render-only", false, "only rebuild <out>/ADOPTION.md from the *-summary.json files already there")
 	threshold := flags.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold: share of required functions for \"partial\"")
 	if err := flags.Parse(args); err != nil {
@@ -67,6 +68,9 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	}
 	if *verifyDB != "" {
 		return verifyPhase0DB(cfg, *out, *verifyDB, stdout, stderr)
+	}
+	if *archivalDB != "" {
+		return recordInstanceArchival(cfg, *out, *archivalDB, stdout, stderr)
 	}
 	if err := cfg.RequireRPC(); err != nil {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
@@ -194,6 +198,56 @@ func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Wri
 	}
 	ok, err := phase0.PrintChecks(stdout, phase0.Verify(s, t))
 	if err != nil || !ok {
+		return exitError
+	}
+	return exitOK
+}
+
+// recordInstanceArchival implements --record-instance-archival: for a
+// census whose source has no instance TTLs, record the archival a seed of
+// the same population measured, with its ledger, and rebuild ADOPTION.md.
+func recordInstanceArchival(cfg config.Common, out, dbPath string, stdout, stderr io.Writer) int {
+	s, err := phase0.ReadSummary(out, cfg.Network.Name)
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	if phase0.InstanceArchivalChecked(s) {
+		errorf(stderr, "sep47idx phase0: the %s census already measured instance archival itself\n", cfg.Network.Name)
+		return exitError
+	}
+	ctx := context.Background()
+	st, err := store.Open(ctx, dbPath, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	defer func() { _ = st.Close() }() // read-only
+	archived, total, err := st.InstanceArchivalCounts(ctx)
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	if total != s.Contracts.Total {
+		errorf(stderr, "sep47idx phase0: database holds %d contracts, census %d: seed it from %s-contracts.csv first\n", total, s.Contracts.Total, cfg.Network.Name)
+		return exitError
+	}
+	last, err := st.State(ctx, store.KeyLastLedger)
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	var ledger uint32
+	if _, err := fmt.Sscan(last, &ledger); err != nil {
+		errorf(stderr, "sep47idx phase0: last_ledger %q: %v\n", last, err)
+		return exitError
+	}
+	s.InstanceArchival = &phase0.InstanceArchival{Archived: archived, Of: total, Ledger: ledger, Source: "seeding the census population"}
+	if err := phase0.WriteSummary(out, s); err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	if _, err := fmt.Fprintf(stdout, "%s: %d of %d instances archived as of ledger %d; ADOPTION.md rebuilt\n", cfg.Network.Name, archived, total, ledger); err != nil {
 		return exitError
 	}
 	return exitOK

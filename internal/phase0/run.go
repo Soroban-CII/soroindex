@@ -174,14 +174,32 @@ func Write(dir string, r Result) error {
 	if err := writeFile(filepath.Join(dir, r.Summary.Network+"-contracts.csv"), contracts.Bytes()); err != nil {
 		return err
 	}
-	js, err := json.MarshalIndent(r.Summary, "", "  ")
+	return WriteSummary(dir, r.Summary)
+}
+
+// WriteSummary writes dir/<network>-summary.json and rebuilds ADOPTION.md.
+func WriteSummary(dir string, s Summary) error {
+	js, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := writeFile(filepath.Join(dir, r.Summary.Network+"-summary.json"), append(js, '\n')); err != nil {
+	if err := writeFile(filepath.Join(dir, s.Network+"-summary.json"), append(js, '\n')); err != nil {
 		return err
 	}
 	return RegenerateAdoption(dir)
+}
+
+// ReadSummary reads dir/<network>-summary.json.
+func ReadSummary(dir, network string) (Summary, error) {
+	b, err := os.ReadFile(filepath.Join(dir, network+"-summary.json")) // #nosec G304 -- operator-chosen report directory
+	if err != nil {
+		return Summary{}, err
+	}
+	var s Summary
+	if err := json.Unmarshal(b, &s); err != nil {
+		return Summary{}, fmt.Errorf("%s summary: %w", network, err)
+	}
+	return s, nil
 }
 
 // RegenerateAdoption rebuilds dir/ADOPTION.md from dir/*-summary.json.

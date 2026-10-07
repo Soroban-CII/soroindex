@@ -302,7 +302,8 @@ func TestRunMainnetCensus(t *testing.T) {
 	}
 	md, _ := fs.ReadFile(out, "ADOPTION.md")
 	for _, want := range []string{"## Decision", "| Wasm contracts whose code is archived or missing | 1 | |",
-		"| Code entries in census | 9 |", "| Archived or missing (not fetched) | 2 |", "that RPC returned live", "4 / 6 (66.67%)", "6 / 7 (85.71%)", "**Undeclared gap** (inferred): 1 hashes / 1 contracts"} {
+		"| Code entries in census | 9 |", "| Archived or missing (not fetched) | 2 |", "that RPC returned live",
+		"| Instances archived | not measured: the census source carries no instance TTLs | |", "4 / 6 (66.67%)", "6 / 7 (85.71%)", "**Undeclared gap** (inferred): 1 hashes / 1 contracts"} {
 		if !strings.Contains(string(md), want) {
 			t.Errorf("ADOPTION.md lacks %q", want)
 		}

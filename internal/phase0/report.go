@@ -131,8 +131,22 @@ type Summary struct {
 		Gap       int            `json:"undeclared_gap"`
 	} `json:"used_hashes"`
 
+	// InstanceArchival is instance archival measured outside the census, for
+	// a census whose source carries no instance TTLs (mainnet: by seeding
+	// the census population). Nil when not measured.
+	InstanceArchival *InstanceArchival `json:"instance_archival,omitempty"`
+
 	Sample   *SampleStats `json:"sample,omitempty"`
 	Decision string       `json:"decision,omitempty"`
+}
+
+// InstanceArchival records how many contract instances were found
+// archived, by which method, and as of which ledger.
+type InstanceArchival struct {
+	Archived int    `json:"archived"`
+	Of       int    `json:"of"`
+	Ledger   uint32 `json:"ledger"`
+	Source   string `json:"source"`
 }
 
 // Summarize computes the report numbers for a census and its analyzed Wasm.
