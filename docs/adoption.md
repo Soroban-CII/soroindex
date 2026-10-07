@@ -1,0 +1,1 @@
+--8<-- "report/ADOPTION.md"
