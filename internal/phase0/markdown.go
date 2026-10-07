@@ -42,6 +42,7 @@ func RenderAdoption(sums []Summary) string {
 		p("| … references unresolved | %d | |\n", s.Contracts.WasmRefUnresolved)
 		p("| Instances archived (sample only) | %d | %s |\n", s.Contracts.ArchivedInstances, pct(s.Contracts.ArchivedInstances, total))
 		p("| Instance rows that failed to decode | %d | |\n", s.Contracts.InstanceDecodeErrors)
+		p("| Wasm contracts whose code is archived or missing | %d | |\n", s.Contracts.Wasm+s.Contracts.WasmRef-s.Contracts.WasmRefUnresolved-s.Contracts.Measured)
 		p("| Wasm contracts measured (by-contract denominator) | %d | |\n\n", s.Contracts.Measured)
 
 		p("### Wasm hashes\n\n| | Count |\n| --- | ---: |\n")

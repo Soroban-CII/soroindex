@@ -43,9 +43,17 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	pageSize := flags.Uint("page-size", 10, "testnet: ledgers per getLedgers call (1-200)")
 	out := flags.String("out", "report/", "output directory")
 	rulesDir := flags.String("rules", "", "load rule files from this directory instead of the embedded set")
+	renderOnly := flags.Bool("render-only", false, "only rebuild <out>/ADOPTION.md from the *-summary.json files already there")
 	threshold := flags.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold: share of required functions for \"partial\"")
 	if err := flags.Parse(args); err != nil {
 		return exitError
+	}
+	if *renderOnly {
+		if err := phase0.RegenerateAdoption(*out); err != nil {
+			errorf(stderr, "sep47idx phase0: %v\n", err)
+			return exitError
+		}
+		return exitOK
 	}
 	cfg, err := resolve()
 	if err != nil {
