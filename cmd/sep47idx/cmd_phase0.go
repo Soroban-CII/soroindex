@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,12 +11,15 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/phase0"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
+	"github.com/Soroban-CII/soroindex/internal/store"
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 	"github.com/Soroban-CII/soroindex/rules"
 )
@@ -43,6 +47,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	pageSize := flags.Uint("page-size", 10, "testnet: ledgers per getLedgers call (1-200)")
 	out := flags.String("out", "report/", "output directory")
 	rulesDir := flags.String("rules", "", "load rule files from this directory instead of the embedded set")
+	verifyDB := flags.String("verify-db", "", "compare <out>/<network>-summary.json with a database seeded from <network>-contracts.csv; exit 1 on any difference")
 	renderOnly := flags.Bool("render-only", false, "only rebuild <out>/ADOPTION.md from the *-summary.json files already there")
 	threshold := flags.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold: share of required functions for \"partial\"")
 	if err := flags.Parse(args); err != nil {
@@ -59,6 +64,9 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
 		return exitError
+	}
+	if *verifyDB != "" {
+		return verifyPhase0DB(cfg, *out, *verifyDB, stdout, stderr)
 	}
 	if err := cfg.RequireRPC(); err != nil {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
@@ -152,4 +160,41 @@ func runMainnetPhase0(ctx context.Context, c *rpc.Client, hashes, instances, exe
 		in.ExecRefs = rf
 	}
 	return phase0.RunMainnet(ctx, c, in, o)
+}
+
+// verifyPhase0DB implements --verify-db (CLAUDE.md §7 step 20).
+func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Writer) int {
+	b, err := os.ReadFile(filepath.Join(out, cfg.Network.Name+"-summary.json")) // #nosec G304 -- operator-chosen report directory
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	var s phase0.Summary
+	if err := json.Unmarshal(b, &s); err != nil {
+		errorf(stderr, "sep47idx phase0: summary: %v\n", err)
+		return exitError
+	}
+	ctx := context.Background()
+	st, err := store.Open(ctx, dbPath, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	defer func() { _ = st.Close() }() // read-only
+	ruleset := ""
+	for _, v := range s.RulesetVersions {
+		if strings.HasPrefix(v, "sep41-") {
+			ruleset = v
+		}
+	}
+	t, err := st.Totals(ctx, ruleset)
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	ok, err := phase0.PrintChecks(stdout, phase0.Verify(s, t))
+	if err != nil || !ok {
+		return exitError
+	}
+	return exitOK
 }

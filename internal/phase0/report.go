@@ -122,6 +122,15 @@ type Summary struct {
 		Declared41    map[string]Pair `json:"declared_41_by_status"`
 	} `json:"sep41"`
 
+	// UsedHashes repeats the by-hash numbers over only the hashes some
+	// measured contract runs. A seeded store holds exactly those, so these
+	// are what `phase0 --verify-db` compares by hash.
+	UsedHashes struct {
+		Declaring int            `json:"declaring"`
+		SEP41     map[string]int `json:"sep41_status"`
+		Gap       int            `json:"undeclared_gap"`
+	} `json:"used_hashes"`
+
 	Sample   *SampleStats `json:"sample,omitempty"`
 	Decision string       `json:"decision,omitempty"`
 }
@@ -298,6 +307,20 @@ func Summarize(c Census, results map[string]ingest.WasmResult, population []stri
 			s.SEP41.UndeclaredGap.Contracts += n
 		}
 	}
+	s.UsedHashes.SEP41 = map[string]int{}
+	for h := range contractsByHash {
+		r := results[h]
+		if len(r.Claims.SEPs) > 0 {
+			s.UsedHashes.Declaring++
+		}
+		if m, ok := r.MatchFor(41); ok {
+			s.UsedHashes.SEP41[string(m.Status)]++
+			if m.Status == match.StatusMatch && len(r.Claims.SEPs) == 0 {
+				s.UsedHashes.Gap++
+			}
+		}
+	}
+
 	// Contracts running hashes outside the population still count by contract.
 	inPop := map[string]bool{}
 	for _, h := range population {
@@ -372,6 +395,22 @@ func WriteRawCSV(w io.Writer, population []string, results map[string]ingest.Was
 			strings.Join(seps, ";"), strings.Join(anomalies, ";"), string(m.Status), strconv.Itoa(m.OKCount),
 			strings.Join(m.Missing, ";"), strings.Join(mism, ";"), sepmeta.ParserVersion, m.RulesetVersion}
 		if err := cw.Write(row); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	return cw.Error()
+}
+
+// WriteContractsCSV writes the census population (one row per contract),
+// usable as a seed file: `sep47idx sync --seed <network>-contracts.csv`.
+func WriteContractsCSV(w io.Writer, c Census) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write([]string{"contract_id", "kind", "wasm_hash", "archived", "unresolved_ref"}); err != nil {
+		return err
+	}
+	for _, ct := range c.Contracts {
+		if err := cw.Write([]string{ct.ID, string(ct.Kind), ct.WasmHash, strconv.FormatBool(ct.Archived), strconv.FormatBool(ct.Unresolved)}); err != nil {
 			return err
 		}
 	}

@@ -10,13 +10,16 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Soroban-CII/soroindex/internal/claims"
 	"github.com/Soroban-CII/soroindex/internal/ingest"
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
+	"github.com/Soroban-CII/soroindex/internal/store"
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 	"github.com/Soroban-CII/soroindex/rules"
 	"github.com/stellar/go-stellar-sdk/strkey"
@@ -160,7 +163,9 @@ func testOptions(t *testing.T) Options {
 		Now: func() time.Time { return time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC) }}
 }
 
-func TestRunMainnetCensus(t *testing.T) {
+// mainnetFixture builds the census inputs and a fake RPC that also serves
+// every instance, so the same contracts can be seeded into a store.
+func mainnetFixture(t *testing.T) (*fakeRPC, MainnetInputs, map[string]string) {
 	code := fixtureCode(t, "token_full_sep.wasm", "token_full_legacy.wasm", "token_partial.wasm", "not_token.wasm", "multi_sep.wasm", "no_meta.wasm")
 	full, legacy, partial := hashOf(code["token_full_sep.wasm"]), hashOf(code["token_full_legacy.wasm"]), hashOf(code["token_partial.wasm"])
 	notTok, multi, noMeta := hashOf(code["not_token.wasm"]), hashOf(code["multi_sep.wasm"]), hashOf(code["no_meta.wasm"])
@@ -205,9 +210,23 @@ func TestRunMainnetCensus(t *testing.T) {
 	}
 	f := &fakeRPC{t: t, code: code, expired: map[string]bool{expired: true}, latest: 1000,
 		data: map[string]xdr.ContractDataEntry{v2key: refCD(t, owner, "v2", multi)}}
-	res, err := RunMainnet(context.Background(), f, MainnetInputs{
-		Hashes: strings.NewReader(hashesCSV), Instances: strings.NewReader(instCSV), ExecRefs: strings.NewReader(refsCSV),
-	}, testOptions(t))
+	for _, r := range rows {
+		k, err := ingest.InstanceKey(r.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.data[k] = r.cd
+	}
+	v1key, _ := ingest.ExecRefKey(owner, "v1")
+	f.data[v1key] = refCD(t, owner, "v1", partial)
+	in := MainnetInputs{Hashes: strings.NewReader(hashesCSV), Instances: strings.NewReader(instCSV), ExecRefs: strings.NewReader(refsCSV)}
+	return f, in, map[string]string{"full": full, "legacy": legacy}
+}
+
+func TestRunMainnetCensus(t *testing.T) {
+	f, in, hs := mainnetFixture(t)
+	full := hs["full"]
+	res, err := RunMainnet(context.Background(), f, in, testOptions(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,4 +471,45 @@ func TestAnalyzeTruncatedIsError(t *testing.T) {
 	if r.ParseStatus != ingest.ParseError || len(r.Claims.SEPs) != 0 || r.Matches[0].Status != match.StatusNoSpec {
 		t.Fatalf("got %+v", r)
 	}
+}
+
+// TestVerifyMatchesSeededStore is step 20 end to end, offline: take a
+// census, seed a store from the contracts CSV it writes, and require every
+// comparable number to agree.
+func TestVerifyMatchesSeededStore(t *testing.T) {
+	ctx := context.Background()
+	f, in, _ := mainnetFixture(t)
+	o := testOptions(t)
+	res, err := RunMainnet(ctx, f, in, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := Write(dir, res); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, filepath.Join(dir, "m.db"), store.Options{Passphrase: "Public Global Stellar Network ; September 2015"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	ix := &ingest.Indexer{Store: st, RPC: f, Rules: o.Rules, Limits: o.Limits, Claims: claims.Default(o.Limits), Log: o.Log, Now: o.Now}
+	seed, err := os.Open(filepath.Join(dir, "mainnet-contracts.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = seed.Close() }()
+	if _, err := ix.Seed(ctx, ingest.SeedFileSource{R: seed}); err != nil {
+		t.Fatal(err)
+	}
+	tot, err := st.Totals(ctx, "sep41-v0.5.2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	ok, err := PrintChecks(&out, Verify(res.Summary, tot))
+	if err != nil || !ok {
+		t.Fatalf("phase0 and store disagree:\n%s", out.String())
+	}
+	t.Logf("\n%s", out.String())
 }

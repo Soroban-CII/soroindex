@@ -153,8 +153,9 @@ func finish(ctx context.Context, c ingest.RPC, census Census, population []strin
 	return Result{Summary: s, Census: census, Population: population, Wasm: results}, nil
 }
 
-// Write stores a run in dir: <network>-raw.csv and <network>-summary.json,
-// then regenerates ADOPTION.md from every summary present.
+// Write stores a run in dir: <network>-raw.csv, <network>-contracts.csv
+// and <network>-summary.json, then regenerates ADOPTION.md from every
+// summary present.
 func Write(dir string, r Result) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
@@ -164,6 +165,13 @@ func Write(dir string, r Result) error {
 		return err
 	}
 	if err := writeFile(filepath.Join(dir, r.Summary.Network+"-raw.csv"), raw.Bytes()); err != nil {
+		return err
+	}
+	var contracts bytes.Buffer
+	if err := WriteContractsCSV(&contracts, r.Census); err != nil {
+		return err
+	}
+	if err := writeFile(filepath.Join(dir, r.Summary.Network+"-contracts.csv"), contracts.Bytes()); err != nil {
 		return err
 	}
 	js, err := json.MarshalIndent(r.Summary, "", "  ")
