@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"start ledger (1) must be between the oldest ledger: 4941954 and the latest ledger: 5062913 for this rpc instance"}}
