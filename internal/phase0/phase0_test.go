@@ -494,12 +494,11 @@ func TestVerifyMatchesSeededStore(t *testing.T) {
 	}
 	defer func() { _ = st.Close() }()
 	ix := &ingest.Indexer{Store: st, RPC: f, Rules: o.Rules, Limits: o.Limits, Claims: claims.Default(o.Limits), Log: o.Log, Now: o.Now}
-	seed, err := os.Open(filepath.Join(dir, "mainnet-contracts.csv"))
+	seed, err := fs.ReadFile(os.DirFS(dir), "mainnet-contracts.csv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = seed.Close() }()
-	if _, err := ix.Seed(ctx, ingest.SeedFileSource{R: seed}); err != nil {
+	if _, err := ix.Seed(ctx, ingest.SeedFileSource{R: strings.NewReader(string(seed))}); err != nil {
 		t.Fatal(err)
 	}
 	tot, err := st.Totals(ctx, "sep41-v0.5.2")
