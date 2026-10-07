@@ -348,6 +348,7 @@ CREATE TABLE wasm (
   has_spec          INTEGER NOT NULL DEFAULT 0,
   sep_entry_count   INTEGER NOT NULL DEFAULT 0,
   meta_json         TEXT,                      -- all raw key/value pairs
+  functions_json    TEXT,                      -- migration 0002: sepmeta.Functions() output (name, input and output type names); NULL without a spec
   parse_status      TEXT NOT NULL CHECK (parse_status IN ('ok','partial','error','archived')),
   parse_error       TEXT,
   parser_version    TEXT NOT NULL
@@ -419,6 +420,8 @@ CREATE VIEW claims AS
   FROM contract_versions v JOIN wasm_claims c ON c.wasm_hash = v.wasm_hash;
 ```
 
+> **Amended 2026-10-07, operator-approved.** `--recompute` (§5.9) must re-run the matcher without re-fetching Wasm, but the original schema kept neither the Wasm nor its function signatures. Migration `0002_functions_json.sql` adds `wasm.functions_json`, written on every analysis and never cleared by archival. Wasm analyzed before 0002 has `functions_json` NULL and is reported by `--recompute` as needing a re-fetch, never silently skipped.
+
 `sync_state` keys: `last_ledger`, `network_passphrase`, `schema_version`, `rpc_url`, `ruleset_versions`.
 
 **Invariants, enforced in SQL, not only in Go:**
@@ -467,7 +470,7 @@ The API process opens the database read-only (`mode=ro`).
 3. Fetch batches of up to 200 ledgers. For each batch, write every change and the new `last_ledger` **in one transaction**.
 4. Reprocessing any ledger must be idempotent. Stellar ledgers are final, so no reorg handling is needed.
 5. When caught up, re-check `getLatestLedger` before reporting `caught_up`. With `--follow`, poll every `--interval` (default 5s).
-6. `--recompute` re-runs the matcher for every Wasm whose stored `ruleset_version` differs from the loaded rules. It doesn't re-fetch Wasm.
+6. `--recompute` re-runs the matcher for every Wasm whose stored `ruleset_version` differs from the loaded rules. It doesn't re-fetch Wasm: it reads `wasm.functions_json` (migration 0002). A Wasm without `functions_json` but with a spec is counted and reported as needing a re-fetch.
 7. Lag (`latest - last_ledger`) is exposed in `/v1/health` and `sep47idx stats`.
 
 **Required tests** (each named in the STOP F report):
