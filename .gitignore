@@ -1,0 +1,41 @@
+# Build output
+/sep47idx
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# Databases: never commit indexed data (CLAUDE.md §6)
+/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Secrets and credentials: never commit (CLAUDE.md §6)
+.env
+.env.*
+*.pem
+*.key
+*credentials*.json
+*service-account*.json
+gcloud-*.json
+application_default_credentials.json
+
+# Docs site build
+/site/
+/.venv/
+__pycache__/
+
+# Rust fixture build intermediates (built .wasm under testdata/wasm IS committed)
+testdata/contracts/**/target/
+testdata/contracts/**/Cargo.lock.bak
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
