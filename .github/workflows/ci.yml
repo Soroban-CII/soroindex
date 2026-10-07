@@ -1,6 +1,6 @@
-# CI for sep47idx. Job names (lint, test, fuzz-smoke, build) are required
-# status checks in branch protection (scripts/repo-settings.sh); renaming a
-# job here means updating that script in the same commit.
+# CI for sep47idx. The checks lint, test, fuzz-smoke and build are required
+# in branch protection (scripts/repo-settings.sh); renaming one here means
+# updating that script in the same commit.
 name: ci
 
 on:
@@ -67,7 +67,8 @@ jobs:
       - name: fuzz each target for 30s
         run: make fuzz-smoke
 
-  build:
+  build-targets:
+    name: build-target (${{ matrix.goos }}, ${{ matrix.goarch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -85,3 +86,15 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: go build -trimpath -o /dev/null ./cmd/sep47idx
+
+  # One check named exactly "build" for branch protection: matrix jobs report
+  # as "build-target (os, arch)", which a required check named "build" would
+  # never match. GitHub treats a skipped required check as passing, so this
+  # job always runs and fails unless every target built.
+  build:
+    needs: build-targets
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: every target built
+        run: test "${{ needs.build-targets.result }}" = "success"
