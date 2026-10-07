@@ -1,0 +1,14 @@
+[package]
+name = "common"
+description = "Shared SEP-41 token logic for the fixture contracts. Carries no contract meta."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+soroban-token-sdk = { workspace = true }
