@@ -180,3 +180,24 @@ func TestDecodeMetaLimits(t *testing.T) {
 		}
 	})
 }
+
+func TestCompletesWithPadding(t *testing.T) {
+	vecType := []byte{0, 0, 0x03, 0xea} // SC_SPEC_TYPE_VEC = 1002
+	tests := []struct {
+		name string
+		rest []byte
+		want bool
+	}{
+		{"cut inside a type code is truncated", vecType[:3], true},
+		{"cut after a whole type code is truncated", vecType, true},
+		{"one stray byte is truncated", vecType[:1], true},
+		{"invalid whole type code is not truncated", []byte{0, 0, 0x7f, 0xff}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := completesWithPadding[xdr.ScSpecTypeDef](tt.rest, DefaultLimits()); got != tt.want {
+				t.Fatalf("completesWithPadding(%x) = %v, want %v", tt.rest, got, tt.want)
+			}
+		})
+	}
+}

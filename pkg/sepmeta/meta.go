@@ -69,16 +69,23 @@ func decodeStream[T any](section []byte, lim Limits) ([]T, error) {
 
 // completesWithPadding reports whether rest is a strict prefix of a valid
 // encoding of T: that is, whether the decode failed only because bytes were
-// missing. It appends lim.MaxSectionBytes zero bytes and decodes again. Zero
-// bytes complete any value that was cut short (a zero length, a zero
-// discriminant, an absent optional), while bytes that are wrong in themselves
-// still fail. Only the error path pays for this.
+// missing.
+//
+// XDR values occupy whole 4-byte words and every entry starts on a word
+// boundary, so a trailing partial word is dropped first: its missing bytes
+// could be anything, and zeros would not complete, say, the type code
+// 0x000003EA cut to [0 0 3]. The whole words that remain are then followed
+// by lim.MaxSectionBytes zero bytes and decoded again. Zeros complete any
+// value that stops at a word boundary (a zero length, a zero discriminant,
+// an absent optional), while words that are wrong in themselves still fail.
+// Only the error path pays for this.
 func completesWithPadding[T any](rest []byte, lim Limits) bool {
-	padded := make([]byte, len(rest)+lim.MaxSectionBytes)
-	copy(padded, rest)
+	whole := len(rest) - len(rest)%4
+	padded := make([]byte, whole+lim.MaxSectionBytes)
+	copy(padded, rest[:whole])
 	var v T
 	n, err := xdr.UnmarshalWithOptions(bytes.NewReader(padded), &v, decodeOptions(len(padded), lim))
-	return err == nil && n > len(rest)
+	return err == nil && n > whole
 }
 
 func decodeOptions(inputLen int, lim Limits) xdr.DecodeOptions {
