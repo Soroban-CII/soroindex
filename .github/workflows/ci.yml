@@ -19,6 +19,7 @@ env:
   # Exact build pin from go.mod's toolchain line (CLAUDE.md §3).
   GO_VERSION: "1.27.1"
   GOLANGCI_LINT_VERSION: "v2.14.0"
+  CHECK_JSONSCHEMA_VERSION: "0.38.2"
   # Stop setup-go from auto-switching toolchains: CI must use exactly GO_VERSION.
   GOTOOLCHAIN: local
 
@@ -36,6 +37,8 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - name: go vet
         run: go vet ./...
+      - name: rule files match rules/schema.json
+        run: make rules-check
       # goinstall builds golangci-lint with GO_VERSION, so it can parse code
       # that targets this toolchain regardless of what the release binary used.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0

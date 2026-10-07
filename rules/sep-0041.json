@@ -1,0 +1,18 @@
+{
+  "sep": 41,
+  "ruleset_version": "sep41-v0.5.2",
+  "source": "stellar/stellar-protocol ecosystem/sep-0041.md, Version 0.5.2, Updated 2026-08-24; diffed against live text (commit 4db3e802b2) on 2026-10-07",
+  "required": [
+    {"fn": "allowance",     "inputs": [["Address"],["Address"]],                          "output": ["i128"]},
+    {"fn": "approve",       "inputs": [["Address"],["Address"],["i128"],["u32"]],         "output": []},
+    {"fn": "balance",       "inputs": [["Address"]],                                      "output": ["i128"]},
+    {"fn": "transfer",      "inputs": [["Address"],["MuxedAddress","Address"],["i128"]],  "output": []},
+    {"fn": "transfer_from", "inputs": [["Address"],["Address"],["Address"],["i128"]],     "output": []},
+    {"fn": "burn",          "inputs": [["Address"],["i128"]],                             "output": []},
+    {"fn": "burn_from",     "inputs": [["Address"],["Address"],["i128"]],                 "output": []},
+    {"fn": "decimals",      "inputs": [],                                                 "output": ["u32"]},
+    {"fn": "name",          "inputs": [],                                                 "output": ["String"]},
+    {"fn": "symbol",        "inputs": [],                                                 "output": ["String"]}
+  ],
+  "optional": []
+}

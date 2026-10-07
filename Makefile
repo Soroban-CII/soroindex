@@ -11,7 +11,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)
 
 export CGO_ENABLED := 0
 
-.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check clean
+.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check rules-check clean
 
 all: lint test build
 
@@ -49,6 +49,11 @@ fixtures:
 ## docs: build the MkDocs site into ./site (needs docs/requirements.txt)
 docs:
 	mkdocs build --strict
+
+## rules-check: validate every rules/sep-*.json against rules/schema.json
+CHECK_JSONSCHEMA_VERSION ?= 0.38.2
+rules-check:
+	pipx run --spec check-jsonschema==$(CHECK_JSONSCHEMA_VERSION) check-jsonschema --schemafile rules/schema.json rules/sep-*.json
 
 ## tidy-check: fail if go.mod/go.sum are not tidy
 tidy-check:

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Soroban-CII/soroindex/rules/schema.json",
+  "title": "sep47idx interface rule file",
+  "description": "Describes the functions a SEP requires, by type. The matcher compares a contract's spec against it (CLAUDE.md §5.7). internal/match enforces the same constraints when loading.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["sep", "ruleset_version", "source", "required", "optional"],
+  "properties": {
+    "sep": {
+      "description": "The SEP number this file describes.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 999999
+    },
+    "ruleset_version": {
+      "description": "Changes whenever the rules change, so stored match results can be recomputed. Convention: sep<N>-v<SEP version>[-r<revision>].",
+      "type": "string",
+      "pattern": "^sep[0-9]{1,6}-v[0-9]+\\.[0-9]+\\.[0-9]+(-r[0-9]+)?$"
+    },
+    "source": {
+      "description": "Where the rules came from: SEP file, version, updated date, and the date it was diffed against the live text.",
+      "type": "string",
+      "minLength": 20
+    },
+    "required": {
+      "description": "Functions every implementation must expose with these types.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/fn" }
+    },
+    "optional": {
+      "description": "Functions an implementation may expose; if present they must have these types.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/fn" }
+    }
+  },
+  "$defs": {
+    "type": {
+      "description": "A canonical type name as rendered by sepmeta.TypeName, e.g. Address, i128, Option<u32>, udt:Name.",
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_:<>,()]*$",
+      "maxLength": 200
+    },
+    "fn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fn", "inputs", "output"],
+      "properties": {
+        "fn": {
+          "description": "Function name, a Soroban symbol.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]{1,32}$"
+        },
+        "inputs": {
+          "description": "One element per parameter, in order. Each element lists the types accepted at that position.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/type" }
+          }
+        },
+        "output": {
+          "description": "Output types; empty for a function that returns nothing.",
+          "type": "array",
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/type" }
+        }
+      }
+    }
+  }
+}
