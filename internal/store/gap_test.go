@@ -49,3 +49,32 @@ func TestGap(t *testing.T) {
 		t.Fatalf("gap for a SEP with no rules = %+v, %v; want empty, non-nil", empty, err)
 	}
 }
+
+func TestTotalsInstanceArchival(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	for _, q := range []string{
+		`INSERT INTO wasm (hash, parse_status, parser_version) VALUES ('w1','ok','1')`,
+		`INSERT INTO wasm (hash, parse_status, parser_version) VALUES ('w2','archived','1')`,
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C1','wasm','w1')`,
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash, archived) VALUES ('C2','wasm','w1',1)`,
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C3','wasm','w2')`,
+	} {
+		if err := exec(t, s, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	live, err := s.Totals(ctx, "r", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := s.Totals(ctx, "r", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// C3 runs archived code: never measured. C2's instance is archived:
+	// measured only when instance archival is ignored.
+	if live.LiveWasm != 2 || live.MeasuredContracts != 1 || all.LiveWasm != 3 || all.MeasuredContracts != 2 {
+		t.Fatalf("live %+v, all %+v", live, all)
+	}
+}

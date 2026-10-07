@@ -25,8 +25,12 @@ type Totals struct {
 	GapUsedHashes                  int
 }
 
-// Totals computes the numbers for one ruleset version of SEP-41.
-func (s *Store) Totals(ctx context.Context, sep41Ruleset string) (Totals, error) {
+// Totals computes the numbers for one ruleset version of SEP-41. With
+// countArchivedInstances, contracts whose instance entry is archived count
+// as live: use it to compare with a census that could not see instance TTLs
+// (the Hubble export). Contracts running archived code are excluded either
+// way.
+func (s *Store) Totals(ctx context.Context, sep41Ruleset string, countArchivedInstances bool) (Totals, error) {
 	t := Totals{SEP41ByContract: map[string]int{}, SEP41ByUsedHash: map[string]int{}}
 	one := func(dst *int, q string, args ...any) error {
 		if err := s.DB.QueryRowContext(ctx, q, args...).Scan(dst); err != nil {
@@ -34,18 +38,24 @@ func (s *Store) Totals(ctx context.Context, sep41Ruleset string) (Totals, error)
 		}
 		return nil
 	}
-	const measured = `SELECT c.contract_id, c.current_wasm_hash AS h FROM contracts c JOIN wasm w ON w.hash = c.current_wasm_hash
-		WHERE c.archived = 0 AND c.kind IN ('wasm','wasm_ref') AND w.parse_status <> 'archived'`
+	// Only these two constant fragments are ever joined into the SQL text;
+	// no data is.
+	live := "c.archived = 0"
+	if countArchivedInstances {
+		live = "c.archived IN (0, 1)"
+	}
+	measured := `SELECT c.contract_id, c.current_wasm_hash AS h FROM contracts c JOIN wasm w ON w.hash = c.current_wasm_hash
+		WHERE ` + live + ` AND c.kind IN ('wasm','wasm_ref') AND w.parse_status <> 'archived'`
 	const declares = `EXISTS (SELECT 1 FROM wasm_claims wc WHERE wc.wasm_hash = m.h)`
 	steps := []struct {
 		dst  *int
 		q    string
 		args []any
 	}{
-		{&t.LiveSAC, `SELECT count(*) FROM contracts WHERE archived = 0 AND kind = 'sac'`, nil},
-		{&t.LiveWasm, `SELECT count(*) FROM contracts WHERE archived = 0 AND kind = 'wasm'`, nil},
-		{&t.LiveWasmRef, `SELECT count(*) FROM contracts WHERE archived = 0 AND kind = 'wasm_ref'`, nil},
-		{&t.WasmRefUnresolved, `SELECT count(*) FROM contracts WHERE archived = 0 AND kind = 'wasm_ref' AND current_wasm_hash IS NULL`, nil},
+		{&t.LiveSAC, `SELECT count(*) FROM contracts c WHERE ` + live + ` AND kind = 'sac'`, nil},
+		{&t.LiveWasm, `SELECT count(*) FROM contracts c WHERE ` + live + ` AND kind = 'wasm'`, nil},
+		{&t.LiveWasmRef, `SELECT count(*) FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref'`, nil},
+		{&t.WasmRefUnresolved, `SELECT count(*) FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref' AND current_wasm_hash IS NULL`, nil},
 		{&t.MeasuredContracts, `SELECT count(*) FROM (` + measured + `)`, nil},
 		{&t.UsedHashes, `SELECT count(DISTINCT h) FROM (` + measured + `)`, nil},
 		{&t.DeclaringContracts, `SELECT count(*) FROM (` + measured + `) m WHERE ` + declares, nil},

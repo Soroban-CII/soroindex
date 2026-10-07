@@ -501,7 +501,7 @@ func TestVerifyMatchesSeededStore(t *testing.T) {
 	if _, err := ix.Seed(ctx, ingest.SeedFileSource{R: strings.NewReader(string(seed))}); err != nil {
 		t.Fatal(err)
 	}
-	tot, err := st.Totals(ctx, "sep41-v0.5.2")
+	tot, err := st.Totals(ctx, "sep41-v0.5.2", !InstanceArchivalChecked(res.Summary))
 	if err != nil {
 		t.Fatal(err)
 	}

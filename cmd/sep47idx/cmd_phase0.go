@@ -187,7 +187,7 @@ func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Wri
 			ruleset = v
 		}
 	}
-	t, err := st.Totals(ctx, ruleset)
+	t, err := st.Totals(ctx, ruleset, !phase0.InstanceArchivalChecked(s))
 	if err != nil {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
 		return exitError

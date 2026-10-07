@@ -7,6 +7,12 @@ import (
 	"github.com/Soroban-CII/soroindex/internal/store"
 )
 
+// InstanceArchivalChecked reports whether a summary's census read each
+// contract's instance TTL. The testnet sample does (CurrentInstances). The
+// Hubble-based mainnet census cannot, because the export carries no TTLs,
+// so --verify-db then counts archived instances as live on the store side.
+func InstanceArchivalChecked(s Summary) bool { return s.Sample != nil }
+
 // Check is one number compared between a Phase 0 summary and the store.
 type Check struct {
 	Name   string
