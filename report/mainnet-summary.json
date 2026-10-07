@@ -1,0 +1,134 @@
+{
+  "network": "mainnet",
+  "generated_at": "2026-10-07T12:09:34Z",
+  "latest_ledger": 64817831,
+  "parser_version": "1",
+  "ruleset_versions": [
+    "sep41-v0.5.2"
+  ],
+  "method": "Census, not a sample. Contract instances and code hashes come from Stellar's Hubble dataset on BigQuery (scripts/hubble-export.sql: current rows of snapshots.contract_data_snapshot and the latest row per hash of crypto_stellar.contract_code). Each instance's executable is decoded from its exported XDR; CAP-85 references are resolved from the export or with getLedgerEntries. By-hash rates are over code hashes not marked deleted that RPC returned live; by-contract rates are over Wasm-running contracts whose code RPC returned live.",
+  "limits": {
+    "MaxWasmBytes": 1048576,
+    "MaxSectionBytes": 262144,
+    "MaxSections": 10000,
+    "MaxXDRDepth": 500
+  },
+  "contracts": {
+    "total": 156173,
+    "sac": 4042,
+    "wasm": 152131,
+    "wasm_ref": 0,
+    "wasm_ref_distinct_refs": 0,
+    "wasm_ref_unresolved": 0,
+    "archived_instances": 0,
+    "instance_decode_errors": 0,
+    "measured": 141977
+  },
+  "hashes": {
+    "code_entries": 5261,
+    "code_deleted": 0,
+    "population": 5261,
+    "archived": 3083,
+    "measured": 2178,
+    "parse_ok": 2178,
+    "parse_partial": 0,
+    "parse_error": 0,
+    "used_by_a_contract": 1750
+  },
+  "declares_any": {
+    "by_hash": {
+      "n": 13,
+      "of": 2178,
+      "pct": 0.5968778696051423
+    },
+    "by_contract": {
+      "n": 16,
+      "of": 141977,
+      "pct": 0.011269430964170253
+    }
+  },
+  "with_spec_by_hash": {
+    "n": 2176,
+    "of": 2178,
+    "pct": 99.90817263544537
+  },
+  "per_sep": [
+    {
+      "sep": 40,
+      "hashes": 2,
+      "contracts": 2
+    },
+    {
+      "sep": 41,
+      "hashes": 11,
+      "contracts": 14
+    }
+  ],
+  "anomalies": [],
+  "sep41": {
+    "status": {
+      "match": {
+        "hashes": 120,
+        "contracts": 1141
+      },
+      "mismatch": {
+        "hashes": 1977,
+        "contracts": 140683
+      },
+      "no_spec": {
+        "hashes": 2,
+        "contracts": 3
+      },
+      "partial": {
+        "hashes": 79,
+        "contracts": 150
+      }
+    },
+    "ok_histogram": [
+      1822,
+      68,
+      62,
+      13,
+      12,
+      28,
+      3,
+      1,
+      34,
+      13,
+      120
+    ],
+    "undeclared_gap": {
+      "hashes": 109,
+      "contracts": 1127
+    },
+    "declared_41_by_status": {
+      "match": {
+        "hashes": 11,
+        "contracts": 14
+      },
+      "mismatch": {
+        "hashes": 0,
+        "contracts": 0
+      },
+      "no_spec": {
+        "hashes": 0,
+        "contracts": 0
+      },
+      "partial": {
+        "hashes": 0,
+        "contracts": 0
+      }
+    }
+  },
+  "used_hashes": {
+    "declaring": 8,
+    "sep41_status": {
+      "match": 78,
+      "mismatch": 1607,
+      "no_spec": 2,
+      "partial": 63
+    },
+    "undeclared_gap": 72
+  },
+  "decision": "\u003c 1%: README headline \"Interface index + adoption tracker\" with outreach in \"How to help\"; Phase 2 deferred."
+}

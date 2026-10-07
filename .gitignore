@@ -39,3 +39,8 @@ testdata/contracts/**/Cargo.lock.bak
 .idea/
 .vscode/
 *.swp
+
+# Large Phase 0 inputs/outputs: regenerate them (report/README.md) instead
+# of storing tens of MB in history.
+/report/mainnet_instances.csv
+/report/mainnet-contracts.csv
