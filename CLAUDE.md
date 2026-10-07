@@ -274,7 +274,7 @@ type Claim struct {
 Rules:
 
 - **Never mix tiers.** A SAC is never `declared`. An inferred match is never presented as a claim.
-- **Verification belongs to a Wasm hash.** After an upgrade, earlier verifications show as `stale: true` and are not counted.
+- **Verification belongs to a Wasm hash.** After an upgrade, earlier verifications show as `stale: true` and are not counted. This includes an upgrade caused by an executable-reference change (§5.9), where the contract's own instance entry never changed.
 - **The "undeclared gap"** is a Wasm whose inferred status is `match` and that declares nothing. It is always labelled inferred.
 
 ### 5.7 Rule files and the Matcher
@@ -320,6 +320,8 @@ Rules:
 
 ### 5.8 Data model (SQLite, one file per network)
 
+> **Amended 2026-10-07, operator-approved (option A).** CAP-85 (Final, protocol 28; mainnet and testnet are on protocol 29) adds a third contract executable, `CONTRACT_EXECUTABLE_EXTERNAL_REF {executable_owner, tag}`. The contract's Wasm hash is held in a persistent `CONTRACT_DATA` entry of the owner contract, keyed by `SCV_EXECUTABLE_TAG(tag)`. Updating that one entry upgrades every contract that references it, with no change to their instance entries. The schema below adds `kind = 'wasm_ref'`, the `exec_refs` table, and the `exec_ref_*` columns for this.
+
 The schema lives in numbered migrations under `migrations/`, embedded with `go:embed`. On start:
 
 - Apply migrations in a transaction.
@@ -329,8 +331,10 @@ The schema lives in numbered migrations under `migrations/`, embedded with `go:e
 ```sql
 CREATE TABLE contracts (
   contract_id       TEXT PRIMARY KEY,          -- C... strkey
-  kind              TEXT NOT NULL CHECK (kind IN ('wasm','sac')),
-  current_wasm_hash TEXT,                      -- NULL for sac
+  kind              TEXT NOT NULL CHECK (kind IN ('wasm','wasm_ref','sac')),
+  current_wasm_hash TEXT,                      -- NULL for sac; for wasm_ref the resolved hash, NULL if unresolved
+  exec_ref_owner    TEXT,                      -- C... owner; NOT NULL iff kind = 'wasm_ref'
+  exec_ref_tag      TEXT,                      -- NOT NULL iff kind = 'wasm_ref'
   sac_asset         TEXT,                      -- 'native' | 'CODE:ISSUER', NULL for wasm
   created_ledger    INTEGER,
   updated_ledger    INTEGER,
@@ -349,11 +353,21 @@ CREATE TABLE wasm (
   parser_version    TEXT NOT NULL
 );
 CREATE TABLE contract_versions (
-  contract_id TEXT NOT NULL,
-  wasm_hash   TEXT,                            -- NULL for sac
-  from_ledger INTEGER NOT NULL,
-  to_ledger   INTEGER,                         -- NULL while current
+  contract_id    TEXT NOT NULL,
+  wasm_hash      TEXT,                         -- NULL for sac, or for an unresolved wasm_ref
+  exec_ref_owner TEXT,                         -- set when this version's code came through an executable reference
+  exec_ref_tag   TEXT,
+  from_ledger    INTEGER NOT NULL,
+  to_ledger      INTEGER,                      -- NULL while current
   PRIMARY KEY (contract_id, from_ledger)
+);
+CREATE TABLE exec_refs (                       -- CAP-85 executable reference entries
+  owner_contract_id TEXT NOT NULL,
+  tag               TEXT NOT NULL,
+  wasm_hash         TEXT,                      -- NULL until resolved
+  updated_ledger    INTEGER,
+  archived          INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (owner_contract_id, tag)
 );
 CREATE TABLE wasm_claims (
   wasm_hash TEXT NOT NULL,
@@ -396,6 +410,7 @@ CREATE TABLE verifications (
 CREATE TABLE sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX idx_claims_sep       ON wasm_claims (sep, wasm_hash);
 CREATE INDEX idx_contracts_hash   ON contracts (current_wasm_hash);
+CREATE INDEX idx_contracts_ref    ON contracts (exec_ref_owner, exec_ref_tag) WHERE kind = 'wasm_ref';
 CREATE INDEX idx_matches_sep      ON interface_matches (sep, status);
 CREATE INDEX idx_versions_current ON contract_versions (contract_id) WHERE to_ledger IS NULL;
 CREATE VIEW claims AS
@@ -410,6 +425,7 @@ CREATE VIEW claims AS
 
 - **One current version per contract.** A trigger rejects inserting a second `contract_versions` row with `to_ledger IS NULL` for the same contract.
 - **Only a pass is passed.** A `CHECK` rejects `passed = 1` unless `verdict = 'pass'`.
+- **A reference contract names its reference.** A `CHECK` requires `exec_ref_owner` and `exec_ref_tag` to be non-NULL exactly when `kind = 'wasm_ref'`.
 - Write a test for each invariant that runs **raw SQL** against the database and attempts the violation directly, not only through Go code.
 
 The API process opens the database read-only (`mode=ro`).
@@ -425,9 +441,12 @@ The API process opens the database read-only (`mode=ro`).
 **Change extraction** (`internal/ingest`): decode each ledger's `metadataXdr` as `xdr.LedgerCloseMeta`. Walk every ledger-entry change in transaction meta and upgrade meta, and collect:
 
 - `CONTRACT_CODE` created → new Wasm hash.
-- `CONTRACT_DATA` with key `ScvLedgerKeyContractInstance` and persistent durability, created or updated → read the instance executable. It is either a Wasm hash or the Stellar Asset executable.
-  - On create, insert the contract.
-  - On update, compare with the stored hash. A different hash is an **upgrade**: close the old `contract_versions` row at this ledger and open a new one.
+- `CONTRACT_DATA` with key `ScvLedgerKeyContractInstance` and persistent durability, created or updated → read the instance executable. It is a Wasm hash, the Stellar Asset executable, or (CAP-85) an external reference `{executable_owner, tag}`.
+  - On create, insert the contract. For an external reference, set `kind='wasm_ref'` and resolve the hash from `exec_refs`, or with `getLedgerEntries` if not yet known.
+  - On update, compare the **resolved** hash with the stored one. A different hash is an **upgrade**: close the old `contract_versions` row at this ledger and open a new one. A switch between a direct hash and a reference (either way) is also an upgrade if the resolved hash changes, and always updates `kind` and the `exec_ref_*` columns.
+- `CONTRACT_DATA` with key `ScvExecutableTag` (CAP-85) and persistent durability, created or updated → upsert `exec_refs` with the 32-byte hash value. If the hash changed, every contract currently referencing `(owner, tag)` is upgraded at this ledger, in the same transaction: close each current version row and open a new one.
+  - Apply ledger-entry changes in transaction-apply order, so a reference update and an instance update in the same ledger resolve as the network did.
+- **Unresolved references claim nothing.** A `wasm_ref` contract whose reference entry is missing or archived has `current_wasm_hash = NULL` and no current claims or matches. It is counted, never silently dropped, and shown with `archived` set when the reference entry is archived.
 - SAC asset identity → `contracts.sac_asset`, where the instance storage exposes it.
   - If it can't be derived reliably, leave it NULL and report this at the STOP. Don't guess.
 
@@ -458,6 +477,8 @@ The API process opens the database read-only (`mode=ro`).
 - An instance update with a new hash creates exactly one new version row and closes the old one.
 - An archived code entry keeps its claims.
 - The retention-gap condition returns `ErrRetentionGap` and writes nothing.
+- An executable-reference update upgrades every contract that references it, and only those, at that ledger.
+- A `wasm_ref` contract with an unresolved reference reports no current claims.
 
 ### 5.10 Phase 0: the adoption report
 
@@ -483,7 +504,7 @@ sep47idx phase0 --network testnet --sample 2000 --out report/
 
 **Outputs:** `report/<network>-raw.csv` (one row per Wasm hash) and `report/ADOPTION.md`, containing:
 
-- contracts counted, % SAC, % Wasm, unique Wasm hashes, archived count;
+- contracts counted, % SAC, % Wasm, % `wasm_ref` (CAP-85) with how many distinct references they share, unique Wasm hashes, archived count;
 - % of Wasm declaring `sep`, weighted **by unique hash** and **by contract** (both, side by side, because factory deployments skew the per-contract number);
 - the count for each SEP number;
 - anomalies, by type, with examples;
@@ -514,7 +535,7 @@ General rules:
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /v1/contracts` | Contracts currently satisfying the filters. Params: `implements` (comma list, AND), `implements_any` (OR), `tier` (`declared` \| `inferred` \| `verified` \| `protocol`, default `declared`), `kind` (`wasm` \| `sac`), `limit`, `cursor`. `/contracts` is an alias. |
+| `GET /v1/contracts` | Contracts currently satisfying the filters. Params: `implements` (comma list, AND), `implements_any` (OR), `tier` (`declared` \| `inferred` \| `verified` \| `protocol`, default `declared`), `kind` (`wasm` \| `wasm_ref` \| `sac`), `limit`, `cursor`. `/contracts` is an alias. |
 | `GET /v1/contracts/{id}` | Detail: claims grouped by tier, version history, archived flag |
 | `GET /v1/contracts/{id}/history` | Every Wasm version with ledger range and the claims at each |
 | `GET /v1/wasm/{hash}` | Parsed meta, claims, anomalies, interface matches, contracts using it |
@@ -530,6 +551,7 @@ Contract detail shape (fixed surface):
   "network": "mainnet",
   "kind": "wasm",
   "wasm_hash": "ab12...",
+  "exec_ref": null,
   "archived": false,
   "claims": [
     {"sep": 41,
@@ -546,6 +568,7 @@ Contract detail shape (fixed surface):
 }
 ```
 
+- `exec_ref` is `null` unless `kind` is `wasm_ref`; then it is `{"owner": "C...", "tag": "..."}`, and `wasm_hash` is the resolved hash (`null` if unresolved). History entries carry the same `exec_ref` field.
 - `verified` is `null` when not run. Otherwise it is `{"verdict", "tool", "tool_version", "run_at", "stale"}`.
 - Errors always use this shape: `{"error":{"code":"not_found|bad_request|rate_limited|internal","message":"..."}}`, with the matching HTTP status.
 - Every response that carries `verified` data includes, in the docs, the caveat that **a pass means the suite's checks passed; it is not a security audit.**
@@ -556,7 +579,7 @@ Contract detail shape (fixed surface):
 sep47idx phase0 ...                       (§5.10)
 sep47idx sync    --network <n> [--seed f] [--start-ledger n] [--follow] [--recompute]
 sep47idx serve   --network <n> --addr :8080 [--rate-limit n]
-sep47idx query   --implements 41 [--implements-any ...] [--tier declared] [--kind wasm] [--json] [--csv]
+sep47idx query   --implements 41 [--implements-any ...] [--tier declared] [--kind wasm|wasm_ref|sac] [--json] [--csv]
 sep47idx contract <C...> [--history] [--json]
 sep47idx wasm <hash> [--json]
 sep47idx stats [--json]
