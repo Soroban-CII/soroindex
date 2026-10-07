@@ -134,6 +134,25 @@ func TestUpsertContractNeverRegresses(t *testing.T) {
 	}
 }
 
+func TestUnknownLedgersStayNull(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	for i := 0; i < 2; i++ { // the second pass is a replay
+		inTx(t, s, func(tx *Tx) error {
+			if err := tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", CurrentWasmHash: "aa"}); err != nil {
+				return err
+			}
+			return tx.UpsertExecRef(ctx, "C9", "v1", "aa", 0, false)
+		})
+	}
+	if got := queryString(t, s, `SELECT COALESCE(updated_ledger, 'NULL') FROM contracts`); got != "NULL" {
+		t.Fatalf("contracts.updated_ledger = %s, want NULL (unknown)", got)
+	}
+	if got := queryString(t, s, `SELECT COALESCE(updated_ledger, 'NULL') FROM exec_refs`); got != "NULL" {
+		t.Fatalf("exec_refs.updated_ledger = %s, want NULL (unknown)", got)
+	}
+}
+
 func TestRollbackLeavesNothing(t *testing.T) {
 	s, _ := openTest(t)
 	ctx := context.Background()

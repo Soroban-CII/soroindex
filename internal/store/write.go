@@ -54,6 +54,21 @@ func (t *Tx) SetState(ctx context.Context, key, value string) error {
 		`INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`, key, value)
 }
 
+// State reads a sync_state value inside the transaction. Use this, not
+// Store.State, while a write transaction is open: the writer has a single
+// connection, so a query outside the transaction would wait for it forever.
+func (t *Tx) State(ctx context.Context, key string) (string, error) {
+	var v string
+	err := t.tx.QueryRowContext(ctx, `SELECT value FROM sync_state WHERE key = ?`, key).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("sync_state %s: %w", key, ErrNotFound)
+	}
+	if err != nil {
+		return "", fmt.Errorf("sync_state %s: %w", key, err)
+	}
+	return v, nil
+}
+
 // SetLastLedger records the last ledger fully applied.
 func (t *Tx) SetLastLedger(ctx context.Context, l uint32) error {
 	return t.SetState(ctx, KeyLastLedger, strconv.FormatUint(uint64(l), 10))
@@ -211,7 +226,9 @@ ON CONFLICT (contract_id) DO UPDATE SET
   exec_ref_owner = excluded.exec_ref_owner, exec_ref_tag = excluded.exec_ref_tag,
   sac_asset = COALESCE(excluded.sac_asset, contracts.sac_asset),
   created_ledger = COALESCE(contracts.created_ledger, excluded.created_ledger),
-  updated_ledger = max(COALESCE(contracts.updated_ledger, 0), COALESCE(excluded.updated_ledger, 0)),
+  updated_ledger = CASE WHEN excluded.updated_ledger IS NULL THEN contracts.updated_ledger
+                        WHEN contracts.updated_ledger IS NULL THEN excluded.updated_ledger
+                        ELSE max(contracts.updated_ledger, excluded.updated_ledger) END,
   archived = excluded.archived`,
 		c.ID, c.Kind, nullStr(c.CurrentWasmHash), nullStr(c.ExecRefOwner), nullStr(c.ExecRefTag), nullStr(c.SACAsset),
 		nullLedger(c.CreatedLedger), nullLedger(c.UpdatedLedger), c.Archived)
@@ -295,7 +312,9 @@ func (t *Tx) UpsertExecRef(ctx context.Context, owner, tag, hash string, ledger 
 INSERT INTO exec_refs (owner_contract_id, tag, wasm_hash, updated_ledger, archived) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (owner_contract_id, tag) DO UPDATE SET
   wasm_hash = COALESCE(excluded.wasm_hash, exec_refs.wasm_hash),
-  updated_ledger = max(COALESCE(exec_refs.updated_ledger, 0), COALESCE(excluded.updated_ledger, 0)),
+  updated_ledger = CASE WHEN excluded.updated_ledger IS NULL THEN exec_refs.updated_ledger
+                        WHEN exec_refs.updated_ledger IS NULL THEN excluded.updated_ledger
+                        ELSE max(exec_refs.updated_ledger, excluded.updated_ledger) END,
   archived = excluded.archived`,
 		owner, tag, nullStr(hash), nullLedger(ledger), archived)
 }
