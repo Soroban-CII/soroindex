@@ -1,3 +1,7 @@
+// Package phase0 measures SEP-47 adoption across a network: the adoption
+// report that gates the rest of the project (CLAUDE.md §5.10). It parses
+// Wasm with pkg/sepmeta and checks interfaces with internal/match, through
+// the same ingest.Analyze the indexer uses; it never executes Wasm.
 package phase0
 
 import (
@@ -181,7 +185,7 @@ func ReadExecRefs(r io.Reader) (map[[2]string]string, error) {
 // ResolveRefs sets WasmHash for every wasm_ref contract. References missing
 // from known are fetched with getLedgerEntries; any still missing, or
 // archived, leave the contract Unresolved.
-func ResolveRefs(ctx context.Context, c RPC, contracts []Contract, known map[[2]string]string) error {
+func ResolveRefs(ctx context.Context, c ingest.RPC, contracts []Contract, known map[[2]string]string) error {
 	if known == nil {
 		known = map[[2]string]string{}
 	}

@@ -1,4 +1,4 @@
-package phase0
+package ingest
 
 import (
 	"context"
@@ -7,12 +7,12 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Soroban-CII/soroindex/internal/ingest"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
-// RPC is the subset of the RPC client phase0 uses; tests substitute a fake.
+// RPC is the subset of the RPC client the indexer and phase0 use; tests
+// substitute a fake.
 type RPC interface {
 	GetNetwork(ctx context.Context) (rpc.Network, error)
 	GetLatestLedger(ctx context.Context) (rpc.LatestLedger, error)
@@ -28,7 +28,7 @@ type Code struct {
 
 // codeLimits bounds a ContractCode entry: Soroban caps code at 128 KiB, so
 // 2 MiB of base64 leaves ample room while rejecting anything absurd.
-var codeLimits = ingest.XDRLimits{MaxBase64Len: 2 << 20}
+var codeLimits = XDRLimits{MaxBase64Len: 2 << 20}
 
 // FetchCode fetches every hash's code with getLedgerEntries, 200 keys per
 // call, with calls in parallel up to the client's concurrency limit. A
@@ -38,7 +38,7 @@ func FetchCode(ctx context.Context, c RPC, hashes []string) (map[string]Code, er
 	keys := make([]string, 0, len(hashes))
 	keyToHash := map[string]string{}
 	for _, h := range hashes {
-		k, err := ingest.ContractCodeKey(h)
+		k, err := ContractCodeKey(h)
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func FetchCode(ctx context.Context, c RPC, hashes []string) (map[string]Code, er
 				return
 			}
 			for _, e := range res.Entries {
-				data, err := ingest.DecodeLedgerEntryDataBase64(e.XDR, codeLimits)
+				data, err := DecodeLedgerEntryDataBase64(e.XDR, codeLimits)
 				if err != nil || data.Type != xdr.LedgerEntryTypeContractCode || data.ContractCode == nil {
 					if firstErr == nil {
 						firstErr = fmt.Errorf("code entry for key %s: unexpected or undecodable (%v)", e.Key, err)
@@ -95,8 +95,8 @@ func FetchCode(ctx context.Context, c RPC, hashes []string) (map[string]Code, er
 	return out, nil
 }
 
-// sortedKeys returns a map's keys in order, for deterministic output.
-func sortedKeys[V any](m map[string]V) []string {
+// SortedKeys returns a map's keys in order, for deterministic output.
+func SortedKeys[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

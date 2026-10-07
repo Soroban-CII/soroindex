@@ -54,7 +54,7 @@ var metaLimits = ingest.XDRLimits{MaxBase64Len: 64 << 20}
 //
 // This samples by activity: a contract that changes its instance often is
 // more likely to be drawn than an idle one. The report says so.
-func SampleTestnet(ctx context.Context, c RPC, cfg SampleConfig, log *slog.Logger) ([]string, SampleStats, error) {
+func SampleTestnet(ctx context.Context, c ingest.RPC, cfg SampleConfig, log *slog.Logger) ([]string, SampleStats, error) {
 	cfg = cfg.withDefaults()
 	latest, err := c.GetLatestLedger(ctx)
 	if err != nil {
@@ -139,7 +139,7 @@ func stratumOffset(span uint32, i, n int) uint32 {
 // CurrentInstances fetches each contract's current instance entry. A
 // contract the node does not return, or whose instance TTL has passed, is
 // marked Archived.
-func CurrentInstances(ctx context.Context, c RPC, ids []string) ([]Contract, uint32, error) {
+func CurrentInstances(ctx context.Context, c ingest.RPC, ids []string) ([]Contract, uint32, error) {
 	keyToID := map[string]string{}
 	keys := make([]string, 0, len(ids))
 	for _, id := range ids {

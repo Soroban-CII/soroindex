@@ -127,7 +127,7 @@ type Summary struct {
 }
 
 // Summarize computes the report numbers for a census and its analyzed Wasm.
-func Summarize(c Census, results map[string]WasmResult, population []string, rules []match.RuleFile, lim sepmeta.Limits, generatedAt string) Summary {
+func Summarize(c Census, results map[string]ingest.WasmResult, population []string, rules []match.RuleFile, lim sepmeta.Limits, generatedAt string) Summary {
 	var s Summary
 	s.Network, s.GeneratedAt, s.LatestLedger, s.Method, s.Limits = c.Network, generatedAt, c.LatestLedger, c.Method, lim
 	s.ParserVersion = sepmeta.ParserVersion
@@ -158,7 +158,7 @@ func Summarize(c Census, results map[string]WasmResult, population []string, rul
 				continue
 			}
 		}
-		if r, ok := results[ct.WasmHash]; ok && r.ParseStatus != ParseArchived {
+		if r, ok := results[ct.WasmHash]; ok && r.ParseStatus != ingest.ParseArchived {
 			s.Contracts.Measured++
 			contractsByHash[ct.WasmHash]++
 		}
@@ -173,18 +173,18 @@ func Summarize(c Census, results map[string]WasmResult, population []string, rul
 		}
 	}
 	s.Hashes.Population = len(population)
-	measured := make([]WasmResult, 0, len(population))
+	measured := make([]ingest.WasmResult, 0, len(population))
 	for _, h := range population {
 		r := results[h]
 		switch r.ParseStatus {
-		case ParseArchived:
+		case ingest.ParseArchived:
 			s.Hashes.Archived++
 			continue
-		case ParseOK:
+		case ingest.ParseOK:
 			s.Hashes.ParseOK++
-		case ParsePartial:
+		case ingest.ParsePartial:
 			s.Hashes.ParsePartial++
-		case ParseError:
+		case ingest.ParseError:
 			s.Hashes.ParseError++
 		}
 		measured = append(measured, r)
@@ -343,7 +343,7 @@ func Decide(byHashPct float64) string {
 
 // WriteRawCSV writes one row per Wasm hash in the population (CLAUDE.md
 // §5.10: report/<network>-raw.csv).
-func WriteRawCSV(w io.Writer, population []string, results map[string]WasmResult, contractsByHash map[string]int) error {
+func WriteRawCSV(w io.Writer, population []string, results map[string]ingest.WasmResult, contractsByHash map[string]int) error {
 	cw := csv.NewWriter(w)
 	header := []string{"wasm_hash", "size_bytes", "contracts", "parse_status", "parse_error", "has_meta", "has_spec",
 		"sep_entry_count", "seps", "anomalies", "sep41_status", "sep41_ok_count", "sep41_missing", "sep41_mismatched",

@@ -1,8 +1,4 @@
-// Package phase0 measures SEP-47 adoption across a network: the adoption
-// report that gates the rest of the project (CLAUDE.md §5.10). It parses
-// Wasm with pkg/sepmeta and checks interfaces with internal/match; it never
-// executes Wasm.
-package phase0
+package ingest
 
 import (
 	"errors"
@@ -19,7 +15,9 @@ const (
 	ParseArchived = "archived" // the code entry is missing or archived; not fetched
 )
 
-// WasmResult is everything phase0 learns from one Wasm.
+// WasmResult is everything the indexer and phase0 learn from one Wasm. Both
+// use this one analysis, so the stored data and the adoption report cannot
+// disagree about what a Wasm declares or matches.
 type WasmResult struct {
 	Hash        string
 	Size        int
@@ -33,7 +31,7 @@ type WasmResult struct {
 
 // Analyze parses one Wasm and matches it against every rule file. Malformed
 // input is recorded in the result, never returned as an error: one bad
-// contract must not stop a census.
+// contract must not stop a census or a sync. It parses bytes only.
 func Analyze(hash string, code []byte, rules []match.RuleFile, m match.Matcher, lim sepmeta.Limits) WasmResult {
 	r := WasmResult{Hash: hash, Size: len(code), ParseStatus: ParseOK, Claims: sepmeta.ParseSEP47(nil, sepmeta.Lenient)}
 	secs, err := sepmeta.ReadCustomSections(code, []string{sepmeta.SectionMeta, sepmeta.SectionSpec}, lim)

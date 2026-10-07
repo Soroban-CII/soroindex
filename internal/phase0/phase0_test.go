@@ -282,7 +282,8 @@ func TestRunMainnetCensus(t *testing.T) {
 		t.Errorf("raw csv lacks the factory hash row with 3 contracts:\n%s", raw)
 	}
 	md, _ := fs.ReadFile(out, "ADOPTION.md")
-	for _, want := range []string{"## Decision", "| Wasm contracts whose code is archived or missing | 1 | |", "4 / 6 (66.67%)", "6 / 7 (85.71%)", "**Undeclared gap** (inferred): 1 hashes / 1 contracts"} {
+	for _, want := range []string{"## Decision", "| Wasm contracts whose code is archived or missing | 1 | |",
+		"| Code entries in census | 9 |", "| Archived or missing (not fetched) | 2 |", "that RPC returned live", "4 / 6 (66.67%)", "6 / 7 (85.71%)", "**Undeclared gap** (inferred): 1 hashes / 1 contracts"} {
 		if !strings.Contains(string(md), want) {
 			t.Errorf("ADOPTION.md lacks %q", want)
 		}
@@ -447,8 +448,8 @@ func TestDecide(t *testing.T) {
 
 func TestAnalyzeTruncatedIsError(t *testing.T) {
 	code := fixtureCode(t, "truncated.wasm")
-	r := Analyze("x", code["truncated.wasm"], testOptions(t).Rules, match.Matcher{}, sepmeta.DefaultLimits())
-	if r.ParseStatus != ParseError || len(r.Claims.SEPs) != 0 || r.Matches[0].Status != match.StatusNoSpec {
+	r := ingest.Analyze("x", code["truncated.wasm"], testOptions(t).Rules, match.Matcher{}, sepmeta.DefaultLimits())
+	if r.ParseStatus != ingest.ParseError || len(r.Claims.SEPs) != 0 || r.Matches[0].Status != match.StatusNoSpec {
 		t.Fatalf("got %+v", r)
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/Soroban-CII/soroindex/internal/ingest"
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
@@ -30,7 +31,7 @@ type Result struct {
 	Summary    Summary
 	Census     Census
 	Population []string
-	Wasm       map[string]WasmResult
+	Wasm       map[string]ingest.WasmResult
 }
 
 // MainnetInputs are the Hubble exports (scripts/hubble-export.sql).
@@ -42,7 +43,7 @@ type MainnetInputs struct {
 
 // RunMainnet takes a census from the Hubble exports: every code hash and
 // every current contract instance, with each Wasm fetched from RPC.
-func RunMainnet(ctx context.Context, c RPC, in MainnetInputs, o Options) (Result, error) {
+func RunMainnet(ctx context.Context, c ingest.RPC, in MainnetInputs, o Options) (Result, error) {
 	hashes, err := ReadCodeHashes(in.Hashes)
 	if err != nil {
 		return Result{}, err
@@ -83,7 +84,7 @@ func RunMainnet(ctx context.Context, c RPC, in MainnetInputs, o Options) (Result
 
 // RunTestnet samples contracts from the RPC retention window, because
 // Hubble does not cover testnet.
-func RunTestnet(ctx context.Context, c RPC, sc SampleConfig, o Options) (Result, error) {
+func RunTestnet(ctx context.Context, c ingest.RPC, sc SampleConfig, o Options) (Result, error) {
 	ids, st, err := SampleTestnet(ctx, c, sc, o.Log)
 	if err != nil {
 		return Result{}, err
@@ -116,7 +117,7 @@ func RunTestnet(ctx context.Context, c RPC, sc SampleConfig, o Options) (Result,
 	return finish(ctx, c, census, population, o, &st)
 }
 
-func finish(ctx context.Context, c RPC, census Census, population []string, o Options, st *SampleStats) (Result, error) {
+func finish(ctx context.Context, c ingest.RPC, census Census, population []string, o Options, st *SampleStats) (Result, error) {
 	want := map[string]bool{}
 	for _, h := range population {
 		want[h] = true
@@ -126,18 +127,18 @@ func finish(ctx context.Context, c RPC, census Census, population []string, o Op
 			want[ct.WasmHash] = true
 		}
 	}
-	all := sortedKeys(want)
+	all := ingest.SortedKeys(want)
 	o.Log.LogAttrs(ctx, slog.LevelInfo, "phase0 fetching code", slog.Int("hashes", len(all)))
-	code, err := FetchCode(ctx, c, all)
+	code, err := ingest.FetchCode(ctx, c, all)
 	if err != nil {
 		return Result{}, err
 	}
-	results := make(map[string]WasmResult, len(all))
+	results := make(map[string]ingest.WasmResult, len(all))
 	for _, h := range all {
 		if cd := code[h]; cd.Archived {
-			results[h] = Archived(h, o.Rules)
+			results[h] = ingest.Archived(h, o.Rules)
 		} else {
-			results[h] = Analyze(h, cd.Bytes, o.Rules, o.Matcher, o.Limits)
+			results[h] = ingest.Analyze(h, cd.Bytes, o.Rules, o.Matcher, o.Limits)
 		}
 	}
 	s := Summarize(census, results, population, o.Rules, o.Limits, o.Now().UTC().Format(time.RFC3339))
