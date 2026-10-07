@@ -1,0 +1,145 @@
+{
+  "network": "testnet",
+  "generated_at": "2026-10-07T03:12:23Z",
+  "latest_ledger": 5063829,
+  "parser_version": "1",
+  "ruleset_versions": [
+    "sep41-v0.5.2"
+  ],
+  "method": "Sample, not a census: Hubble does not cover testnet. The RPC retention window (ledgers 4942229–5063188) was split into 20 equal strata; each was scanned from its start with getLedgers until it gave its share of contracts not seen before. A contract enters the sample when its instance entry is created or updated in a scanned ledger, so active contracts are more likely to be drawn than idle ones. Each sampled contract's current instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.",
+  "limits": {
+    "MaxWasmBytes": 1048576,
+    "MaxSectionBytes": 262144,
+    "MaxSections": 10000,
+    "MaxXDRDepth": 500
+  },
+  "contracts": {
+    "total": 2000,
+    "sac": 114,
+    "wasm": 1820,
+    "wasm_ref": 10,
+    "wasm_ref_distinct_refs": 10,
+    "wasm_ref_unresolved": 0,
+    "archived_instances": 56,
+    "instance_decode_errors": 0,
+    "measured": 1758
+  },
+  "hashes": {
+    "code_entries": 0,
+    "code_deleted": 0,
+    "population": 576,
+    "archived": 11,
+    "measured": 565,
+    "parse_ok": 565,
+    "parse_partial": 0,
+    "parse_error": 0,
+    "used_by_a_contract": 565
+  },
+  "declares_any": {
+    "by_hash": {
+      "n": 0,
+      "of": 565,
+      "pct": 0
+    },
+    "by_contract": {
+      "n": 0,
+      "of": 1758,
+      "pct": 0
+    },
+    "wilson95_by_contract": {
+      "low_pct": 0,
+      "high_pct": 0.21803657766490767
+    }
+  },
+  "with_spec_by_hash": {
+    "n": 565,
+    "of": 565,
+    "pct": 100
+  },
+  "per_sep": [],
+  "anomalies": [],
+  "sep41": {
+    "status": {
+      "match": {
+        "hashes": 34,
+        "contracts": 121
+      },
+      "mismatch": {
+        "hashes": 507,
+        "contracts": 1517
+      },
+      "no_spec": {
+        "hashes": 0,
+        "contracts": 0
+      },
+      "partial": {
+        "hashes": 24,
+        "contracts": 120
+      }
+    },
+    "ok_histogram": [
+      460,
+      29,
+      11,
+      1,
+      6,
+      2,
+      1,
+      0,
+      21,
+      0,
+      34
+    ],
+    "undeclared_gap": {
+      "hashes": 34,
+      "contracts": 121
+    },
+    "declared_41_by_status": {
+      "match": {
+        "hashes": 0,
+        "contracts": 0
+      },
+      "mismatch": {
+        "hashes": 0,
+        "contracts": 0
+      },
+      "no_spec": {
+        "hashes": 0,
+        "contracts": 0
+      },
+      "partial": {
+        "hashes": 0,
+        "contracts": 0
+      }
+    }
+  },
+  "sample": {
+    "OldestLedger": 4942229,
+    "LatestLedger": 5063188,
+    "Strata": 20,
+    "LedgersScanned": 22950,
+    "PerStratum": [
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100,
+      100
+    ],
+    "SkippedEntries": 0
+  }
+}
