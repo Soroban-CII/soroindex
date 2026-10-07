@@ -1,0 +1,93 @@
+# Contributing
+
+Thanks for helping. This page covers setup, the checks your change must pass, how commits are written, and how Stellar Wave issues work.
+
+## Setup
+
+You need Go 1.27.1. `go.mod` pins it with `toolchain go1.27.1`, so a newer Go downloads it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
+
+```sh
+git clone https://github.com/Soroban-CII/soroindex
+cd soroindex
+make test
+```
+
+If `go` fails to download modules with "unknown revision" errors, your `GOPROXY` is probably `direct`. Some dependencies resolve only through the module proxy:
+
+```sh
+GOPROXY=https://proxy.golang.org,direct make test
+```
+
+## Make targets
+
+| Target | What it runs | CI job |
+| --- | --- | --- |
+| `make test` | `go test ./...` | `test` (with `-race`) |
+| `make lint` | `golangci-lint run ./...` (govet, staticcheck, errcheck, gosec, revive) | `lint` |
+| `make rules-check` | Validates `rules/sep-*.json` against `rules/schema.json` | `lint` |
+| `make tidy-check` | Fails if `go.mod`/`go.sum` are not tidy | `lint` |
+| `make fuzz-smoke` | Each fuzz target for 30 s | `fuzz-smoke` |
+| `make fuzz FUZZTIME=10m` | Each fuzz target for 10 minutes | — |
+| `make build` | Static binary, `CGO_ENABLED=0` | `build` (linux/darwin × amd64/arm64) |
+| `make fixtures` | Rebuilds `testdata/wasm` from Rust sources (needs Rust and stellar-cli) | — |
+| `make docs` | `mkdocs build --strict` | `docs` workflow |
+
+All four CI jobs must pass before a pull request can merge.
+
+## Rules for code
+
+- Treat Wasm and XDR from the network as hostile. Check every length against the bytes remaining and a limit before allocating.
+- No panics outside `main` setup and tests. Malformed input becomes a recorded error.
+- Every I/O function takes a `context.Context` first, and every RPC call has a timeout.
+- SQL is parameterized. Database writes are idempotent.
+- Every exported identifier has a doc comment that says why.
+- Tests are table-driven, with `t.Run` names that state the expected behavior. Tests do not touch the network unless they carry the `integration` build tag.
+- New dependencies need a stated reason in the commit and a maintainer's agreement. The allowed set today is `github.com/stellar/go-stellar-sdk` (the `xdr` and `strkey` packages) and `modernc.org/sqlite`.
+- Where a requirement is ambiguous, choose the reading that claims less trust about a contract.
+
+## Commits
+
+- One commit per logical change: one function with its tests, one migration, one endpoint, one doc page.
+- [Conventional commits](https://www.conventionalcommits.org/), lowercase, imperative: `type(scope): description`.
+  - Types: `feat fix test docs chore ci refactor perf build`.
+  - Scopes: `sepmeta rpc ingest claims match store sync api cli verify phase0 docs repo`.
+- Stage files by name; do not commit with `git add .`.
+- A fix to something already merged is its own commit. Its body says what was wrong and how you showed it: a test that fails before the fix and passes after.
+- Never commit secrets, `.env` files or databases (`.gitignore` covers them).
+
+## Stellar Wave issues
+
+Issues open for [Stellar Wave](https://www.drips.network/wave/stellar) contributors carry the label **`Stellar Wave`**, plus:
+
+- a difficulty: `difficulty/trivial`, `difficulty/medium` or `difficulty/high`;
+- an area: `area/parser`, `area/sync`, `area/api`, `area/cli`, `area/rules`, `area/docs`, `area/infra`.
+
+To take one, comment on the issue and wait for a maintainer to assign it to you; one assignee per issue. Each issue lists acceptance criteria as checkboxes; a pull request should tick all of them, link the issue, and pass CI. Maintainers review Wave pull requests within 48 hours.
+
+## Rule-file pull requests
+
+A new or changed `rules/sep-NNNN.json`:
+
+- [ ] Fetched the SEP's current text and named the commit you read in the PR description.
+- [ ] Every required function and type matches the text; nothing optional is marked required.
+- [ ] `source` names the SEP file, its version, its updated date, and the date you diffed it.
+- [ ] `ruleset_version` changed if any rule changed.
+- [ ] `make rules-check` passes.
+- [ ] A test in `internal/match` covers at least one matching and one mismatching spec.
+
+## Versions
+
+Checked on 7 October 2026. A bump is its own commit, with a test run.
+
+| Component | Version | Pinned in |
+| --- | --- | --- |
+| Go toolchain (build) | go1.27.1 | `go.mod` `toolchain` |
+| Go language floor | 1.26 (the highest `go` directive in the dependency tree: modernc.org/sqlite v1.60.1) | `go.mod` `go` |
+| github.com/stellar/go-stellar-sdk | v0.7.3 | `go.mod` |
+| modernc.org/sqlite | v1.60.1 | `go.mod` |
+| golangci-lint | v2.14.0 | `.github/workflows/ci.yml` |
+| check-jsonschema | 0.38.2 | `ci.yml`, `Makefile` |
+| MkDocs / Material | 1.6.1 / 9.7.7 | `docs/requirements.txt` |
+| Rust (fixtures only) | 1.98.1 | `testdata/contracts/rust-toolchain.toml` |
+| soroban-sdk, soroban-token-sdk (fixtures only) | 28.0.0 | `testdata/contracts/Cargo.toml` |
+| stellar-cli (fixtures only) | 28.0.0 | `scripts/build-fixtures.sh` |

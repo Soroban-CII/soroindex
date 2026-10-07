@@ -1,0 +1,31 @@
+name: Rule file
+description: Propose interface rules for a SEP (rules/sep-NNNN.json).
+labels: ["area/rules"]
+body:
+  - type: input
+    id: sep
+    attributes:
+      label: SEP number and version
+      placeholder: "SEP-40, Version 1.0.0"
+    validations: {required: true}
+  - type: input
+    id: source
+    attributes:
+      label: Source text and commit
+      description: Link to the SEP file in stellar/stellar-protocol at the commit you read.
+    validations: {required: true}
+  - type: textarea
+    id: functions
+    attributes:
+      label: Required and optional functions
+      description: Each function with its parameter and return types, copied from the SEP text.
+    validations: {required: true}
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: Every function and type matches the current SEP text.
+          required: true
+        - label: Nothing optional is marked required.
+          required: true

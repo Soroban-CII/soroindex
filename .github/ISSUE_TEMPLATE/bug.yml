@@ -1,0 +1,26 @@
+name: Bug report
+description: Something the index, parser or CLI got wrong.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the exact command and its full output.
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations: {required: true}
+  - type: input
+    id: contract
+    attributes:
+      label: Contract ID or Wasm hash
+      description: If the bug concerns one contract or Wasm, give its C... ID or 64-hex hash and the network.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `sep47idx version`, or the commit SHA.
+    validations: {required: true}
