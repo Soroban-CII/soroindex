@@ -259,6 +259,13 @@ func TestReadCustomSectionsLimits(t *testing.T) {
 			t.Fatalf("got %q, %v; want \"ok\", nil", got["m"], err)
 		}
 	})
+	t.Run("zero Limits fields take their defaults instead of allowing nothing", func(t *testing.T) {
+		w := module(section(1, nil), custom("m", []byte("ok")))
+		got, err := ReadCustomSections(w, []string{"m"}, Limits{})
+		if err != nil || string(got["m"]) != "ok" {
+			t.Fatalf("got %q, %v; want \"ok\", nil", got["m"], err)
+		}
+	})
 	t.Run("exactly MaxSections sections is allowed", func(t *testing.T) {
 		w := module(section(1, nil), section(1, nil), section(1, nil))
 		if _, err := ReadCustomSections(w, nil, small); err != nil {

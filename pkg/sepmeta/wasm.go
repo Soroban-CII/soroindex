@@ -25,6 +25,7 @@ var (
 
 // Limits caps the resources one untrusted input may consume. They exist so
 // that a crafted Wasm cannot make the indexer allocate or loop without bound.
+// A zero field means "use the DefaultLimits value", never "unlimited".
 type Limits struct {
 	// MaxWasmBytes caps the total size of a Wasm module.
 	MaxWasmBytes int
@@ -47,6 +48,25 @@ func DefaultLimits() Limits {
 		MaxSections:     10_000,
 		MaxXDRDepth:     500,
 	}
+}
+
+// withDefaults returns lim with every zero field replaced by its default, so
+// a zero Limits{} is safe rather than "allow nothing" or "allow anything".
+func (lim Limits) withDefaults() Limits {
+	d := DefaultLimits()
+	if lim.MaxWasmBytes <= 0 {
+		lim.MaxWasmBytes = d.MaxWasmBytes
+	}
+	if lim.MaxSectionBytes <= 0 {
+		lim.MaxSectionBytes = d.MaxSectionBytes
+	}
+	if lim.MaxSections <= 0 {
+		lim.MaxSections = d.MaxSections
+	}
+	if lim.MaxXDRDepth == 0 {
+		lim.MaxXDRDepth = d.MaxXDRDepth
+	}
+	return lim
 }
 
 // LimitError reports which limit was exceeded. It matches ErrLimit under
@@ -74,7 +94,10 @@ const customSectionID = 0
 // contractmeta! invocation. Names that do not occur are absent from the map.
 //
 // Non-custom sections, including code, are skipped without being decoded.
+//
+// Zero fields in lim take their DefaultLimits value.
 func ReadCustomSections(wasm []byte, names []string, lim Limits) (map[string][]byte, error) {
+	lim = lim.withDefaults()
 	if len(wasm) > lim.MaxWasmBytes {
 		return nil, &LimitError{Limit: "MaxWasmBytes", Max: lim.MaxWasmBytes, Got: len(wasm)}
 	}
