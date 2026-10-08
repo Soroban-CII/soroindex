@@ -47,6 +47,9 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	follow := flags.Bool("follow", false, "poll for new ledgers after catching up")
 	interval := flags.Duration("interval", 5*time.Second, "poll interval when following")
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
 		return exitError
 	}
 	cfg, err := resolve()
