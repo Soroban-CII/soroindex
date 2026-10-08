@@ -1,6 +1,6 @@
 # CLI reference
 
-The binary is `sep47idx`. Every output below was captured from a real run on 7 October 2026.
+The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. The help output was refreshed from a local build on 8 October 2026.
 
 Every flag also has an environment variable: `SEP47IDX_` plus the flag name in capitals, dashes as underscores (`--rpc-url` is `SEP47IDX_RPC_URL`). A flag on the command line overrides the variable. Exit codes: `0` ok, `1` error, `2` not found.
 
@@ -11,7 +11,7 @@ usage: sep47idx <command> [flags]
 commands:
   gap        list contracts that match a SEP's interface but declare nothing (inferred)
   phase0     measure SEP-47 adoption and write the adoption report
-  sync       seed the index or recompute matches (incremental sync is planned)
+  sync       seed the index, sync ledgers or recompute matches
   version    print the binary version
 ```
 
@@ -60,7 +60,15 @@ Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mai
 
 ## sync
 
-Seeds an index from a contract list, and recomputes interface matches. The incremental sync loop is not built yet.
+Seeds an index, recomputes interface matches, or applies consecutive ledger batches. With no seed or recompute option, it resumes from the database’s `last_ledger`. A new index requires a seed or `--start-ledger`.
+
+| Flag | Meaning |
+| --- | --- |
+| `--start-ledger` | First ledger to index when the database has no resume point. An existing resume point takes precedence. |
+| `--follow` | Keep polling after catching up. Combine with a seed to seed and then follow. |
+| `--interval` | Positive polling duration, default `5s`. |
+
+Each batch and its resume point commit in one transaction. A retention gap exits with an error and tells the operator to seed or backfill. Progress is JSON on stderr, including `last_ledger`, `latest_ledger`, `lag` and `caught_up`. Live testnet validation remains pending; offline tests exercise resume, rollback, upgrades and reference changes.
 
 ```text
 $ sep47idx sync --network testnet --db s20.db --seed report/testnet-contracts.csv

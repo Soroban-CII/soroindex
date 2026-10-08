@@ -31,6 +31,12 @@ A seeded version row starts at the instance's last-modified ledger. Earlier hist
 
 Stellar archives entries whose TTL passes. On 7 October 2026, 3,083 of 5,261 mainnet Wasm hashes and 74,959 of 156,173 mainnet contract instances were archived. The index marks archived code and instances. It never deletes claims because an entry was archived; it keeps the last known data.
 
-## Planned: incremental sync
+## Incremental sync
 
-The sync loop will follow the network with `getLedgers`, 200 ledgers per batch, each batch one transaction. It will detect upgrades and archival as they happen. If the index falls behind the RPC node's retention window, it will stop with an error rather than skip ledgers. The ledger reader that enforces "never skip" is built (`internal/ingest/ledgers.go`); the loop around it is tracked as an issue.
+The sync loop reads `getLedgers` in batches of up to 200 ledgers. It applies instance, code, reference and archival changes in network order. Every batch and its `last_ledger` commit in one transaction, so a failed batch can be resumed. Reference updates upgrade the contracts that currently reference that owner and tag. Unresolved or archived references have no current claims.
+
+A seeded index resumes with `sync`; `--follow` polls after catching up. An index without a seed needs `--start-ledger`. If its next ledger is older than the RPC retention window, the loop returns an error before applying a batch. It rechecks the latest ledger before reporting `caught_up`.
+
+These paths have offline tests. The required live testnet follow and fixture upgrade are pending.
+
+See the [Stage F validation evidence](stage-f-progress.md) for the completed offline checks and pending live checks.
