@@ -166,6 +166,11 @@ func TestExtractContractFactsInstancesAndRefs(t *testing.T) {
 	if len(f.ExecRefs) != 1 || len(f.Skipped) != 1 || !errors.Is(f.Skipped[0], ErrMalformed) {
 		t.Fatalf("refs %+v skipped %v", f.ExecRefs, f.Skipped)
 	}
+	if len(f.Changes) != 4 || !IsInstanceKey(*f.Changes[0].Entry.Data.ContractData) ||
+		!IsInstanceKey(*f.Changes[1].Entry.Data.ContractData) || !IsExecRefKey(*f.Changes[2].Entry.Data.ContractData) ||
+		!IsExecRefKey(*f.Changes[3].Entry.Data.ContractData) {
+		t.Fatalf("ordered facts lost instance/reference order: %+v", f.Changes)
+	}
 }
 
 func TestUnsupportedMetaVersions(t *testing.T) {
