@@ -7,7 +7,7 @@ A multi-stage Dockerfile is implemented and tested locally. It builds a static b
 Go 1.27.2, with `CGO_ENABLED=0`; SQLite is the pure-Go `modernc.org/sqlite` driver.
 
 ```sh
-git clone https://github.com/Soroban-CII/soroindex
+git clone https://github.com/ciscokwiz/soroindex
 cd soroindex
 CGO_ENABLED=0 go build -o sep47idx ./cmd/sep47idx
 ```
@@ -27,7 +27,7 @@ Stellar's docs list mainnet RPC providers. Several public endpoints answered a 2
 
 ## Seed
 
-An index starts from a seed: a CSV with a `contract_id` column. For mainnet, export Q2 of [`scripts/hubble-export.sql`](https://github.com/Soroban-CII/soroindex/blob/main/scripts/hubble-export.sql) from BigQuery, or run `phase0` and use its `mainnet-contracts.csv`.
+An index starts from a seed: a CSV with a `contract_id` column. For mainnet, export Q2 of [`scripts/hubble-export.sql`](https://github.com/ciscokwiz/soroindex/blob/main/scripts/hubble-export.sql) from BigQuery, or run `phase0` and use its `mainnet-contracts.csv`.
 
 ```sh
 sep47idx sync --network mainnet --rpc-url <url> --seed mainnet-contracts.csv
