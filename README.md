@@ -91,7 +91,7 @@ SEP-47 (contract interface discovery) and SEP-48 (contract interface specificati
 
 ## Contributing
 
-The [Wave application package](docs/wave/APPLICATION.md) distinguishes built features from the 26 remaining issues and publication tasks. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, `make` targets and the commit rules. Security issues: [SECURITY.md](SECURITY.md). This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+The [Wave application package](docs/wave/APPLICATION.md) distinguishes built features from the 25 remaining issues and publication tasks. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, `make` targets and the commit rules. Security issues: [SECURITY.md](SECURITY.md). This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
 
 ## Maintainers
 
