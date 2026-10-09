@@ -39,4 +39,4 @@ A seeded index resumes with `sync`; `--follow` polls after catching up. An index
 
 These paths have offline tests. The 30-minute testnet follow check passed on 9 October 2026 with a final lag of one ledger. The operator waived the deployed-fixture upgrade check.
 
-See the [Stage F validation evidence](stage-f-progress.md) for the completed offline checks and pending live checks.
+See the [Stage F validation evidence](stage-f-progress.md) for the completed offline and live-follow checks and the explicit fixture waiver.
