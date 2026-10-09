@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/Soroban-CII/soroindex/security/advisories/new
+    url: https://github.com/ciscokwiz/soroindex/security/advisories/new
     about: Report privately. Do not open a public issue (see SECURITY.md).
   - name: Documentation
-    url: https://soroban-cii.github.io/soroindex/
+    url: https://ciscokwiz.github.io/soroindex/
     about: Read the docs first; many questions are answered there.

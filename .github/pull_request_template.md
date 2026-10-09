@@ -14,3 +14,6 @@
 - [ ] No new dependency, or the reason is stated and a maintainer agreed.
 - [ ] Docs updated if user-visible behavior changed.
 - [ ] No tier presented as another (declared / inferred / verified / protocol).
+
+- [ ] Linked the assigned Wave issue and checked its acceptance criteria, if applicable.
+- [ ] Public API or schema changes received operator review before implementation.
