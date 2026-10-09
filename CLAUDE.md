@@ -706,11 +706,11 @@ Each bullet is at least one commit. The **STOP** points are the operator's check
 23. `LedgerSource` over `getLedgers` + change extraction + tests on recorded ledger meta.
 24. Sync loop + batching + idempotency + crash resume + retention-gap error.
 25. Upgrade detection + archival handling.
-26. All five tests from §5.9.
+26. All seven tests from §5.9.
 27. Integration test (build tag `integration`): follow testnet for 30 minutes from the current tip with no errors and lag under 10 ledgers at the end.
-28. **Operator action:** deploy a fixture token to testnet, then upgrade it to `token_partial.wasm`. Show the new version row and the changed inferred status.
+28. **Operator action (waived by the operator on 9 October 2026 for this build):** deploy a fixture token to testnet, then upgrade it to `token_partial.wasm`. Show the new version row and the changed inferred status. The live deployment/upgrade check is skipped; offline fixture tests cover version rows and changed inferred status. Do not substitute an arbitrary contract ID or claim live upgrade validation.
 
-**STOP F.** Read in full: paste the five §5.9 test names and their source, plus the step 28 evidence.
+**STOP F.** Read in full: paste the seven §5.9 test names and their source. Record step 28 as an operator-approved skip for this build, not a passing live check.
 
 ### Stage G: API and CLI — loose
 
