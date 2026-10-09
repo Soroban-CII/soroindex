@@ -30,3 +30,23 @@ ok      github.com/Soroban-CII/soroindex/internal/store    10.629s
 p95 is below the 200 ms Stage G threshold. The `claims` view remains a view;
 materialization is unnecessary. The benchmark rebuilds its fixture in a temporary
 directory and checks the actual row counts before measuring.
+
+## Patched toolchain rerun
+
+After updating to Go 1.27.2 and `klauspost/compress` 1.18.7, the same command ran
+again on 9 October 2026. A Docker build and race checks were running on the same
+machine, so this is not a controlled compiler comparison.
+
+```text
+goos: linux
+goarch: amd64
+pkg: github.com/Soroban-CII/soroindex/internal/store
+cpu: AMD EPYC 9V74 80-Core Processor
+BenchmarkContractsMillionClaims
+    catalog_benchmark_test.go:83: fixture: 1000000 claims, 100000 live contracts, 1000 SEP-41 hashes; production indexes, read-only query, limit 50
+BenchmarkContractsMillionClaims-4          100      11789639 ns/op             9.302 p50-ms             23.78 p95-ms
+PASS
+ok      github.com/Soroban-CII/soroindex/internal/store    14.867s
+```
+
+The patched build also stays below the materialization threshold.
