@@ -161,6 +161,9 @@ func addTxMeta(tm xdr.TransactionMeta, add func(xdr.LedgerEntryChanges)) error {
 // ContractFacts are the contract-level facts in one ledger, in apply order.
 type ContractFacts struct {
 	Ledger uint32
+	// Changes preserves apply order across instances, references, code and
+	// removals. Incremental sync must not apply the grouped summaries below.
+	Changes []Change
 	// CodeCreated lists Wasm hashes (hex) whose code entry was created or
 	// restored.
 	CodeCreated []string
@@ -191,6 +194,19 @@ func ExtractContractFacts(m xdr.LedgerCloseMeta) (ContractFacts, error) {
 	}
 	f := ContractFacts{Ledger: m.LedgerSequence()}
 	for _, c := range changes {
+		// Keep only relevant changes, including removals and restorations.
+		if c.Key != nil {
+			if c.Key.Type == xdr.LedgerEntryTypeContractCode || (c.Key.ContractData != nil &&
+				c.Key.ContractData.Durability == xdr.ContractDataDurabilityPersistent &&
+				(c.Key.ContractData.Key.Type == xdr.ScValTypeScvLedgerKeyContractInstance || c.Key.ContractData.Key.Type == xdr.ScValTypeScvExecutableTag)) {
+				f.Changes = append(f.Changes, c)
+			}
+		} else if c.Entry != nil {
+			d := c.Entry.Data
+			if d.Type == xdr.LedgerEntryTypeContractCode || (d.ContractData != nil && (IsInstanceKey(*d.ContractData) || IsExecRefKey(*d.ContractData))) {
+				f.Changes = append(f.Changes, c)
+			}
+		}
 		switch c.Kind {
 		case Evicted:
 			f.Evicted = append(f.Evicted, *c.Key)

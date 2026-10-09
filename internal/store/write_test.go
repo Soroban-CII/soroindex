@@ -123,7 +123,7 @@ func TestUpsertContractNeverRegresses(t *testing.T) {
 		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", CurrentWasmHash: "bb", CreatedLedger: 10, UpdatedLedger: 20})
 	})
 	inTx(t, s, func(tx *Tx) error { // an older replay
-		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", CurrentWasmHash: "bb", CreatedLedger: 5, UpdatedLedger: 12})
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", CurrentWasmHash: "aa", CreatedLedger: 5, UpdatedLedger: 12})
 	})
 	if got := queryString(t, s, `SELECT created_ledger || '/' || updated_ledger FROM contracts WHERE contract_id = 'C1'`); got != "10/20" {
 		t.Fatalf("created/updated = %s", got)
@@ -168,5 +168,15 @@ func TestRollbackLeavesNothing(t *testing.T) {
 	}
 	if _, err := s.State(ctx, KeyLastLedger); err == nil {
 		t.Fatal("rolled-back write is visible")
+	}
+}
+
+func TestExecRefReplayNeverRegressesHash(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	inTx(t, s, func(tx *Tx) error { return tx.UpsertExecRef(ctx, "C9", "v1", "bb", 20, false) })
+	inTx(t, s, func(tx *Tx) error { return tx.UpsertExecRef(ctx, "C9", "v1", "aa", 10, true) })
+	if got := queryString(t, s, `SELECT wasm_hash || '/' || updated_ledger || '/' || archived FROM exec_refs`); got != "bb/20/0" {
+		t.Fatalf("older replay regressed reference: %s", got)
 	}
 }

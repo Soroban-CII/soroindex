@@ -1,0 +1,43 @@
+name: integration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.27.2"
+  GOTOOLCHAIN: local
+  SEP47IDX_RPC_URL: https://soroban-testnet.stellar.org
+
+jobs:
+  follow-testnet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      # Uses a temporary index and the testnet passphrase; submits no transactions.
+      # pipefail preserves failures while retaining the progress log.
+      - name: follow testnet for 30 minutes
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -v -count=1 -tags integration -run '^TestFollowTestnet30Minutes$' -timeout 35m ./internal/sync | tee integration.log
+      - name: retain integration log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: testnet-follow-${{ github.run_id }}
+          path: integration.log
+          if-no-files-found: warn
+          retention-days: 14

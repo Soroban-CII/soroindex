@@ -231,7 +231,8 @@ ON CONFLICT (contract_id) DO UPDATE SET
   updated_ledger = CASE WHEN excluded.updated_ledger IS NULL THEN contracts.updated_ledger
                         WHEN contracts.updated_ledger IS NULL THEN excluded.updated_ledger
                         ELSE max(contracts.updated_ledger, excluded.updated_ledger) END,
-  archived = excluded.archived`,
+  archived = excluded.archived
+WHERE contracts.updated_ledger IS NULL OR excluded.updated_ledger IS NULL OR excluded.updated_ledger >= contracts.updated_ledger`,
 		c.ID, c.Kind, nullStr(c.CurrentWasmHash), nullStr(c.ExecRefOwner), nullStr(c.ExecRefTag), nullStr(c.SACAsset),
 		nullLedger(c.CreatedLedger), nullLedger(c.UpdatedLedger), c.Archived)
 }
@@ -317,7 +318,8 @@ ON CONFLICT (owner_contract_id, tag) DO UPDATE SET
   updated_ledger = CASE WHEN excluded.updated_ledger IS NULL THEN exec_refs.updated_ledger
                         WHEN exec_refs.updated_ledger IS NULL THEN excluded.updated_ledger
                         ELSE max(exec_refs.updated_ledger, excluded.updated_ledger) END,
-  archived = excluded.archived`,
+  archived = excluded.archived
+WHERE exec_refs.updated_ledger IS NULL OR excluded.updated_ledger IS NULL OR excluded.updated_ledger >= exec_refs.updated_ledger`,
 		owner, tag, nullStr(hash), nullLedger(ledger), archived)
 }
 

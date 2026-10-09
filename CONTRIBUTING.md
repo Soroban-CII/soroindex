@@ -4,10 +4,10 @@ Thanks for helping. This page covers setup, the checks your change must pass, ho
 
 ## Setup
 
-You need Go 1.27.1. `go.mod` pins it with `toolchain go1.27.1`, so a newer Go downloads it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
+You need Go 1.27.2. `go.mod` pins it with `toolchain go1.27.2`, so an older supported Go can download it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
 
 ```sh
-git clone https://github.com/Soroban-CII/soroindex
+git clone https://github.com/ciscokwiz/soroindex
 cd soroindex
 make test
 ```
@@ -32,7 +32,7 @@ GOPROXY=https://proxy.golang.org,direct make test
 | `make fixtures` | Rebuilds `testdata/wasm` from Rust sources (needs Rust and stellar-cli) | — |
 | `make docs` | `mkdocs build --strict` | `docs` workflow |
 
-All four CI jobs must pass before a pull request can merge.
+The required checks are `lint`, `test`, `fuzz-smoke` and `build`. Security and docs workflows provide additional review evidence.
 
 ## Rules for code
 
@@ -77,17 +77,43 @@ A new or changed `rules/sep-NNNN.json`:
 
 ## Versions
 
-Checked on 7 October 2026. A bump is its own commit, with a test run.
+Baseline checked on 7 October 2026. Go was refreshed against go.dev on 9 October
+2026 to fix reachable standard-library advisories found with 1.27.1. The language
+floor is unchanged. A bump is its own commit, with a test run.
 
 | Component | Version | Pinned in |
 | --- | --- | --- |
-| Go toolchain (build) | go1.27.1 | `go.mod` `toolchain` |
+| Go toolchain (build) | go1.27.2 | `go.mod` `toolchain`, `ci.yml`, `Dockerfile` |
 | Go language floor | 1.26 (the highest `go` directive in the dependency tree: modernc.org/sqlite v1.60.1) | `go.mod` `go` |
 | github.com/stellar/go-stellar-sdk | v0.7.3 | `go.mod` |
 | modernc.org/sqlite | v1.60.1 | `go.mod` |
+| github.com/klauspost/compress (transitive) | v1.18.7 | `go.mod`; patched 1.18 release checked on 9 October 2026 |
+| govulncheck | v1.8.0 | `.github/workflows/security.yml`; checked on 9 October 2026 |
 | golangci-lint | v2.14.0 | `.github/workflows/ci.yml` |
 | check-jsonschema | 0.38.2 | `ci.yml`, `Makefile` |
 | MkDocs / Material | 1.6.1 / 9.7.7 | `docs/requirements.txt` |
 | Rust (fixtures only) | 1.98.1 | `testdata/contracts/rust-toolchain.toml` |
 | soroban-sdk, soroban-token-sdk (fixtures only) | 28.0.0 | `testdata/contracts/Cargo.toml` |
 | stellar-cli (fixtures only) | 28.0.0 | `scripts/build-fixtures.sh` |
+
+## Wave backlog and operator tools
+
+`scripts/wave-issues.json` is the reviewed remaining-work list. The application
+summary is generated from that source. Preview with `DRY_RUN=1 ./scripts/create-issues.sh`;
+preview requires Python 3 and makes no GitHub calls. A maintainer creates the
+labels and issues with `./scripts/create-issues.sh` after reviewing the preview.
+Already-open or closed issues with identical titles are skipped. Do not add work
+already implemented or proposed changes that bypass the fixed API/schema review.
+
+Preview settings with `DRY_RUN=1 ./scripts/repo-settings.sh`. Only the operator
+runs the actual settings script. Both scripts default to `ciscokwiz/soroindex`;
+`REPO=owner/name` overrides the target explicitly.
+
+Build local release archives with `./scripts/build-release.sh v0.1.0` after
+activating Go 1.27.2. This requires Bash, Python 3, Git and Go; it does not publish.
+The archives include checksums, provenance and dependency license notices.
+`scripts/publish-release.sh` previews the publication sequence. Only the operator
+runs it with `--publish`, after merging and reviewing a clean `main`, configuring
+registry access and inspecting the release body. It never overwrites an existing
+tag pointing at a different commit. A tag, image, GitHub release and docs site
+must be checked while logged out before the Wave application is submitted.

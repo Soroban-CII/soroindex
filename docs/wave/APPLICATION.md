@@ -1,77 +1,102 @@
 # Stellar Wave application
 
-Prepared 7 October 2026 for the [Stellar Wave program](https://www.drips.network/wave/stellar) on Drips. Everything below is accurate on that date.
+Prepared 9 October 2026 for the [Stellar Wave program](https://www.drips.network/wave/stellar). The live approval-list search and README comparison passed; public publication and operator checks remain pending. This package is not yet ready to submit.
 
-## Project
+## Project description
 
-**soroindex**: [github.com/Soroban-CII/soroindex](https://github.com/Soroban-CII/soroindex). A single Go repository.
-
-### Description
-
-soroindex is a public index of Soroban smart contracts that answers "which contracts are tokens?" and similar questions. SEP-47 lets a contract declare which SEPs it implements in its Wasm meta, but tools read that declaration one contract at a time, so nobody can list every contract that implements SEP-41. soroindex scans every deployed contract and records three things: what the contract declares (SEP-47 meta), what its interface actually matches (a typed check of its `contractspecv0` functions against versioned rule files), and, on testnet, whether it passed a conformance suite. It also tracks how all three change when a contract upgrades, including the CAP-85 executable references introduced in protocol 28, which upgrade many contracts at once. Our census of all 156,173 mainnet contracts on 7 October 2026 found that only 13 of 2,178 live Wasm hashes (0.60%) declare any SEP, while 120 hashes (1,141 contracts) match the SEP-41 token interface and 109 of those declare nothing. So the index leads with what code matches, tracks declarations as they grow, and helps authors add them. It is written in Go, parses Wasm without ever executing it, stores data in SQLite, and will serve an HTTP API and a CLI.
-
-## Not already on the platform
-
-Checked live on 2026-10-07 at 19:38 UTC, against the Drips Wave API that backs [drips.network/wave/stellar/repos](https://www.drips.network/wave/stellar/repos):
-
-- **All 824 approved Stellar Wave repositories** were downloaded (9 pages). None has the name `soroindex`, the owner `Soroban-CII`, or the text `SEP-47`, `sep47`, `contractmeta`, `contract meta` or `interface index` in any field.
-- The API's own search for `soroindex` returns **0** results. A control search for a known approved repository (`routedock`) returns 1, so search does filter.
-- The closest approved project is `Miracle656/wraith`, an incoming-transfer **event** indexer for SAC/SEP-41 tokens. soroindex does not index events. It indexes what contracts declare and match. The full survey of related tools is in [Prior art](../prior-art.md).
-
-## Links
-
-| Item | Link | Status on 2026-10-07 |
-| --- | --- | --- |
-| Repository | [github.com/Soroban-CII/soroindex](https://github.com/Soroban-CII/soroindex) | Public |
-| Documentation site | [soroban-cii.github.io/soroindex](https://soroban-cii.github.io/soroindex/) | Live after `scripts/repo-settings.sh` enables Pages |
-| Adoption report | [report/ADOPTION.md](https://github.com/Soroban-CII/soroindex/blob/main/report/ADOPTION.md) | Mainnet census + testnet sample |
-| Planned issues | [Issues labelled Stellar Wave](https://github.com/Soroban-CII/soroindex/issues?q=label%3A%22Stellar+Wave%22) | Created by `scripts/create-issues.sh` |
-| CI | [Actions](https://github.com/Soroban-CII/soroindex/actions/workflows/ci.yml) | lint, test, fuzz-smoke, build |
-| Go package docs | [pkg.go.dev/.../pkg/sepmeta](https://pkg.go.dev/github.com/Soroban-CII/soroindex/pkg/sepmeta) | Indexed on first request |
-| Demo video | — | To be recorded by the maintainer |
-| Release, binaries, Docker image | — | Not yet: tracked as issues |
-| Live API | — | Not yet: the API is planned |
+**soroindex** ([ciscokwiz/soroindex](https://github.com/ciscokwiz/soroindex)) is a public index of Soroban smart contracts by the SEPs they declare and the interfaces they match. SEP-47 metadata can be read one contract at a time; the index answers which contracts declare SEP-41, which actually match its typed interface, and how those facts change across observed upgrades, including CAP-85 executable references. The dated 7 October 2026 census covered 156,173 mainnet contracts: 13 of 2,178 live Wasm hashes (0.60%) declared any SEP, while 120 hashes (1,141 contracts) matched SEP-41 and 109 matching hashes declared nothing. Go parsers inspect Wasm without executing it, SQLite stores versioned claims, and a read-only HTTP API and CLI expose the results. Declarations and interface matches carry separate trust tiers; a verified tier is reserved for future testnet conformance work and is not a security audit.
 
 ## Built and planned
 
-| Built and tested | Planned |
-| --- | --- |
-| `pkg/sepmeta`: bounded Wasm section reader, SEP-47 meta parser (strict and lenient, every anomaly recorded), spec decoder; 4 fuzz targets ran 10 minutes each with no failure | Incremental sync loop over `getLedgers` with upgrade detection and the retention-gap guard |
-| SEP-41 rule file (diffed against the live SEP-41 v0.5.2 text) and the typed interface matcher | HTTP API: `/v1/contracts`, `/v1/contracts/{id}`, `/history`, `/v1/wasm/{hash}`, `/v1/seps`, `/v1/stats`, `/v1/health` |
-| Phase 0: mainnet census from Hubble and a stratified testnet sample, with `report/ADOPTION.md` | CLI: `query`, `contract`, `wasm`, `stats`, `serve` |
-| SQLite store with migrations; invariants enforced in SQL and tested with raw SQL | Rule files for SEP-40, SEP-50, SEP-56 |
-| Seeding an index from any contract list; stored totals verified against the census (testnet 18/18; mainnet 16/18, both differences one contract upgraded after the Hubble snapshot) | Dockerfile, release binaries, GHCR image |
-| Undeclared-gap query and `gap` command; match recomputation for new rule versions | Data-lake backfill, RPC failover, adoption charts and trend |
-| `LedgerSource`: reads consecutive ledgers and refuses gaps | Verified tier (soroban-guard): deferred, since under 1% of mainnet Wasm declares anything |
+Built and tested: bounded SEP-47 metadata/spec parsing; versioned SEP-41 interface matching; Phase 0 census and report; idempotent seeding; incremental ledger sync and retention-gap detection; CAP-85 reference fan-out; archival handling; history; read-only API with pagination and rate limits; query, contract, wasm, stats and serve CLI; non-root static Docker image; four-platform release candidate with licenses and checksums. The real 30-minute testnet follow check passed with final lag one ledger. The deployed-fixture upgrade check was explicitly waived by the operator; the demo does not claim that test passed.
 
-430 tests passed on 7 October 2026 (`go test -v ./...`: 430 PASS lines, 0 FAIL); `golangci-lint` reported 0 issues.
+The v0.1.0 candidate is built locally. A public release, image, Pages deployment and public API hosting are not claimed. Remaining implementation work is listed below. Stage J conformance verification remains deferred because measured declaration adoption is below the 1% gate. The Go module retains `github.com/Soroban-CII/soroindex`; repository ownership links use `ciscokwiz/soroindex` without changing imports.
+
+## Links checklist
+
+| Item | Intended link | Current evidence / required action |
+| --- | --- | --- |
+| Repository | [ciscokwiz/soroindex](https://github.com/ciscokwiz/soroindex) | Selected origin; source commits pushed to `work`. Operator reviews and merges to main. |
+| Docs | [ciscokwiz.github.io/soroindex](https://ciscokwiz.github.io/soroindex/) | Strict local build passes; anonymous request currently returns 404. Operator enables Pages and checks deployment in a logged-out browser. |
+| Adoption report | [report/ADOPTION.md](https://github.com/ciscokwiz/soroindex/blob/main/report/ADOPTION.md) | Recorded 7 October census, not a fresh scan. |
+| Issues | [Stellar Wave issues](https://github.com/ciscokwiz/soroindex/issues?q=label%3A%22Stellar+Wave%22) | 26 validated remaining issues prepared; operator previews and creates them. |
+| CI | [Actions](https://github.com/ciscokwiz/soroindex/actions/workflows/ci.yml) | Workflow defines lint, test, fuzz-smoke, build. Verify main checks after merge. |
+| Release | [v0.1.0](https://github.com/ciscokwiz/soroindex/releases/tag/v0.1.0) | Candidate only; anonymous release link returns 404. Operator runs reviewed publication script. |
+| Docker image | `ghcr.io/ciscokwiz/soroindex:v0.1.0` | Local image built and smoke-tested; registry publication pending. |
+| Demo video | No URL yet | Operator records [the real demo](DEMO.md), supplies a public URL and checks access. |
+| Live API | No hosted URL | Local read-only API exercised; hosting is optional and currently absent. |
+
+## Live Wave eligibility and README comparison
+
+Read-only requests to the live approved-repository page succeeded on 9 October after initial proxy denials. Its embedded response lists 824 approved repositories sorted by stars. Searches for `soroindex` and `ciscokwiz/soroindex` both returned zero results; a positive control for `routedock` returned `winsznx/routedock`. This is dated evidence, and the operator must repeat the search before submitting.
+
+The actual GitHub-selected READMEs of the three leading approved rows—MarketPay (59 Wave-recorded stars), GreenPay (54) and OFFER-HUB (54)—were fetched and read before updating our README. See [the comparison and source hashes](README-COMPARISON.md). The direct Wave API hostname remained blocked; the public page supplied its server-rendered API responses. Environment settings include the needed public hosts, with the API hostname added for future direct checks.
 
 ## Planned issues
 
-32 issues, each with a summary, why it matters, acceptance criteria as checkboxes, tech stack and file pointers. All carry the `Stellar Wave` label, a difficulty and an area. Source: [`scripts/create-issues.sh`](https://github.com/Soroban-CII/soroindex/blob/main/scripts/create-issues.sh).
+Generated from [`scripts/wave-issues.json`](https://github.com/ciscokwiz/soroindex/blob/work/scripts/wave-issues.json), the source consumed by `scripts/create-issues.sh`: **26 real remaining issues**. All have Summary, Why, checkbox acceptance criteria, Tech Stack and existing file pointers, plus `Stellar Wave`, difficulty and area labels. The creator checks existing open and closed issue titles before creating anything.
 
-| Area | Issues | Difficulty (trivial / medium / high) |
+| Area | Count | Difficulty: trivial / medium / high |
 | --- | ---: | --- |
-| Sync and ingestion | 8 | 0 / 5 / 3 |
-| HTTP API | 9 | 0 / 8 / 1 |
-| CLI | 3 | 1 / 2 / 0 |
-| Rule files (SEP-40, SEP-50, SEP-56) | 3 | 0 / 3 / 0 |
-| Parser | 2 | 2 / 0 / 0 |
-| Infrastructure (Docker, releases, govulncheck, integration CI) | 4 | 1 / 3 / 0 |
-| Docs and adoption tracking | 3 | 1 / 2 / 0 |
+| api | 4 | 0 / 2 / 2 |
+| cli | 3 | 1 / 2 / 0 |
+| docs | 4 | 1 / 3 / 0 |
+| infra | 4 | 0 / 4 / 0 |
+| parser | 3 | 1 / 2 / 0 |
+| rules | 3 | 0 / 3 / 0 |
+| sync | 5 | 0 / 2 / 3 |
 
-- **Sync and ingestion:** the incremental sync loop; the retention-gap stop; upgrade detection; CAP-85 reference fan-out; eviction and restoration; `--follow`; a data-lake backfill source; RPC failover.
-- **HTTP API:** the server skeleton with `/v1/health`; `/v1/contracts` with tier and SEP filters; contract detail and history; Wasm detail; SEP counts and stats; rate limiting; an OpenAPI document; a 1M-row query benchmark.
-- **CLI:** `query` with CSV output; `contract` and `wasm`; `stats`.
-- **Rule files:** SEP-40 oracle consumer (7 functions), SEP-50 non-fungible tokens (11), SEP-56 tokenized vault (17), each reviewed against the SEP text.
-- **Parser:** vectors for Unicode whitespace and edge tokens; fuzz seeds from real mainnet Wasm.
-- **Infrastructure:** Dockerfile; a release workflow with binaries and image; govulncheck; a nightly testnet integration run.
-- **Docs:** adoption charts; adoption tracked over time; real API examples once the API exists.
+### api
 
-## Before submitting (maintainer)
+- docs(api): publish validated OpenAPI 3.1 specification
+- feat(api): propose declared and inferred disagreement filters
+- feat(api): propose historical ledger query filters
+- test(api): exercise concurrent WAL readers during sync
 
-1. Run `./scripts/repo-settings.sh` (Pages, branch protection, topics, private vulnerability reporting). Then open the docs site in a logged-out browser.
-2. Run `./scripts/create-issues.sh` (preview first with `DRY_RUN=1`).
-3. Record the demo video. A script of real commands is in [DEMO.md](DEMO.md).
-4. Re-check that the project is still not in the approved list.
-5. Install the Drips Wave GitHub App on the `Soroban-CII` organization and submit.
+### cli
+
+- feat(cli): export all query pages to CSV
+- feat(cli): paginate undeclared gap output
+- feat(cli): explain interface mismatch signatures in human output
+
+### docs
+
+- docs(phase0): chart declared versus inferred adoption
+- feat(phase0): retain dated adoption snapshots and trends
+- docs(api): add a typed Python client example
+- docs(api): add a browser client with pagination and tier labels
+
+### infra
+
+- ci(repo): produce release SBOM and signed provenance
+- ci(repo): build and smoke-test arm64 container images
+- ci(repo): test the declared Go language floor
+- ci(repo): propose reviewed dependency patch automation
+
+### parser
+
+- test(sepmeta): add Unicode whitespace boundary vectors
+- test(sepmeta): seed fuzzing with real mainnet custom sections
+- test(sepmeta): add nested UDT and union spec vectors
+
+### rules
+
+- feat(rules): add reviewed SEP-40 oracle consumer rules
+- feat(rules): add reviewed SEP-50 non-fungible tokens rules
+- feat(rules): add reviewed SEP-56 tokenized vaults rules
+
+### sync
+
+- feat(ingest): implement data-lake BackfillSource
+- feat(rpc): fail over across network-verified providers
+- feat(store): add a consistent online backup command
+- feat(sync): expose throughput and RPC retry metrics
+- feat(ingest): stream large seed CSV inputs in bounded batches
+
+## Operator completion checklist
+
+1. Review and merge the source branch. Recheck the dated live eligibility result before submission.
+2. Preview `DRY_RUN=1 ./scripts/repo-settings.sh` and `DRY_RUN=1 ./scripts/create-issues.sh`, then run the reviewed scripts with appropriate repository rights. Settings enable Pages, private vulnerability reporting, topics and main protection.
+3. Confirm docs renders and all links open in a logged-out browser. Reproduce the demo on a real index, record it and replace the missing video link.
+4. Preview `./scripts/publish-release.sh`; from clean reviewed main, run `./scripts/publish-release.sh --publish` with the operator's registry login. Confirm public release assets, checksums and image access.
+5. Recheck the live approved-repository list. Install the Drips Wave GitHub App for the selected repository/account and submit from the operator's account. The agent does not submit or operate that account.

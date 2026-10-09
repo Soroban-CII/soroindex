@@ -145,7 +145,7 @@ All versions below were checked on 7 October 2026. Before you pin each one, chec
 
 | Component | Pin | Notes |
 | --- | --- | --- |
-| Go toolchain (build pin) | `go1.27.1` | Put `toolchain go1.27.1` in go.mod. CI uses exactly this. |
+| Go toolchain (build pin) | `go1.27.2` | Refreshed against go.dev on 9 October 2026 after the Stage H vulnerability check. Put `toolchain go1.27.2` in go.mod. CI uses exactly this. |
 | Go language floor (`go` directive) | `1.26` | **Different number on purpose.** The floor is the oldest Go you claim to support, and it can be lower than the build pin. If a dependency's own go.mod needs higher, raise the floor to the **highest** requirement in the whole dependency tree, and report which module forced it. Don't fix only the first error you see. |
 | `github.com/stellar/go-stellar-sdk` | `v0.7.3` | Use only the `xdr` package (and `strkey` for contract IDs). It is pre-1.0, so pin it exactly; an upgrade is its own commit with a test run. Confirm `xdr.ScMetaEntry`, `xdr.ScSpecEntry`, `xdr.LedgerCloseMeta`, and the `SC_SPEC_TYPE_MUXED_ADDRESS` spec type exist at this version. If MuxedAddress is missing, stop and report it. |
 | `modernc.org/sqlite` | `v1.60.1` | CGO-free driver. Builds must work with `CGO_ENABLED=0`. |
@@ -706,11 +706,11 @@ Each bullet is at least one commit. The **STOP** points are the operator's check
 23. `LedgerSource` over `getLedgers` + change extraction + tests on recorded ledger meta.
 24. Sync loop + batching + idempotency + crash resume + retention-gap error.
 25. Upgrade detection + archival handling.
-26. All five tests from §5.9.
+26. All seven tests from §5.9.
 27. Integration test (build tag `integration`): follow testnet for 30 minutes from the current tip with no errors and lag under 10 ledgers at the end.
-28. **Operator action:** deploy a fixture token to testnet, then upgrade it to `token_partial.wasm`. Show the new version row and the changed inferred status.
+28. **Operator action (waived by the operator on 9 October 2026 for this build):** deploy a fixture token to testnet, then upgrade it to `token_partial.wasm`. Show the new version row and the changed inferred status. The live deployment/upgrade check is skipped; offline fixture tests cover version rows and changed inferred status. Do not substitute an arbitrary contract ID or claim live upgrade validation.
 
-**STOP F.** Read in full: paste the five §5.9 test names and their source, plus the step 28 evidence.
+**STOP F.** Read in full: paste the seven §5.9 test names and their source. Record step 28 as an operator-approved skip for this build, not a passing live check.
 
 ### Stage G: API and CLI — loose
 
@@ -839,7 +839,7 @@ Run through this before declaring any stage done, and in full before STOP I. Eac
 - [ ] All four fuzz targets ran at least 10 minutes with no crash; regression cases are committed.
 - [ ] No code path executes Wasm or simulates a contract call (grep for `simulateTransaction`; it appears only in the `HomeDomainSource` stub comment).
 - [ ] Both SQL invariants have raw-SQL violation tests.
-- [ ] All five §5.9 sync tests exist and pass.
+- [ ] All seven §5.9 sync tests exist and pass.
 - [ ] The retention-gap case exits non-zero and writes nothing.
 - [ ] No tier is mixed: a test asserts a SAC never appears under `tier=declared`.
 - [ ] `rules/sep-0041.json` was diffed against the live SEP-41 text on the day it was committed (date recorded in its `source` field).

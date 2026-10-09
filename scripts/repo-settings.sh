@@ -7,13 +7,19 @@
 # 1. GitHub Pages from GitHub Actions (the docs workflow publishes the site).
 # 2. Branch protection on main: pull requests with 1 approval, required checks
 #    lint, test, fuzz-smoke and build (the exact check names CI reports), no
-#    force-push, no deletion. Admins are not exempt from checks on PRs but may
-#    still push directly (enforce_admins false), so a maintainer can fix main.
+#    force-push, no deletion. Admins are included in the protection rules; changes go through PRs.
 # 3. Repository topics.
 set -euo pipefail
 
-REPO="${REPO:-Soroban-CII/soroindex}"
-command -v gh >/dev/null || { echo "gh CLI is required" >&2; exit 1; }
+REPO="${REPO:-ciscokwiz/soroindex}"
+if [[ "${DRY_RUN:-0}" == 1 ]]; then
+  gh() {
+    printf 'would run gh' >&2; printf ' %q' "$@" >&2; printf '\n' >&2
+    if [[ " $* " == *" --input - "* ]]; then cat >&2; fi
+  }
+else
+  command -v gh >/dev/null || { echo "gh CLI is required" >&2; exit 1; }
+fi
 
 echo "== Pages (source: GitHub Actions)"
 if gh api "repos/$REPO/pages" >/dev/null 2>&1; then
@@ -31,7 +37,7 @@ gh api -X PUT "repos/$REPO/branches/main/protection" \
     "strict": true,
     "contexts": ["lint", "test", "fuzz-smoke", "build"]
   },
-  "enforce_admins": false,
+  "enforce_admins": true,
   "required_pull_request_reviews": {
     "required_approving_review_count": 1,
     "dismiss_stale_reviews": true

@@ -1,0 +1,46 @@
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.27.2"
+  GOTOOLCHAIN: local
+  GOVULNCHECK_VERSION: v1.8.0
+
+jobs:
+  vulnerability-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod verify
+      - run: go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+      - run: govulncheck ./...
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # GitHub's dependency-review API requires Dependency Graph to be enabled
+      # on the base repository. Scan Go modules directly so forks and upstream
+      # repositories get a blocking check without an admin setting change.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go mod verify
+      - run: go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
+      # Module scanning accepts no patterns. Run from the CLI package because
+      # the module root contains no Go files. Fail on any affected module,
+      # including vulnerable code that is not reachable from the application.
+      - name: Review dependency vulnerabilities
+        run: govulncheck -C cmd/sep47idx -scan=module -show=verbose

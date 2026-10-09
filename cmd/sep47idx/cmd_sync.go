@@ -19,13 +19,14 @@ import (
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
 	"github.com/Soroban-CII/soroindex/internal/store"
+	indexsync "github.com/Soroban-CII/soroindex/internal/sync"
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 	"github.com/Soroban-CII/soroindex/rules"
 )
 
 func init() {
 	commands["sync"] = command{
-		summary: "seed the index or recompute matches (incremental sync is planned)",
+		summary: "seed the index, sync ledgers or recompute matches",
 		run:     runSync,
 	}
 }
@@ -42,7 +43,13 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	allowInvocation := flags.Bool("allow-invocation", false, "run claim sources that simulate contract calls (none ship by default)")
 	recompute := flags.Bool("recompute", false, "re-run the matcher for Wasm whose stored ruleset_version differs from the loaded rules (no network)")
 	threshold := flags.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold")
+	start := flags.Uint64("start-ledger", 0, "first ledger to index on an unseeded database")
+	follow := flags.Bool("follow", false, "poll for new ledgers after catching up")
+	interval := flags.Duration("interval", 5*time.Second, "poll interval when following")
 	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return exitOK
+		}
 		return exitError
 	}
 	cfg, err := resolve()
@@ -50,17 +57,18 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 		errorf(stderr, "sep47idx sync: %v\n", err)
 		return exitError
 	}
-	if *seed == "" && !*recompute {
-		errorf(stderr, "sep47idx sync: pass --seed and/or --recompute (incremental sync from --start-ledger is not built yet)\n")
+	if *start > uint64(^uint32(0)) || (*start == 0 && wasSet(flags, "start-ledger")) || *interval <= 0 || flags.NArg() != 0 {
+		errorf(stderr, "sep47idx sync: start-ledger must be 1..4294967295, interval must be positive, and positional arguments are not accepted\n")
 		return exitError
 	}
+	incremental := *seed == "" && !*recompute || *start != 0 || *follow
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	// Recompute alone needs no network; seeding does.
 	var client *rpc.Client
-	if *seed != "" {
+	if *seed != "" || incremental {
 		if err := cfg.RequireRPC(); err != nil {
 			errorf(stderr, "sep47idx sync: %v\n", err)
 			return exitError
@@ -103,12 +111,14 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 		Limits: sepmeta.DefaultLimits(), Claims: reg, Log: log, Now: time.Now}
 	if client != nil {
 		ix.RPC = client
-		if err := st.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
-			errorf(stderr, "sep47idx sync: %v\n", err)
-			return exitError
-		}
-		if code := runSeed(ctx, ix, *seed, stdout, stderr); code != exitOK {
-			return code
+		if *seed != "" {
+			if err := st.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
+				errorf(stderr, "sep47idx sync: %v\n", err)
+				return exitError
+			}
+			if code := runSeed(ctx, ix, *seed, stdout, stderr); code != exitOK {
+				return code
+			}
 		}
 	}
 	if *recompute {
@@ -122,7 +132,45 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 			return exitError
 		}
 	}
+	if incremental {
+		loop := indexsync.Loop{Store: st, Source: &ingest.LedgerSource{RPC: client}, Apply: ix.ApplyLedger,
+			StartLedger: uint32(*start), Follow: *follow, Interval: *interval} // #nosec G115 -- checked above
+		loop.Apply = func(ctx context.Context, tx *store.Tx, facts ingest.ContractFacts) error {
+			if err := tx.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
+				return err
+			}
+			if _, err := tx.State(ctx, store.KeyRulesetVersions); errors.Is(err, store.ErrNotFound) {
+				var versions []string
+				for _, rule := range ix.Rules {
+					versions = append(versions, rule.RulesetVersion)
+				}
+				if err := tx.SetState(ctx, store.KeyRulesetVersions, strings.Join(versions, ",")); err != nil {
+					return err
+				}
+			} else if err != nil {
+				return err
+			}
+			return ix.ApplyLedger(ctx, tx, facts)
+		}
+		loop.Progress = func(last, latest uint32, caught bool) {
+			log.InfoContext(ctx, "sync progress", "last_ledger", last, "latest_ledger", latest, "lag", latest-last, "caught_up", caught)
+		}
+		if err := loop.Run(ctx); err != nil {
+			errorf(stderr, "sep47idx sync: %v\n", err)
+			return exitError
+		}
+	}
 	return exitOK
+}
+
+func wasSet(fs *flag.FlagSet, name string) bool {
+	found := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
 
 func runSeed(ctx context.Context, ix *ingest.Indexer, seed string, stdout, stderr io.Writer) int {

@@ -1,8 +1,8 @@
 site_name: soroindex
 site_description: A public index of Soroban smart contracts by the SEPs they declare and the interfaces they match.
-site_url: https://soroban-cii.github.io/soroindex/
-repo_url: https://github.com/Soroban-CII/soroindex
-repo_name: Soroban-CII/soroindex
+site_url: https://ciscokwiz.github.io/soroindex/
+repo_url: https://github.com/ciscokwiz/soroindex
+repo_name: ciscokwiz/soroindex
 edit_uri: edit/main/docs/
 docs_dir: docs
 strict: true
