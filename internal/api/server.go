@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/Soroban-CII/soroindex/internal/match"
+	"github.com/Soroban-CII/soroindex/rules"
 	"net/http"
 	"strconv"
 	"time"
@@ -24,6 +26,7 @@ type Options struct {
 	Network   string
 	RPC       LatestLedger
 	RateLimit int
+	Rulesets  map[int]string
 }
 
 // Server is an HTTP handler with bounded request contexts.
@@ -43,8 +46,20 @@ func New(o Options) (*Server, error) {
 	if o.RateLimit < 0 {
 		return nil, errors.New("api: rate-limit must not be negative")
 	}
+	if o.Rulesets == nil {
+		o.Rulesets = map[int]string{}
+		loaded, err := match.LoadRules(rules.FS)
+		if err != nil {
+			return nil, err
+		}
+		for _, rule := range loaded {
+			o.Rulesets[rule.SEP] = rule.RulesetVersion
+		}
+	}
 	s := &Server{options: o, mux: http.NewServeMux()}
 	s.mux.HandleFunc("GET /v1/health", s.health)
+	s.mux.HandleFunc("GET /v1/contracts", s.contracts)
+	s.mux.HandleFunc("GET /contracts", s.contracts)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint not found")
 	})
@@ -78,6 +93,10 @@ type healthResponse struct {
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "bad_request", "health takes no query parameters")
+		return
+	}
 	state, err := s.options.Store.State(r.Context(), store.KeyLastLedger)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		writeError(w, 500, "internal", "cannot read sync progress")
