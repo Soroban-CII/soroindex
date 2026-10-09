@@ -66,7 +66,16 @@ retain those notices when redistributing dependencies.
 | github.com/remyoudompheng/bigfft | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause |
 | golang.org/x/sys | v0.48.0 | BSD-3-Clause |
 
-`security.yml` runs the live vulnerability scan on PRs, main pushes and manual
-runs. Its pinned dependency-review action blocks new findings at moderate
-severity or above on PRs. Action refs were checked against their upstream tags.
-The workflow YAML was parsed locally; a hosted Actions run is not claimed here.
+`security.yml` runs the live reachable-code vulnerability scan on PRs, main
+pushes and manual runs. Its PR-only `dependency-review` job independently runs
+`govulncheck -C cmd/sep47idx -scan=module -show=verbose`, blocking known vulnerable
+module versions even when the vulnerable code is not reachable. Unlike GitHub's
+dependency-review action, it does not require Dependency Graph to be enabled on
+the base repository. It checks the current Go dependency set against the live Go
+vulnerability database, rather than comparing GitHub dependency snapshots or
+filtering findings by severity. Neither job uses `continue-on-error`.
+
+The command runs from the CLI package because the repository root has no Go
+files, and module scanning does not accept `./...` patterns. Local validation
+used the unmodified official database snapshot described above; the CI commands
+use the live database. Hosted results must be checked after pushing.
