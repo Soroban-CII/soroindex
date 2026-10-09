@@ -116,7 +116,7 @@ sep47idx dev (go1.27.1, darwin/arm64)
 Read-only current contract queries share the API's AND/OR and tier semantics.
 `--implements` is AND; `--implements-any` is OR. `--tier` defaults to declared.
 `--kind`, `--limit` (1..500, default 50) and `--cursor` match the API. JSON includes
-`next_cursor`; human and CSV output write continuation information to stderr.
+`next_cursor`; human and default one-page CSV output write continuation information to stderr.
 `--csv` and `--json` cannot be combined. Environment values follow the same flag rules.
 
 ```text
@@ -147,6 +147,31 @@ CAEWTQQW3RGKV67IK2K64BNXRFUYTPNIDKSTGZULV3E3JQMQQECTBRCR,wasm,7494c2bb5e9f6dd3f8
 stderr:
 next cursor: eyJ2IjoxLCJpZCI6IkNBRVdUUVFXM1JHS1Y2N0lLMks2NEJOWFJGVVlUUE5JREtTVEdaVUxWM0UzSlFNUVFFQ1RCUkNSIn0
 ```
+
+### Complete CSV export
+
+Use `query --csv --all` to stream all remaining pages, with one header and at
+most `--limit` contracts loaded per page. `--all` requires `--csv`; ordinary CSV,
+JSON and human queries retain their one-page behavior. An optional `--cursor`
+starts the export after that cursor, using the same filters and tier.
+
+```sh
+sep47idx query --db /path/to/testnet.db --implements 41 --tier inferred --csv --all --limit 500 > contracts.csv
+```
+
+Successful complete exports do not print a continuation cursor. Output and query
+errors fail the command; pages are flushed before the next query. If a later
+query fails, stderr identifies the cursor before the failed page so a resumed
+export can continue with `--cursor`. Each invocation writes its own header;
+omit the second header when combining successful pages. A write failure may
+leave a partial page, so discard that incomplete output rather than assuming
+it is a complete or safely resumable export.
+
+Each page observes the current database independently: concurrent sync may
+change matches between pages. This is not a single cross-page snapshot. Use a
+checkpointed frozen database when a repeatable export is required. The existing
+read-command timeout (`--rpc-timeout`, default 30s) covers the entire export;
+raise it for a large database. No complete result is accumulated in memory.
 
 ## contract
 
