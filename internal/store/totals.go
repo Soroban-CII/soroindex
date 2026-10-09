@@ -41,9 +41,13 @@ type Totals struct {
 // (the Hubble export). Contracts running archived code are excluded either
 // way.
 func (s *Store) Totals(ctx context.Context, sep41Ruleset string, countArchivedInstances bool) (Totals, error) {
+	return totals(ctx, s.DB, sep41Ruleset, countArchivedInstances)
+}
+
+func totals(ctx context.Context, db reader, sep41Ruleset string, countArchivedInstances bool) (Totals, error) {
 	t := Totals{SEP41ByContract: map[string]int{}, SEP41ByUsedHash: map[string]int{}}
 	one := func(dst *int, q string, args ...any) error {
-		if err := s.DB.QueryRowContext(ctx, q, args...).Scan(dst); err != nil {
+		if err := db.QueryRowContext(ctx, q, args...).Scan(dst); err != nil {
 			return fmt.Errorf("totals: %w", err)
 		}
 		return nil
@@ -80,7 +84,7 @@ func (s *Store) Totals(ctx context.Context, sep41Ruleset string, countArchivedIn
 			return Totals{}, err
 		}
 	}
-	rows, err := s.DB.QueryContext(ctx, `SELECT im.status, count(*), count(DISTINCT m.h) FROM (`+measured+`) m
+	rows, err := db.QueryContext(ctx, `SELECT im.status, count(*), count(DISTINCT m.h) FROM (`+measured+`) m
 		JOIN interface_matches im ON im.wasm_hash = m.h WHERE im.sep = 41 AND im.ruleset_version = ? GROUP BY im.status`, sep41Ruleset)
 	if err != nil {
 		return Totals{}, fmt.Errorf("totals: %w", err)
