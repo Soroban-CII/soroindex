@@ -1,0 +1,457 @@
+[
+  {
+    "title": "feat(rules): add reviewed SEP-40 oracle consumer rules",
+    "area": "rules",
+    "difficulty": "medium",
+    "summary": "Add a versioned SEP-40 rule file after reading its current protocol text.",
+    "why": "Only SEP-41 has rules today; these interfaces cannot currently be inferred.",
+    "acceptance_criteria": [
+      "Record source commit, review date and ruleset version.",
+      "Distinguish required and optional signatures exactly.",
+      "Validate against the schema and test matching, partial and mismatching fixtures."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "rules/schema.json",
+      "internal/match/match_test.go",
+      "docs/rule-files.md"
+    ]
+  },
+  {
+    "title": "feat(rules): add reviewed SEP-50 non-fungible tokens rules",
+    "area": "rules",
+    "difficulty": "medium",
+    "summary": "Add a versioned SEP-50 rule file after reading its current protocol text.",
+    "why": "Only SEP-41 has rules today; these interfaces cannot currently be inferred.",
+    "acceptance_criteria": [
+      "Record source commit, review date and ruleset version.",
+      "Distinguish required and optional signatures exactly.",
+      "Validate against the schema and test matching, partial and mismatching fixtures."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "rules/schema.json",
+      "internal/match/match_test.go",
+      "docs/rule-files.md"
+    ]
+  },
+  {
+    "title": "feat(rules): add reviewed SEP-56 tokenized vaults rules",
+    "area": "rules",
+    "difficulty": "medium",
+    "summary": "Add a versioned SEP-56 rule file after reading its current protocol text.",
+    "why": "Only SEP-41 has rules today; these interfaces cannot currently be inferred.",
+    "acceptance_criteria": [
+      "Record source commit, review date and ruleset version.",
+      "Distinguish required and optional signatures exactly.",
+      "Validate against the schema and test matching, partial and mismatching fixtures."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "rules/schema.json",
+      "internal/match/match_test.go",
+      "docs/rule-files.md"
+    ]
+  },
+  {
+    "title": "test(sepmeta): add Unicode whitespace boundary vectors",
+    "area": "parser",
+    "difficulty": "trivial",
+    "summary": "Extend vectors with NBSP, em-space, zero-width space and mixed ASCII separators in both parser modes.",
+    "why": "Current vectors do not enumerate these visually ambiguous token boundaries.",
+    "acceptance_criteria": [
+      "Record exact bytes and expected anomalies in both modes.",
+      "Prove zero-width characters are not silently interpreted as ASCII digits.",
+      "Run the existing parser suite without changing trust definitions."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "pkg/sepmeta/sep47_test.go",
+      "pkg/sepmeta/sep47.go"
+    ]
+  },
+  {
+    "title": "test(sepmeta): seed fuzzing with real mainnet custom sections",
+    "area": "parser",
+    "difficulty": "medium",
+    "summary": "Add minimized meta/spec fuzz seeds from public Wasm with source hash and ledger provenance.",
+    "why": "Current corpora are fixture-based; deployed toolchains produce different encodings.",
+    "acceptance_criteria": [
+      "Record origin hashes, dates and extraction method.",
+      "Minimize seeds while preserving the observed encodings.",
+      "Run all four fuzz targets and commit any regression input."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "pkg/sepmeta/fuzz_test.go",
+      "report/mainnet-raw.csv"
+    ]
+  },
+  {
+    "title": "test(sepmeta): add nested UDT and union spec vectors",
+    "area": "parser",
+    "difficulty": "medium",
+    "summary": "Exercise structs, unions and enum references inside nested function types.",
+    "why": "Existing token fixtures cover common signatures but not a curated matrix of nested UDT encodings.",
+    "acceptance_criteria": [
+      "Include forward references, named variants and truncated payloads.",
+      "Assert bounds and decoded signatures, not just no-panic behavior.",
+      "Keep vectors deterministic and network-free."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "pkg/sepmeta/spec_test.go",
+      "pkg/sepmeta/spec.go"
+    ]
+  },
+  {
+    "title": "docs(api): publish validated OpenAPI 3.1 specification",
+    "area": "api",
+    "difficulty": "medium",
+    "summary": "Document the implemented API in machine-readable OpenAPI.",
+    "why": "The current reference has real examples but no client-generation schema.",
+    "acceptance_criteria": [
+      "Cover all routes, errors, nullable fields, tier rules and cursors.",
+      "Validate captured handler responses against the document.",
+      "Link the document from the API reference without changing fixed shapes."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/api",
+      "docs/api.md"
+    ]
+  },
+  {
+    "title": "feat(api): propose declared and inferred disagreement filters",
+    "area": "api",
+    "difficulty": "high",
+    "summary": "Design a query for declarations whose loaded interface matcher does not report match.",
+    "why": "The current tier selector cannot directly find incorrect or partial declarations.",
+    "acceptance_criteria": [
+      "Obtain operator approval for any new public parameters before coding.",
+      "Define partial, mismatch, no_spec and absent-rule behavior separately.",
+      "Add keyset, combined AND/OR and SAC exclusion tests."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/store/catalog.go",
+      "internal/api/catalog.go",
+      "CLAUDE.md"
+    ]
+  },
+  {
+    "title": "feat(api): propose historical ledger query filters",
+    "area": "api",
+    "difficulty": "high",
+    "summary": "Design an explicit as-of-ledger lookup over contract version ranges.",
+    "why": "Current listing intentionally queries only current live code.",
+    "acceptance_criteria": [
+      "Review public API and archival semantics with the operator first.",
+      "Select half-open version ranges without inventing unknown pre-seed history.",
+      "Test upgrades at exact ledger boundaries and cursor continuation."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/store/details.go",
+      "migrations/0001_init.sql",
+      "CLAUDE.md"
+    ]
+  },
+  {
+    "title": "test(api): exercise concurrent WAL readers during sync",
+    "area": "api",
+    "difficulty": "medium",
+    "summary": "Add a bounded workload with concurrent API readers and a writer applying real fixture changes.",
+    "why": "Existing handler tests use frozen indexes; the single-query benchmark is not a concurrent writer test.",
+    "acceptance_criteria": [
+      "Assert each multi-query response has a consistent ledger snapshot.",
+      "Measure busy errors and request p95 under a stated workload.",
+      "Run with the race detector and leave no background processes."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/api/server_test.go",
+      "internal/store/details.go",
+      "internal/ingest/apply_test.go"
+    ]
+  },
+  {
+    "title": "feat(cli): export all query pages to CSV",
+    "area": "cli",
+    "difficulty": "medium",
+    "summary": "Add an explicit complete-export mode that follows continuation cursors.",
+    "why": "CSV output currently emits one page and a cursor on stderr.",
+    "acceptance_criteria": [
+      "Retain default one-page behavior and review the new flag.",
+      "Write one header, stream rows, and propagate output and query failures.",
+      "Test more than 500 rows, interruption and resumed export without claiming a cross-page snapshot."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "cmd/sep47idx/cmd_query.go",
+      "internal/store/catalog.go"
+    ]
+  },
+  {
+    "title": "feat(cli): paginate undeclared gap output",
+    "area": "cli",
+    "difficulty": "medium",
+    "summary": "Bound gap queries and expose continuation for large undeclared sets.",
+    "why": "Store.Gap and the gap command currently collect the entire gap in memory.",
+    "acceptance_criteria": [
+      "Keep results labelled inferred with current ruleset provenance.",
+      "Review CLI options and introduce bounded keyset reads.",
+      "Test continuation and unchanged default output compatibility."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/store/gap.go",
+      "cmd/sep47idx/cmd_gap.go"
+    ]
+  },
+  {
+    "title": "feat(cli): explain interface mismatch signatures in human output",
+    "area": "cli",
+    "difficulty": "trivial",
+    "summary": "Show missing and mismatched functions in ordinary contract/wasm output.",
+    "why": "JSON exposes evidence but human output only lists verdict summaries.",
+    "acceptance_criteria": [
+      "Print expected and observed types from stored match evidence.",
+      "Distinguish not-run from no_spec and unresolved references.",
+      "Capture output and test partial/mismatch fixtures without rerunning the matcher."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "cmd/sep47idx/cmd_contract.go",
+      "cmd/sep47idx/cmd_wasm_detail.go",
+      "internal/store/details.go"
+    ]
+  },
+  {
+    "title": "feat(ingest): implement data-lake BackfillSource",
+    "area": "sync",
+    "difficulty": "high",
+    "summary": "Add a streaming, provenance-aware source from Stellar historical data for gaps older than RPC retention.",
+    "why": "Only SeedFileSource implements the backfill interface today.",
+    "acceptance_criteria": [
+      "Document source schema, date bounds, cost and network.",
+      "Reject nonconsecutive replay and mismatched network provenance.",
+      "Prove recovery across a retention gap with offline recorded input."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/ingest/seed.go",
+      "internal/ingest/ledgers.go",
+      "scripts/hubble-export.sql"
+    ]
+  },
+  {
+    "title": "feat(rpc): fail over across network-verified providers",
+    "area": "sync",
+    "difficulty": "high",
+    "summary": "Support ordered RPC providers with network validation and bounded retries.",
+    "why": "The RPC client retries one provider and cannot move to another.",
+    "acceptance_criteria": [
+      "Verify every provider passphrase before using data.",
+      "Preserve retention-gap and last-ledger invariants across switches.",
+      "Test unavailable, stale and wrong-network providers with local servers."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/rpc/client.go",
+      "internal/sync/loop.go"
+    ]
+  },
+  {
+    "title": "feat(store): add a consistent online backup command",
+    "area": "sync",
+    "difficulty": "medium",
+    "summary": "Provide a supported checkpoint/backup path while synchronization runs.",
+    "why": "The guide currently relies on an external sqlite3 backup command or stopping the writer.",
+    "acceptance_criteria": [
+      "Use a documented SQLite backup or snapshot mechanism compatible with the pure-Go driver.",
+      "Validate snapshot network, schema and committed ledger after restore.",
+      "Test concurrent writes, cancellation and disk errors without copying a live .db alone."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/store/store.go",
+      "docs/self-hosting.md"
+    ]
+  },
+  {
+    "title": "feat(sync): expose throughput and RPC retry metrics",
+    "area": "sync",
+    "difficulty": "medium",
+    "summary": "Add structured progress fields for batch duration, processed facts and retries.",
+    "why": "Current progress reports ledger lag but not the cause of slow synchronization.",
+    "acceptance_criteria": [
+      "Define fields and units before adding them.",
+      "Exclude RPC credentials and contract payloads from telemetry.",
+      "Test zero-work, retries and cancelled batches with deterministic clocks."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/sync/loop.go",
+      "internal/rpc/client.go",
+      "cmd/sep47idx/cmd_sync.go"
+    ]
+  },
+  {
+    "title": "feat(ingest): stream large seed CSV inputs in bounded batches",
+    "area": "sync",
+    "difficulty": "high",
+    "summary": "Replace whole-file collection with a reviewed iterator interface for large censuses.",
+    "why": "SeedFileSource reads and retains all rows before applying batches.",
+    "acceptance_criteria": [
+      "Review interface changes with existing source consumers.",
+      "Preserve duplicate handling, line errors and idempotent resume.",
+      "Measure peak memory on a reproducible million-row seed."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/ingest/seed.go",
+      "internal/ingest/seed_test.go"
+    ]
+  },
+  {
+    "title": "docs(phase0): chart declared versus inferred adoption",
+    "area": "docs",
+    "difficulty": "medium",
+    "summary": "Render the committed dated census as accessible charts beside its tables.",
+    "why": "The adoption page currently exposes tables only.",
+    "acceptance_criteria": [
+      "Derive charts from committed report data, never manually typed percentages.",
+      "Keep hash-weighted and contract-weighted measures distinct.",
+      "Provide text equivalents and verify strict docs build."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "docs/adoption.md",
+      "report/mainnet-summary.json"
+    ]
+  },
+  {
+    "title": "feat(phase0): retain dated adoption snapshots and trends",
+    "area": "docs",
+    "difficulty": "medium",
+    "summary": "Store comparable census snapshots and render change over time.",
+    "why": "The report currently replaces a network summary rather than maintaining a trend series.",
+    "acceptance_criteria": [
+      "Record network, ledger, sampling method and parser/ruleset versions.",
+      "Reject comparisons across incompatible methods or label them explicitly.",
+      "Test deterministic trend generation from recorded snapshots."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "internal/phase0/report.go",
+      "internal/phase0/markdown.go",
+      "docs/adoption.md"
+    ]
+  },
+  {
+    "title": "docs(api): add a typed Python client example",
+    "area": "docs",
+    "difficulty": "trivial",
+    "summary": "Build a small executable example consuming cursor pages and distinguishing trust evidence.",
+    "why": "The API reference shows curl but no client integration.",
+    "acceptance_criteria": [
+      "Use Python standard-library HTTP and explicit request timeouts.",
+      "Handle 400, 404 and 429 without conflating empty results.",
+      "Run against a local fixture server and include real output."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "docs/api.md",
+      "internal/api/server_test.go"
+    ]
+  },
+  {
+    "title": "docs(api): add a browser client with pagination and tier labels",
+    "area": "docs",
+    "difficulty": "medium",
+    "summary": "Provide a minimal example UI that reads the JSON API and displays separate evidence tiers.",
+    "why": "GET CORS exists but there is no worked browser integration.",
+    "acceptance_criteria": [
+      "Keep verified caveats and unresolved/archived states visible.",
+      "Follow opaque cursors and handle cancellation/rate limits.",
+      "Document a tested local workflow without presenting it as the hosted production API."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "docs/api.md",
+      "internal/api/server.go"
+    ]
+  },
+  {
+    "title": "ci(repo): produce release SBOM and signed provenance",
+    "area": "infra",
+    "difficulty": "medium",
+    "summary": "Attach a dependency SBOM and build provenance to the binary and image artifacts.",
+    "why": "Checksums establish integrity but do not describe dependency inventory or build provenance.",
+    "acceptance_criteria": [
+      "Review generator and action pins before adding tools.",
+      "Include exact compiler, source commit and runtime module versions.",
+      "Verify provenance and SBOM against locally built release artifacts."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "go.mod",
+      "Dockerfile",
+      "docs/dependency-review.md"
+    ]
+  },
+  {
+    "title": "ci(repo): build and smoke-test arm64 container images",
+    "area": "infra",
+    "difficulty": "medium",
+    "summary": "Publish a reviewed multiarchitecture image index rather than only a native development image.",
+    "why": "The static binaries cover arm64; current Docker validation ran only amd64.",
+    "acceptance_criteria": [
+      "Build linux/amd64 and linux/arm64 with pinned bases.",
+      "Smoke-test nonroot read-only index access on both architectures.",
+      "Require operator publication and record the multiarch digest."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "Dockerfile",
+      "docs/self-hosting.md"
+    ]
+  },
+  {
+    "title": "ci(repo): test the declared Go language floor",
+    "area": "infra",
+    "difficulty": "medium",
+    "summary": "Run the offline suite under Go 1.26 as well as the pinned build compiler.",
+    "why": "The language floor is documented but CI only executes the build pin.",
+    "acceptance_criteria": [
+      "Pin an available patched compiler in the 1.26 family.",
+      "Disable automatic toolchain switching so the check truly uses the floor.",
+      "Run meaningful parser/store/CLI tests and report unsupported dependencies clearly."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "go.mod",
+      ".github/workflows/ci.yml",
+      "CONTRIBUTING.md"
+    ]
+  },
+  {
+    "title": "ci(repo): propose reviewed dependency patch automation",
+    "area": "infra",
+    "difficulty": "medium",
+    "summary": "Open bounded dependency patch proposals with the existing validation gates.",
+    "why": "Dependency refreshes are manual and security patches can lag the build pin.",
+    "acceptance_criteria": [
+      "Review action permissions and pin third-party actions.",
+      "Keep SDK/minor upgrades separate from patch updates.",
+      "Require tests, rule-source review where relevant and maintainer approval before merging."
+    ],
+    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
+    "pointers": [
+      "go.mod",
+      ".github/workflows/security.yml",
+      "CONTRIBUTING.md"
+    ]
+  }
+]
