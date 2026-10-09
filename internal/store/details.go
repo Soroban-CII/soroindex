@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"sort"
@@ -74,6 +75,7 @@ type HistoryDetail struct {
 	History       []HistoryVersion `json:"history"`
 	ParserVersion string           `json:"parser_version"`
 	AsOfLedger    uint32           `json:"as_of_ledger"`
+	NextCursor    *string          `json:"next_cursor"`
 }
 
 type reader interface {
@@ -94,7 +96,11 @@ func readLedger(ctx context.Context, q reader) (uint32, error) {
 	return uint32(n), err // #nosec G115 -- parsed at 32 bits
 }
 func summaries(ctx context.Context, q reader, id string) ([]VersionSummary, error) {
-	rows, err := q.QueryContext(ctx, `SELECT wasm_hash,from_ledger,to_ledger,exec_ref_owner,exec_ref_tag FROM contract_versions WHERE contract_id = ? ORDER BY from_ledger`, id)
+	return versionRange(ctx, q, id, 0, 2147483647)
+}
+
+func versionRange(ctx context.Context, q reader, id string, after uint32, limit int) ([]VersionSummary, error) {
+	rows, err := q.QueryContext(ctx, `SELECT wasm_hash,from_ledger,to_ledger,exec_ref_owner,exec_ref_tag FROM contract_versions WHERE contract_id = ? AND from_ledger > ? ORDER BY from_ledger LIMIT ?`, id, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -268,21 +274,75 @@ func (s *Store) Contract(ctx context.Context, id, network string, rulesets map[i
 
 // History returns claims for every version, with old verifications marked stale.
 func (s *Store) History(ctx context.Context, id, network string, rulesets map[int]string) (HistoryDetail, error) {
+	return s.history(ctx, id, network, rulesets, 2147483646, "")
+}
+
+type historyCursor struct {
+	Version int    `json:"v"`
+	ID      string `json:"id"`
+	Ledger  uint32 `json:"ledger"`
+}
+
+// HistoryPage bounds work by selecting version ranges before loading claims.
+func (s *Store) HistoryPage(ctx context.Context, id, network string, rulesets map[int]string, limit int, cursor string) (HistoryDetail, error) {
+	if limit == 0 {
+		limit = 50
+	}
+	if limit < 1 || limit > 500 {
+		return HistoryDetail{}, ErrBadQuery
+	}
+	return s.history(ctx, id, network, rulesets, limit, cursor)
+}
+
+func (s *Store) history(ctx context.Context, id, network string, rulesets map[int]string, limit int, cursor string) (HistoryDetail, error) {
 	if err := ValidateContractID(id); err != nil {
 		return HistoryDetail{}, err
+	}
+	var after uint32
+	if cursor != "" {
+		if len(cursor) > 256 {
+			return HistoryDetail{}, ErrBadQuery
+		}
+		b, err := base64.RawURLEncoding.DecodeString(cursor)
+		if err != nil {
+			return HistoryDetail{}, ErrBadQuery
+		}
+		var c historyCursor
+		if err = json.Unmarshal(b, &c); err != nil || c.Version != 1 || c.ID != id || c.Ledger == 0 {
+			return HistoryDetail{}, ErrBadQuery
+		}
+		after = c.Ledger
 	}
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return HistoryDetail{}, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	current, err := contractDetail(ctx, tx, id, network, rulesets)
+	var currentHash *string
+	err = tx.QueryRowContext(ctx, `SELECT current_wasm_hash FROM contracts WHERE contract_id=?`, id).Scan(&currentHash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return HistoryDetail{}, ErrNotFound
+	}
 	if err != nil {
 		return HistoryDetail{}, err
 	}
-	d := HistoryDetail{ContractID: id, Network: network, History: []HistoryVersion{}, ParserVersion: sepmeta.ParserVersion, AsOfLedger: current.AsOfLedger}
-	for _, v := range current.History {
-		claims, err := claimsFor(ctx, tx, id, v.WasmHash, current.WasmHash, v.WasmHash == nil && v.ExecRef == nil, rulesets)
+	d := HistoryDetail{ContractID: id, Network: network, History: []HistoryVersion{}, ParserVersion: sepmeta.ParserVersion}
+	d.AsOfLedger, err = readLedger(ctx, tx)
+	if err != nil {
+		return d, err
+	}
+	versions, err := versionRange(ctx, tx, id, after, limit+1)
+	if err != nil {
+		return d, err
+	}
+	if len(versions) > limit {
+		versions = versions[:limit]
+		b, _ := json.Marshal(historyCursor{1, id, versions[limit-1].FromLedger})
+		c := base64.RawURLEncoding.EncodeToString(b)
+		d.NextCursor = &c
+	}
+	for _, v := range versions {
+		claims, err := claimsFor(ctx, tx, id, v.WasmHash, currentHash, v.WasmHash == nil && v.ExecRef == nil, rulesets)
 		if err != nil {
 			return d, err
 		}

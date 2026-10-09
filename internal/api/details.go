@@ -13,7 +13,7 @@ func detailError(w http.ResponseWriter, err error) bool {
 	}
 	switch {
 	case errors.Is(err, store.ErrBadQuery):
-		writeError(w, 400, "bad_request", "invalid contract ID or Wasm hash")
+		writeError(w, 400, "bad_request", "invalid identifier, filter or cursor")
 	case errors.Is(err, store.ErrNotFound):
 		writeError(w, 404, "not_found", "not found")
 	default:
@@ -33,11 +33,11 @@ func (s *Server) contract(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, d)
 }
 func (s *Server) history(w http.ResponseWriter, r *http.Request) {
-	if r.URL.RawQuery != "" {
-		writeError(w, 400, "bad_request", "history returns all versions and takes no query parameters")
+	limit, cursor, err := pageParameters(r)
+	if detailError(w, err) {
 		return
 	}
-	d, err := s.options.Store.History(r.Context(), r.PathValue("id"), s.options.Network, s.options.Rulesets)
+	d, err := s.options.Store.HistoryPage(r.Context(), r.PathValue("id"), s.options.Network, s.options.Rulesets, limit, cursor)
 	if detailError(w, err) {
 		return
 	}
