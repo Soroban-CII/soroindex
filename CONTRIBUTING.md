@@ -4,7 +4,7 @@ Thanks for helping. This page covers setup, the checks your change must pass, ho
 
 ## Setup
 
-You need Go 1.27.1. `go.mod` pins it with `toolchain go1.27.1`, so a newer Go downloads it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
+You need Go 1.27.2. `go.mod` pins it with `toolchain go1.27.2`, so an older supported Go can download it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
 
 ```sh
 git clone https://github.com/Soroban-CII/soroindex
@@ -77,11 +77,13 @@ A new or changed `rules/sep-NNNN.json`:
 
 ## Versions
 
-Checked on 7 October 2026. A bump is its own commit, with a test run.
+Baseline checked on 7 October 2026. Go was refreshed against go.dev on 9 October
+2026 to fix reachable standard-library advisories found with 1.27.1. The language
+floor is unchanged. A bump is its own commit, with a test run.
 
 | Component | Version | Pinned in |
 | --- | --- | --- |
-| Go toolchain (build) | go1.27.1 | `go.mod` `toolchain` |
+| Go toolchain (build) | go1.27.2 | `go.mod` `toolchain`, `ci.yml`, `Dockerfile` |
 | Go language floor | 1.26 (the highest `go` directive in the dependency tree: modernc.org/sqlite v1.60.1) | `go.mod` `go` |
 | github.com/stellar/go-stellar-sdk | v0.7.3 | `go.mod` |
 | modernc.org/sqlite | v1.60.1 | `go.mod` |

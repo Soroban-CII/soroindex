@@ -6,7 +6,7 @@ module github.com/Soroban-CII/soroindex
 // The toolchain line is the exact compiler used for builds and CI.
 go 1.26.0
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 require (
 	github.com/stellar/go-stellar-sdk v0.7.3

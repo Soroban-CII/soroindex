@@ -17,7 +17,7 @@ concurrency:
 
 env:
   # Exact build pin from go.mod's toolchain line (CLAUDE.md §3).
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27.2"
   GOLANGCI_LINT_VERSION: "v2.14.0"
   CHECK_JSONSCHEMA_VERSION: "0.38.2"
   # Stop setup-go from auto-switching toolchains: CI must use exactly GO_VERSION.

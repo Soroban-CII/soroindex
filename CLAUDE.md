@@ -145,7 +145,7 @@ All versions below were checked on 7 October 2026. Before you pin each one, chec
 
 | Component | Pin | Notes |
 | --- | --- | --- |
-| Go toolchain (build pin) | `go1.27.1` | Put `toolchain go1.27.1` in go.mod. CI uses exactly this. |
+| Go toolchain (build pin) | `go1.27.2` | Refreshed against go.dev on 9 October 2026 after the Stage H vulnerability check. Put `toolchain go1.27.2` in go.mod. CI uses exactly this. |
 | Go language floor (`go` directive) | `1.26` | **Different number on purpose.** The floor is the oldest Go you claim to support, and it can be lower than the build pin. If a dependency's own go.mod needs higher, raise the floor to the **highest** requirement in the whole dependency tree, and report which module forced it. Don't fix only the first error you see. |
 | `github.com/stellar/go-stellar-sdk` | `v0.7.3` | Use only the `xdr` package (and `strkey` for contract IDs). It is pre-1.0, so pin it exactly; an upgrade is its own commit with a test run. Confirm `xdr.ScMetaEntry`, `xdr.ScSpecEntry`, `xdr.LedgerCloseMeta`, and the `SC_SPEC_TYPE_MUXED_ADDRESS` spec type exist at this version. If MuxedAddress is missing, stop and report it. |
 | `modernc.org/sqlite` | `v1.60.1` | CGO-free driver. Builds must work with `CGO_ENABLED=0`. |
