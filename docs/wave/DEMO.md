@@ -168,7 +168,7 @@ Only the first three output lines are reproduced here; the real run listed all 2
 
 ## HTTP stats
 
-A read-only server was already running on localhost against the same database. Start your own with `sep47idx serve --network testnet --db <your-db> --listen 127.0.0.1:8080`.
+A read-only server was already running on localhost against the same database. Start your own with `sep47idx serve --network testnet --db <your-db> --addr 127.0.0.1:8080`.
 
 ```sh
 curl --fail --silent --show-error http://127.0.0.1:8080/v1/stats
