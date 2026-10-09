@@ -47,6 +47,14 @@ func TestUsageListsVersion(t *testing.T) {
 	}
 }
 
+func TestAllBuiltCommandsAreRegistered(t *testing.T) {
+	for _, name := range []string{"phase0", "sync", "serve", "query", "contract", "wasm", "stats", "gap", "version"} {
+		if _, ok := commands[name]; !ok {
+			t.Errorf("command %s missing on %s/%s", name, runtime.GOOS, runtime.GOARCH)
+		}
+	}
+}
+
 type failWriter struct{}
 
 func (failWriter) Write([]byte) (int, error) { return 0, errors.New("closed") }
