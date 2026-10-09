@@ -1,6 +1,6 @@
 # Stage F progress — 8 October 2026
 
-Steps 23–26 are implemented and validated offline. Step 27 has a runnable integration test but is blocked by network access. Step 28 needs the operator's deployment and upgrade. This is not a completed STOP F checkpoint; Stage G has not started.
+Update, 9 October 2026: steps 23–27 are validated, including the live 30-minute testnet follow (final lag 1). The operator waived step 28. See the [STOP F report](stage-f-checkpoint.md) for current evidence. The earlier offline validation and initial access failure below are retained as history. Stage G awaits operator review.
 
 ## Commits
 
@@ -78,7 +78,7 @@ The CLI's help exit handling was corrected after this race run; its CLI suite, r
 - `mkdocs build --strict`: exit 0 after checking the updated documentation.
 - The database schema, trust tiers and public API specification were not changed.
 
-## Live checks outstanding
+## Earlier live-access failure (8 October 2026)
 
 ```text
 $ go test -tags integration -run '^TestFollowTestnet30Minutes$' -timeout 35m ./internal/sync
@@ -89,8 +89,4 @@ FAIL github.com/Soroban-CII/soroindex/internal/sync 3.236s
 FAIL
 ```
 
-This failure occurred before following any ledgers. It is a network-access blocker, not a completed 30-minute run. The draft now includes `soroban-testnet.stellar.org`, preserving the existing `storage.googleapis.com` entry. Saving the draft does not apply or publish it.
-
-Step 28 requires the operator to deploy `token_full_sep.wasm` on testnet, start tracking that contract, then upgrade it to `token_partial.wasm`. Its contract ID and upgrade transaction/ledger will let us check the new version row and the changed inferred status. No deployment or keyed transaction was attempted.
-
-Next: enable live testnet access, complete steps 27–28, then present the full STOP F evidence before Stage G.
+This earlier failure occurred before following ledgers. Testnet access was restored on 9 October and the full run passed. The operator subsequently waived the deployed-fixture upgrade check. See the [STOP F report](stage-f-checkpoint.md).

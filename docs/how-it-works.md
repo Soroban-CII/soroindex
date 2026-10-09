@@ -37,6 +37,6 @@ The sync loop reads `getLedgers` in batches of up to 200 ledgers. It applies ins
 
 A seeded index resumes with `sync`; `--follow` polls after catching up. An index without a seed needs `--start-ledger`. If its next ledger is older than the RPC retention window, the loop returns an error before applying a batch. It rechecks the latest ledger before reporting `caught_up`.
 
-These paths have offline tests. The required live testnet follow and fixture upgrade are pending.
+These paths have offline tests. The 30-minute testnet follow check passed on 9 October 2026 with a final lag of one ledger. The operator waived the deployed-fixture upgrade check.
 
 See the [Stage F validation evidence](stage-f-progress.md) for the completed offline checks and pending live checks.

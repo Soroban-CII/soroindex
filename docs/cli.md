@@ -68,7 +68,7 @@ Seeds an index, recomputes interface matches, or applies consecutive ledger batc
 | `--follow` | Keep polling after catching up. Combine with a seed to seed and then follow. |
 | `--interval` | Positive polling duration, default `5s`. |
 
-Each batch and its resume point commit in one transaction. A retention gap exits with an error and tells the operator to seed or backfill. Progress is JSON on stderr, including `last_ledger`, `latest_ledger`, `lag` and `caught_up`. Live testnet validation remains pending; offline tests exercise resume, rollback, upgrades and reference changes.
+Each batch and its resume point commit in one transaction. A retention gap exits with an error and tells the operator to seed or backfill. Progress is JSON on stderr, including `last_ledger`, `latest_ledger`, `lag` and `caught_up`. The 30-minute testnet follow check passed on 9 October 2026 with a final lag of one ledger. The operator waived the deployed-fixture upgrade check. Offline tests exercise resume, rollback, upgrades and reference changes.
 
 ```text
 $ sep47idx sync --network testnet --db s20.db --seed report/testnet-contracts.csv
