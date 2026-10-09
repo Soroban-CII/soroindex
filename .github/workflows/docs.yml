@@ -1,5 +1,5 @@
 # Builds the MkDocs site and publishes it to GitHub Pages
-# (https://soroban-cii.github.io/soroindex/). Pages must be set to
+# (https://ciscokwiz.github.io/soroindex/). Pages must be set to
 # "GitHub Actions" as its source (scripts/repo-settings.sh does this).
 name: docs
 
