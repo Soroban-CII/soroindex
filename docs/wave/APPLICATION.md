@@ -8,7 +8,7 @@ Prepared 9 October 2026 for the [Stellar Wave program](https://www.drips.network
 
 ## Built and planned
 
-Built and tested: bounded SEP-47 metadata/spec parsing; versioned SEP-41 interface matching; Phase 0 census and report; idempotent seeding; incremental ledger sync and retention-gap detection; CAP-85 reference fan-out; archival handling; history; read-only API with pagination and rate limits; query, contract, wasm, stats and serve CLI; non-root static Docker image; four-platform release candidate with licenses and checksums. The real 30-minute testnet follow check passed with final lag one ledger. The deployed-fixture upgrade check was explicitly waived by the operator; the demo does not claim that test passed.
+Built and tested: bounded SEP-47 metadata/spec parsing; versioned SEP-41 interface matching; Phase 0 census and report; idempotent seeding; incremental ledger sync and retention-gap detection; CAP-85 reference fan-out; archival handling; history; read-only API with pagination and rate limits; query (including bounded complete CSV export), contract, wasm, stats and serve CLI; non-root static Docker image; four-platform release candidate with licenses and checksums. The real 30-minute testnet follow check passed with final lag one ledger. The deployed-fixture upgrade check was explicitly waived by the operator; the demo does not claim that test passed.
 
 The v0.1.0 candidate is built locally. A public release, image, Pages deployment and public API hosting are not claimed. Remaining implementation work is listed below. Stage J conformance verification remains deferred because measured declaration adoption is below the 1% gate. The Go module retains `github.com/Soroban-CII/soroindex`; repository ownership links use `ciscokwiz/soroindex` without changing imports.
 
@@ -19,7 +19,7 @@ The v0.1.0 candidate is built locally. A public release, image, Pages deployment
 | Repository | [ciscokwiz/soroindex](https://github.com/ciscokwiz/soroindex) | Selected origin; source commits pushed to `work`. Operator reviews and merges to main. |
 | Docs | [ciscokwiz.github.io/soroindex](https://ciscokwiz.github.io/soroindex/) | Strict local build passes; anonymous request currently returns 404. Operator enables Pages and checks deployment in a logged-out browser. |
 | Adoption report | [report/ADOPTION.md](https://github.com/ciscokwiz/soroindex/blob/main/report/ADOPTION.md) | Recorded 7 October census, not a fresh scan. |
-| Issues | [Stellar Wave issues](https://github.com/ciscokwiz/soroindex/issues?q=label%3A%22Stellar+Wave%22) | 26 validated remaining issues prepared; operator previews and creates them. |
+| Issues | [Stellar Wave issues](https://github.com/ciscokwiz/soroindex/issues?q=label%3A%22Stellar+Wave%22) | 25 validated remaining issues prepared; operator previews and creates them. |
 | CI | [Actions](https://github.com/ciscokwiz/soroindex/actions/workflows/ci.yml) | Workflow defines lint, test, fuzz-smoke, build. Verify main checks after merge. |
 | Release | [v0.1.0](https://github.com/ciscokwiz/soroindex/releases/tag/v0.1.0) | Candidate only; anonymous release link returns 404. Operator runs reviewed publication script. |
 | Docker image | `ghcr.io/ciscokwiz/soroindex:v0.1.0` | Local image built and smoke-tested; registry publication pending. |
@@ -34,12 +34,12 @@ The actual GitHub-selected READMEs of the three leading approved rows—MarketPa
 
 ## Planned issues
 
-Generated from [`scripts/wave-issues.json`](https://github.com/ciscokwiz/soroindex/blob/work/scripts/wave-issues.json), the source consumed by `scripts/create-issues.sh`: **26 real remaining issues**. All have Summary, Why, checkbox acceptance criteria, Tech Stack and existing file pointers, plus `Stellar Wave`, difficulty and area labels. The creator checks existing open and closed issue titles before creating anything.
+Generated from [`scripts/wave-issues.json`](https://github.com/ciscokwiz/soroindex/blob/work/scripts/wave-issues.json), the source consumed by `scripts/create-issues.sh`: **25 real remaining issues**. All have Summary, Why, checkbox acceptance criteria, Tech Stack and existing file pointers, plus `Stellar Wave`, difficulty and area labels. The creator checks existing open and closed issue titles before creating anything.
 
 | Area | Count | Difficulty: trivial / medium / high |
 | --- | ---: | --- |
 | api | 4 | 0 / 2 / 2 |
-| cli | 3 | 1 / 2 / 0 |
+| cli | 2 | 1 / 1 / 0 |
 | docs | 4 | 1 / 3 / 0 |
 | infra | 4 | 0 / 4 / 0 |
 | parser | 3 | 1 / 2 / 0 |
@@ -55,7 +55,6 @@ Generated from [`scripts/wave-issues.json`](https://github.com/ciscokwiz/soroind
 
 ### cli
 
-- feat(cli): export all query pages to CSV
 - feat(cli): paginate undeclared gap output
 - feat(cli): explain interface mismatch signatures in human output
 
