@@ -14,8 +14,8 @@ set -euo pipefail
 REPO="${REPO:-ciscokwiz/soroindex}"
 if [[ "${DRY_RUN:-0}" == 1 ]]; then
   gh() {
-    printf 'would run gh'; printf ' %q' "$@"; printf '\n'
-    if [[ " $* " == *" --input - "* ]]; then cat; fi
+    printf 'would run gh' >&2; printf ' %q' "$@" >&2; printf '\n' >&2
+    if [[ " $* " == *" --input - "* ]]; then cat >&2; fi
   }
 else
   command -v gh >/dev/null || { echo "gh CLI is required" >&2; exit 1; }
