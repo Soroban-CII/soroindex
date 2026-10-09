@@ -1,6 +1,6 @@
 # Stellar Wave application
 
-Prepared 9 October 2026 for the [Stellar Wave program](https://www.drips.network/wave/stellar). Publication and the live approval-list check remain pending; this package is not yet ready to submit.
+Prepared 9 October 2026 for the [Stellar Wave program](https://www.drips.network/wave/stellar). The live approval-list search and README comparison passed; public publication and operator checks remain pending. This package is not yet ready to submit.
 
 ## Project description
 
@@ -17,20 +17,20 @@ The v0.1.0 candidate is built locally. A public release, image, Pages deployment
 | Item | Intended link | Current evidence / required action |
 | --- | --- | --- |
 | Repository | [ciscokwiz/soroindex](https://github.com/ciscokwiz/soroindex) | Selected origin; source commits pushed to `work`. Operator reviews and merges to main. |
-| Docs | [ciscokwiz.github.io/soroindex](https://ciscokwiz.github.io/soroindex/) | Strict local build passes. Operator enables Pages and checks deployment in a logged-out browser. |
+| Docs | [ciscokwiz.github.io/soroindex](https://ciscokwiz.github.io/soroindex/) | Strict local build passes; anonymous request currently returns 404. Operator enables Pages and checks deployment in a logged-out browser. |
 | Adoption report | [report/ADOPTION.md](https://github.com/ciscokwiz/soroindex/blob/main/report/ADOPTION.md) | Recorded 7 October census, not a fresh scan. |
 | Issues | [Stellar Wave issues](https://github.com/ciscokwiz/soroindex/issues?q=label%3A%22Stellar+Wave%22) | 26 validated remaining issues prepared; operator previews and creates them. |
 | CI | [Actions](https://github.com/ciscokwiz/soroindex/actions/workflows/ci.yml) | Workflow defines lint, test, fuzz-smoke, build. Verify main checks after merge. |
-| Release | [v0.1.0](https://github.com/ciscokwiz/soroindex/releases/tag/v0.1.0) | Candidate only; operator runs reviewed publication script. |
+| Release | [v0.1.0](https://github.com/ciscokwiz/soroindex/releases/tag/v0.1.0) | Candidate only; anonymous release link returns 404. Operator runs reviewed publication script. |
 | Docker image | `ghcr.io/ciscokwiz/soroindex:v0.1.0` | Local image built and smoke-tested; registry publication pending. |
 | Demo video | No URL yet | Operator records [the real demo](DEMO.md), supplies a public URL and checks access. |
 | Live API | No hosted URL | Local read-only API exercised; hosting is optional and currently absent. |
 
 ## Live Wave eligibility and README comparison
 
-The current approved-list check is **unverified**. On 9 October, the cloud network proxy returned HTTP 403 for both `drips.network` and `www.drips.network`; escalating the read did not bypass the proxy. Earlier 7 October observations in the previous application are historical and do not establish the current eligibility of this selected repository.
+Read-only requests to the live approved-repository page succeeded on 9 October after initial proxy denials. Its embedded response lists 824 approved repositories sorted by stars. Searches for `soroindex` and `ciscokwiz/soroindex` both returned zero results; a positive control for `routedock` returned `winsznx/routedock`. This is dated evidence, and the operator must repeat the search before submitting.
 
-Before completing the README, fetch three most-starred approved Stellar Wave repositories and inspect their actual README patterns, as CLAUDE.md Stage I requires. Before submission, search the live approved list for `ciscokwiz/soroindex` and retain the date and result. Neither requirement is replaced with guessed repositories or a default value. The environment network draft includes the required hosts; it must be saved and published before retrying blocked requests.
+The actual GitHub-selected READMEs of the three leading approved rows—MarketPay (59 Wave-recorded stars), GreenPay (54) and OFFER-HUB (54)—were fetched and read before updating our README. See [the comparison and source hashes](README-COMPARISON.md). The direct Wave API hostname remained blocked; the public page supplied its server-rendered API responses. Environment settings include the needed public hosts, with the API hostname added for future direct checks.
 
 ## Planned issues
 
@@ -95,7 +95,7 @@ Generated from [`scripts/wave-issues.json`](https://github.com/ciscokwiz/soroind
 
 ## Operator completion checklist
 
-1. Review and merge the source branch. Complete the live README comparison and eligibility check when network access is available.
+1. Review and merge the source branch. Recheck the dated live eligibility result before submission.
 2. Preview `DRY_RUN=1 ./scripts/repo-settings.sh` and `DRY_RUN=1 ./scripts/create-issues.sh`, then run the reviewed scripts with appropriate repository rights. Settings enable Pages, private vulnerability reporting, topics and main protection.
 3. Confirm docs renders and all links open in a logged-out browser. Reproduce the demo on a real index, record it and replace the missing video link.
 4. Preview `./scripts/publish-release.sh`; from clean reviewed main, run `./scripts/publish-release.sh --publish` with the operator's registry login. Confirm public release assets, checksums and image access.
