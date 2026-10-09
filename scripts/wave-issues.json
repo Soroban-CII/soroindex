@@ -176,23 +176,6 @@
     ]
   },
   {
-    "title": "feat(cli): export all query pages to CSV",
-    "area": "cli",
-    "difficulty": "medium",
-    "summary": "Add an explicit complete-export mode that follows continuation cursors.",
-    "why": "CSV output currently emits one page and a cursor on stderr.",
-    "acceptance_criteria": [
-      "Retain default one-page behavior and review the new flag.",
-      "Write one header, stream rows, and propagate output and query failures.",
-      "Test more than 500 rows, interruption and resumed export without claiming a cross-page snapshot."
-    ],
-    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
-    "pointers": [
-      "cmd/sep47idx/cmd_query.go",
-      "internal/store/catalog.go"
-    ]
-  },
-  {
     "title": "feat(cli): paginate undeclared gap output",
     "area": "cli",
     "difficulty": "medium",
