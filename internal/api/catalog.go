@@ -9,18 +9,9 @@ import (
 )
 
 func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	for key, values := range q {
-		if len(values) != 1 {
-			writeError(w, 400, "bad_request", "query parameters must occur once")
-			return
-		}
-		switch key {
-		case "implements", "implements_any", "tier", "kind", "limit", "cursor":
-		default:
-			writeError(w, 400, "bad_request", "unknown query parameter")
-			return
-		}
+	q, err := parseQuery(r, "implements", "implements_any", "tier", "kind", "limit", "cursor")
+	if detailError(w, err) {
+		return
 	}
 	all, err := store.ParseSEPs(q.Get("implements"))
 	if err != nil {

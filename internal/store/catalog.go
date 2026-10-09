@@ -43,9 +43,11 @@ type Reference struct {
 
 // Page uses an opaque cursor to continue after the last returned contract.
 type Page struct {
-	Contracts     []ContractSummary `json:"contracts"`
-	NextCursor    *string           `json:"next_cursor"`
-	ParserVersion string            `json:"parser_version"`
+	Contracts       []ContractSummary `json:"contracts"`
+	NextCursor      *string           `json:"next_cursor"`
+	ParserVersion   string            `json:"parser_version"`
+	Tier            string            `json:"tier"`
+	RulesetVersions map[int]string    `json:"ruleset_versions,omitempty"`
 }
 
 // ErrBadQuery identifies invalid public query input without exposing SQL errors.
@@ -95,6 +97,10 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 	}
 	if f.Tier == "" {
 		f.Tier = "declared"
+	}
+	page.Tier = f.Tier
+	if f.Tier == "inferred" {
+		page.RulesetVersions = f.Rulesets
 	}
 	if f.Limit == 0 {
 		f.Limit = 50
@@ -156,7 +162,7 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 			if err != nil {
 				return "", nil, err
 			}
-			q := `EXISTS (SELECT 1 FROM interface_matches im WHERE im.wasm_hash = c.current_wasm_hash AND im.status = 'match' AND im.ruleset_version = json_extract(?, '$.' || im.sep)`
+			q := `c.kind <> 'sac' AND EXISTS (SELECT 1 FROM interface_matches im WHERE im.wasm_hash = c.current_wasm_hash AND im.status = 'match' AND im.ruleset_version = json_extract(?, '$.' || im.sep)`
 			a := []any{string(versions)}
 			if sep != 0 {
 				q += ` AND im.sep = ?`
@@ -164,7 +170,7 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 			}
 			return q + `)`, a, nil
 		default:
-			q := `c.kind <> 'sac' AND EXISTS (SELECT 1 FROM verifications v WHERE v.contract_id = c.contract_id AND v.wasm_hash = c.current_wasm_hash AND v.passed = 1 AND v.verdict = 'pass' AND EXISTS (SELECT 1 FROM wasm_claims wc WHERE wc.wasm_hash = v.wasm_hash AND wc.sep = v.sep) AND NOT EXISTS (SELECT 1 FROM verifications newer WHERE newer.contract_id = v.contract_id AND newer.wasm_hash = v.wasm_hash AND newer.sep = v.sep AND newer.tool = v.tool AND newer.run_at > v.run_at)`
+			q := `c.kind <> 'sac' AND EXISTS (SELECT 1 FROM verifications v WHERE v.contract_id = c.contract_id AND v.wasm_hash = c.current_wasm_hash AND v.passed = 1 AND v.verdict = 'pass' AND EXISTS (SELECT 1 FROM wasm_claims wc WHERE wc.wasm_hash = v.wasm_hash AND wc.sep = v.sep) AND NOT EXISTS (SELECT 1 FROM verifications newer WHERE newer.contract_id = v.contract_id AND newer.wasm_hash = v.wasm_hash AND newer.sep = v.sep AND newer.run_at > v.run_at)`
 			a := []any{}
 			if sep != 0 {
 				q += ` AND v.sep = ?`

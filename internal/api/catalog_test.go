@@ -110,10 +110,15 @@ func TestContractsFiltersPaginationAndAlias(t *testing.T) {
 	if len(second.Contracts) != 1 || second.Contracts[0].ID == first.Contracts[0].ID || second.NextCursor != nil {
 		t.Fatal("pagination duplicated or lost rows")
 	}
-	for _, query := range []string{"limit=0", "limit=501", "implements=0", "implements=41,", "tier=unknown", "kind=account", "cursor=bad", "limit=1&limit=2", "oops=1"} {
+	for _, query := range []string{"limit=0", "limit=", "limit=501", "implements=0", "implements=41,", "tier=unknown", "kind=account", "cursor=bad", "limit=1&limit=2", "oops=1", "cursor=%ZZ"} {
 		w := serve(t, s, "/v1/contracts?"+query)
 		if w.Code != 400 || !strings.Contains(w.Body.String(), `"code":"bad_request"`) {
 			t.Fatalf("%s: %d %s", query, w.Code, w.Body.String())
 		}
+	}
+	w = serve(t, s, "/v1/contracts?tier=inferred&implements=41")
+	var inferred store.Page
+	if err := json.Unmarshal(w.Body.Bytes(), &inferred); err != nil || inferred.RulesetVersions[41] != "current" || inferred.Tier != "inferred" {
+		t.Fatal(w.Body.String())
 	}
 }
