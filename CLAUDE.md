@@ -839,7 +839,7 @@ Run through this before declaring any stage done, and in full before STOP I. Eac
 - [ ] All four fuzz targets ran at least 10 minutes with no crash; regression cases are committed.
 - [ ] No code path executes Wasm or simulates a contract call (grep for `simulateTransaction`; it appears only in the `HomeDomainSource` stub comment).
 - [ ] Both SQL invariants have raw-SQL violation tests.
-- [ ] All five §5.9 sync tests exist and pass.
+- [ ] All seven §5.9 sync tests exist and pass.
 - [ ] The retention-gap case exits non-zero and writes nothing.
 - [ ] No tier is mixed: a test asserts a SAC never appears under `tier=declared`.
 - [ ] `rules/sep-0041.json` was diffed against the live SEP-41 text on the day it was committed (date recorded in its `source` field).
