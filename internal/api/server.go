@@ -60,6 +60,8 @@ func New(o Options) (*Server, error) {
 	s.mux.HandleFunc("GET /v1/health", s.health)
 	s.mux.HandleFunc("GET /v1/contracts", s.contracts)
 	s.mux.HandleFunc("GET /contracts", s.contracts)
+	s.mux.HandleFunc("GET /v1/contracts/{id}", s.contract)
+	s.mux.HandleFunc("GET /v1/contracts/{id}/history", s.history)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint not found")
 	})
