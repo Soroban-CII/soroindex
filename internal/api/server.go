@@ -33,6 +33,7 @@ type Options struct {
 type Server struct {
 	options Options
 	mux     *http.ServeMux
+	limiter ipLimiter
 }
 
 // New refuses writable stores so serving cannot migrate or modify the index.
@@ -82,6 +83,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET, OPTIONS")
 		writeError(w, http.StatusMethodNotAllowed, "bad_request", "only GET is supported")
+		return
+	}
+	if !s.limiter.allow(r.RemoteAddr, s.options.RateLimit, time.Now()) {
+		w.Header().Set("Retry-After", "60")
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "request limit exceeded")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
