@@ -238,3 +238,6 @@ func (s *Store) SetState(ctx context.Context, key, value string) error {
 	}
 	return nil
 }
+
+// IsReadOnly lets HTTP servers reject handles capable of changing the index.
+func (s *Store) IsReadOnly() bool { return s.readOnly }
