@@ -9,7 +9,7 @@ A public index of Soroban smart contracts by the SEPs they declare, the interfac
 
 A public index of Soroban smart contracts that answers "which contracts are tokens?" and similar questions. For every deployed contract it records what the contract says it implements, what its code interface actually matches, and, on testnet, what it was shown to do when tested. It tracks how those answers change when a contract is upgraded. Anyone can query it through an HTTP API or a command-line tool.
 
-> **Status, 9 October 2026:** pre-release. The parser, adoption census, seeding, gap queries, match recomputation and incremental sync are built and tested offline. Incremental sync supports crash resume, retention-gap detection, upgrades and CAP-85 reference updates. Its 30-minute testnet follow check passed with a final lag of one ledger. The operator waived the deployed-fixture upgrade check; offline fixture tests cover upgrades. The HTTP API and Docker image are planned. See [What is built](#what-is-built-and-what-is-planned).
+> **Status, 9 October 2026:** pre-release. The parser, adoption census, seeding, gap queries, match recomputation and incremental sync are built and tested offline. Incremental sync supports crash resume, retention-gap detection, upgrades and CAP-85 reference updates. Its 30-minute testnet follow check passed with a final lag of one ledger. The operator waived the deployed-fixture upgrade check; offline fixture tests cover upgrades. The read-only HTTP API, query/detail/stats/serve CLI, and non-root distroless Dockerfile are built and validated. Release binaries and an image publication remain planned. See [What is built](#what-is-built-and-what-is-planned).
 
 ## Questions it answers
 
@@ -54,7 +54,7 @@ The `gap` output is always labelled **inferred**: those contracts match the inte
 2. `internal/match` compares a contract's function types with a versioned rule file such as [rules/sep-0041.json](rules/sep-0041.json).
 3. `internal/ingest` turns network data into facts: instance executables (Wasm hash, Stellar Asset Contract, or a CAP-85 reference), code, and upgrades.
 4. `internal/store` is SQLite with migrations, and invariants enforced in SQL.
-5. `sep47idx` is the command-line tool. The HTTP API is planned.
+5. `sep47idx` is the command-line tool. Its read-only HTTP API exposes the same stored evidence and tier filters.
 
 Details: [documentation site](https://soroban-cii.github.io/soroindex/).
 
@@ -74,12 +74,14 @@ Tiers are never mixed. An inferred match is not a claim, and none of the tiers i
 | Built and tested | Planned (tracked as issues) |
 | --- | --- |
 | SEP-47 meta and spec parser, 4 fuzz targets run 10 min each |  |
-| SEP-41 rule file and matcher | HTTP API (`/v1/contracts`, `/v1/wasm`, `/v1/stats`, ...) |
-| Mainnet census from Hubble; stratified testnet sample | `query`, `contract`, `wasm`, `stats`, `serve` commands |
-| SQLite store, migrations, SQL invariants | Docker image, release binaries |
+| SEP-41 rule file and matcher | |
+| Mainnet census from Hubble; stratified testnet sample | |
+| SQLite store, migrations, SQL invariants | Published Docker image, release binaries |
 | Seeding from a contract list; stored totals checked against the census | Rule files for SEP-40, SEP-50, SEP-56 |
 | Undeclared-gap query; recomputation for new rule versions | Verified tier (deferred until declarations reach 1%) |
 | Incremental sync, atomic resume, retention gaps and reference upgrades (offline tests and live testnet follow) | |
+| Read-only HTTP API and query, contract, wasm, stats, serve commands | |
+| Non-root distroless Dockerfile, security checks and nightly integration workflow | |
 
 ## How to help
 

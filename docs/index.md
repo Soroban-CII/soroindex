@@ -26,4 +26,4 @@ Fewer than 1% of mainnet Wasm hashes declare anything. The index therefore leads
 
 ## Status
 
-Pre-release. Built and tested: the parser, the census, seeding an index, the undeclared-gap query and match recomputation. Planned: the incremental sync loop, the HTTP API and the Docker image. The [Stellar Wave application](wave/APPLICATION.md) lists both.
+Pre-release, updated 9 October 2026. Built and tested: parsing, the census, seeding, the undeclared gap, match recomputation, incremental sync, the read-only HTTP API, query/detail/stats/serve CLI and a non-root distroless Dockerfile. The real testnet follow check passed; the operator waived the deployed-fixture upgrade check. Release publication and verifier execution remain planned. See the [API reference](api.md), [CLI reference](cli.md) and [self-hosting guide](self-hosting.md) for captured runs.
