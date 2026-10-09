@@ -24,7 +24,7 @@ A rule file lists the functions a SEP requires, by type. The matcher compares a 
 - Only types and their order are compared, never parameter names.
 - `ruleset_version` changes whenever the rules change. `sep47idx sync --recompute` then re-matches stored Wasm without fetching anything.
 
-[`rules/schema.json`](https://github.com/Soroban-CII/soroindex/blob/main/rules/schema.json) validates every rule file; CI runs it (`make rules-check`).
+[`rules/schema.json`](https://github.com/ciscokwiz/soroindex/blob/main/rules/schema.json) validates every rule file; CI runs it (`make rules-check`).
 
 ## Status thresholds
 
