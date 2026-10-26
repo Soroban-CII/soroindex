@@ -9,10 +9,15 @@
   archival, upgrades and CAP-85 reference fan-out.
 - Query the index through the read-only HTTP API and CLI, with keyset pagination,
   JSON/CSV output and optional per-IP request limiting.
+- Page through the inferred undeclared gap with bounded reads and resumable
+  cursors, preserving ruleset and parser provenance.
+- Recover testnet sampling when RPC retention advances, with bounded retries
+  and explicit reporting of expired planned ledger ranges.
 - Provide static linux/darwin amd64/arm64 builds and a non-root distroless Dockerfile.
 - Record the dated mainnet adoption census and real testnet validation evidence.
-- Use Go 1.27.2 and the patched compression dependency; enable security and nightly
-  testnet integration workflows.
+- Use Go 1.27.3 and the patched compression dependency; enable security and nightly
+  testnet integration workflows. The compiler patch was refreshed on 26 October
+  2026 to address GO-2026-6809 before publication.
 
 No verifier execution, hosted API, published container or GitHub release is
 claimed until the operator completes publication. The deployed-fixture live

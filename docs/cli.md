@@ -63,6 +63,14 @@ SEP-41 match, contracts                     100        100  ok
 
 Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mainnet, CAP-85 references); `--partial-threshold`; `--rules <dir>`; `--render-only`; `--record-instance-archival <db>`.
 
+If testnet retention advances during sampling, the command confirms the new
+bounds with a fresh successful RPC probe and retries up to three times per
+failed page. It preserves the original window, strata and scan limits.
+Expired planned ledger ranges are recorded in `sample.retention_gaps`, logged
+as warnings, and marked as incomplete coverage in the JSON method and adoption
+report. An expired stratum can therefore contribute fewer contracts than its
+quota. Other RPC failures and exhausted retries still fail the command.
+
 ## sync
 
 Seeds an index, recomputes interface matches, or applies consecutive ledger batches. With no seed or recompute option, it resumes from the database’s `last_ledger`. A new index requires a seed or `--start-ledger`.
@@ -90,6 +98,22 @@ The seed file needs a `contract_id` column (other columns are ignored), or no he
 ## gap
 
 Lists contracts whose Wasm matches a SEP's interface and that declare nothing. The output is always labelled inferred.
+
+Each invocation returns one bounded page: `--limit` is 1..500 (default 50),
+and `--cursor` resumes after the last returned contract. The existing human
+header and JSON evidence fields are retained; their count is the number of
+contracts on this page. Human output writes `next cursor: ...` to stderr
+when another page exists. JSON adds `next_cursor` only when there is a next
+page, and retains `contracts: []` for an empty result. Pass the cursor back
+with the same network and SEP; it is opaque, not a total-count or snapshot
+identifier. Concurrent synchronization can change results between pages.
+`SEP47IDX_LIMIT` and `SEP47IDX_CURSOR` are supported, with explicit flags
+taking precedence. The read timeout covers the page query.
+
+```sh
+sep47idx gap --sep 41 --limit 100 --json
+sep47idx gap --sep 41 --limit 100 --cursor '<next_cursor>' --json
+```
 
 ```text
 $ sep47idx gap --sep 41 --network testnet --db smoke.db

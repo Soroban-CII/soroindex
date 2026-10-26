@@ -15,10 +15,11 @@ verifier is deferred under the recorded adoption decision.
   upgrades, archival and CAP-85 reference changes.
 - Static archives for linux/amd64, linux/arm64, darwin/amd64 and darwin/arm64.
   Each archive includes the binary, license notices and build provenance.
-- Go 1.27.2 and patched dependencies. See the recorded security scan and tests.
+- Go 1.27.3 and patched dependencies. The compiler patch addresses GO-2026-6809,
+  found during the 26 October release-readiness scan.
 
 Verify downloaded archives against `SHA256SUMS`. The intended image tag is
-`ghcr.io/ciscokwiz/soroindex:v0.1.0`. This body is prepared for operator publication;
+`ghcr.io/soroban-cii/soroindex:v0.1.0`. This body is prepared for operator publication;
 the tag, image and GitHub release are not advertised as live before that step.
 
 The 30-minute testnet follow check passed on 9 October 2026. The operator waived
@@ -26,4 +27,6 @@ the deployed-fixture upgrade check; offline tests cover version changes. No
 hosted API is included. A verified pass means a suite's checks passed; it is not
 a security audit. The project is unaudited.
 
-Source and documentation: https://github.com/ciscokwiz/soroindex
+Source and documentation: https://github.com/Soroban-CII/soroindex
+
+Current local validation and publication gates: [release readiness](../release-readiness.md).

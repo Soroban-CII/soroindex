@@ -31,7 +31,7 @@ Almost no contract declares what it implements yet. So this project leads with t
 
 ## Quick start
 
-The v0.1.0 candidate is built and tested locally; release and registry publication await operator review. Build the Docker image from source for now. Requires Go 1.27.2 for seeding and Docker; no Rust or CGO.
+The v0.1.0 candidate is built and tested locally; release and registry publication await operator review. Build the Docker image from source for now. Requires Go 1.27.3 for seeding and Docker; no Rust or CGO.
 
 ```sh
 git clone https://github.com/ciscokwiz/soroindex
@@ -91,7 +91,7 @@ SEP-47 (contract interface discovery) and SEP-48 (contract interface specificati
 
 ## Contributing
 
-The [Wave application package](docs/wave/APPLICATION.md) distinguishes built features from the 25 remaining issues and publication tasks. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, `make` targets and the commit rules. Security issues: [SECURITY.md](SECURITY.md). This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+The [Wave application package](docs/wave/APPLICATION.md) distinguishes built features from the 24 remaining issues and publication tasks. The backlog is below the 25-issue publication minimum; add only substantive unsolved work. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, `make` targets and the commit rules. Security issues: [SECURITY.md](SECURITY.md). This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
 
 ## Maintainers
 
