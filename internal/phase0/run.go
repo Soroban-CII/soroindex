@@ -114,6 +114,10 @@ func RunTestnet(ctx context.Context, c ingest.RPC, sc SampleConfig, o Options) (
 			"instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.",
 			st.OldestLedger, st.LatestLedger, st.Strata),
 	}
+	if len(st.RetentionGaps) > 0 {
+		census.Method += " The retention boundary advanced during sampling; coverage is incomplete. " +
+			"See sample.retention_gaps for planned ledger ranges that expired before scanning."
+	}
 	return finish(ctx, c, census, population, o, &st)
 }
 
