@@ -31,20 +31,27 @@ type gapOutput struct {
 	ParserVersion  string         `json:"parser_version"`
 	Count          int            `json:"count"`
 	Contracts      []store.GapRow `json:"contracts"`
+	NextCursor     *string        `json:"next_cursor,omitempty"`
 }
 
-// runGap implements `sep47idx gap --sep 41 [--json]` (CLAUDE.md §5.12).
+// runGap implements `sep47idx gap --sep 41 [--limit N] [--cursor C] [--json]`.
 func runGap(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("gap", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	resolve := config.RegisterCommon(flags)
 	sep := flags.Int("sep", 41, "SEP number")
+	limit := flags.Int("limit", 50, "page size, 1..500")
+	cursor := flags.String("cursor", "", "opaque continuation cursor")
 	if err := flags.Parse(args); err != nil {
 		return exitError
 	}
 	cfg, err := resolve()
 	if err != nil {
 		errorf(stderr, "sep47idx gap: %v\n", err)
+		return exitError
+	}
+	if flags.NArg() != 0 || *sep < 1 || *sep > 999999 || *limit < 1 || *limit > 500 {
+		errorf(stderr, "sep47idx gap: unexpected argument, invalid SEP or limit (want 1..500)\n")
 		return exitError
 	}
 	ruleFiles, err := match.LoadRules(rules.FS)
@@ -66,21 +73,23 @@ func runGap(args []string, stdout, stderr io.Writer) int {
 		errorf(stderr, "sep47idx gap: %v (run sync first)\n", err)
 		return exitError
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.RPCTimeout)
+	defer cancel()
 	st, err := store.Open(ctx, cfg.DB, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
 	if err != nil {
 		errorf(stderr, "sep47idx gap: %v\n", err)
 		return exitError
 	}
 	defer func() { _ = st.Close() }() // read-only
-	rows, err := st.Gap(ctx, *sep, ruleset)
+	page, err := st.Gap(ctx, *sep, ruleset, *limit, *cursor)
 	if err != nil {
 		errorf(stderr, "sep47idx gap: %v\n", err)
 		return exitError
 	}
+	rows := page.Contracts
 	if cfg.JSON {
 		b, err := json.MarshalIndent(gapOutput{SEP: *sep, Tier: "inferred", RulesetVersion: ruleset,
-			ParserVersion: sepmeta.ParserVersion, Count: len(rows), Contracts: rows}, "", "  ")
+			ParserVersion: sepmeta.ParserVersion, Count: len(rows), Contracts: rows, NextCursor: page.NextCursor}, "", "  ")
 		if err != nil {
 			return exitError
 		}
@@ -95,6 +104,11 @@ func runGap(args []string, stdout, stderr io.Writer) int {
 	}
 	for _, r := range rows {
 		if _, err := fmt.Fprintf(stdout, "%s  %s\n", r.ContractID, r.WasmHash); err != nil {
+			return exitError
+		}
+	}
+	if page.NextCursor != nil {
+		if _, err := fmt.Fprintf(stderr, "next cursor: %s\n", *page.NextCursor); err != nil {
 			return exitError
 		}
 	}
