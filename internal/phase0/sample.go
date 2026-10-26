@@ -2,6 +2,7 @@ package phase0
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -38,9 +39,18 @@ type SampleStats struct {
 	OldestLedger, LatestLedger uint32
 	Strata                     int
 	LedgersScanned             int
-	PerStratum                 []int // contracts first seen in each stratum
-	SkippedEntries             int   // instance entries that failed to decode
+	PerStratum                 []int         // contracts first seen in each stratum
+	SkippedEntries             int           // instance entries that failed to decode
+	RetentionGaps              []LedgerRange `json:"retention_gaps,omitempty"`
 }
+
+// LedgerRange records planned sample coverage lost to RPC retention, inclusively.
+type LedgerRange struct {
+	From uint32 `json:"from"`
+	To   uint32 `json:"to"`
+}
+
+const maxRetentionRetries = 3
 
 // metaLimits bounds one ledger's metadata. Testnet ledgers measured on
 // 2026-10-07 were about 200 KB of base64; 64 MiB leaves ample room.
@@ -70,6 +80,7 @@ func SampleTestnet(ctx context.Context, c ingest.RPC, cfg SampleConfig, log *slo
 		return nil, st, fmt.Errorf("RPC reported retention window %d..%d", st.OldestLedger, st.LatestLedger)
 	}
 	span := st.LatestLedger - st.OldestLedger + 1
+	retainedFrom := st.OldestLedger
 	quota := (cfg.Target + cfg.Strata - 1) / cfg.Strata
 	seen := map[string]bool{}
 	var ids []string
@@ -80,12 +91,44 @@ func SampleTestnet(ctx context.Context, c ingest.RPC, cfg SampleConfig, log *slo
 			to = from + cfg.MaxLedgersPerStratum - 1
 		}
 		got := 0
+		retries := 0
 		for next := from; next <= to && got < quota && len(ids) < cfg.Target; {
+			if err := ctx.Err(); err != nil {
+				return nil, st, err
+			}
+			if next < retainedFrom {
+				gap := LedgerRange{From: next, To: min(retainedFrom-1, to)}
+				st.RetentionGaps = append(st.RetentionGaps, gap)
+				log.LogAttrs(ctx, slog.LevelWarn, "phase0 sampling retention gap",
+					slog.Uint64("from", uint64(gap.From)), slog.Uint64("to", uint64(gap.To)))
+				next = retainedFrom
+				if next > to {
+					break
+				}
+			}
 			limit := min(cfg.PageSize, to-next+1)
 			page, err := c.GetLedgers(ctx, rpc.LedgersRequest{StartLedger: next, Limit: limit})
 			if err != nil {
+				if ctx.Err() != nil {
+					return nil, st, ctx.Err()
+				}
+				var rpcErr *rpc.Error
+				if errors.As(err, &rpcErr) && rpcErr.Code == -32600 && retries < maxRetentionRetries {
+					// A range error has no structured bounds. Confirm expiry with a
+					// successful window probe instead of interpreting its message.
+					window, probeErr := (&ingest.LedgerSource{RPC: c}).Window(ctx)
+					if probeErr != nil {
+						return nil, st, fmt.Errorf("stratum %d ledgers %d+%d: %w; retention refresh: %w", s, next, limit, err, probeErr)
+					}
+					if window.Oldest > next {
+						retainedFrom = window.Oldest
+						retries++
+						continue
+					}
+				}
 				return nil, st, fmt.Errorf("stratum %d ledgers %d+%d: %w", s, next, limit, err)
 			}
+			retries = 0
 			before := next
 			for _, l := range page.Ledgers {
 				if l.Sequence > to {

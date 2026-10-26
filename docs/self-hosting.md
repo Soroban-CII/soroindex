@@ -1,10 +1,10 @@
 # Self-hosting
 
-A multi-stage Dockerfile is implemented and tested locally. It builds a static binary with Go 1.27.2 and runs in digest-pinned distroless as UID/GID 65532. No registry image or release binary has been published yet.
+A multi-stage Dockerfile is implemented and tested locally. It builds a static binary with Go 1.27.3 and runs in digest-pinned distroless as UID/GID 65532. No registry image or release binary has been published yet.
 
 ## Build
 
-Go 1.27.2, with `CGO_ENABLED=0`; SQLite is the pure-Go `modernc.org/sqlite` driver.
+Go 1.27.3, with `CGO_ENABLED=0`; SQLite is the pure-Go `modernc.org/sqlite` driver.
 
 ```sh
 git clone https://github.com/ciscokwiz/soroindex

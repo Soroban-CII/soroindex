@@ -106,6 +106,16 @@ func RenderAdoption(sums []Summary) string {
 		if s.Sample != nil {
 			p("Sample: retention window %d–%d, %d strata, %d ledgers scanned, contracts per stratum %v, %d instance entries undecodable.\n\n",
 				s.Sample.OldestLedger, s.Sample.LatestLedger, s.Sample.Strata, s.Sample.LedgersScanned, s.Sample.PerStratum, s.Sample.SkippedEntries)
+			if len(s.Sample.RetentionGaps) > 0 {
+				p("**Incomplete sampling coverage:** retention advanced before these planned ledger ranges could be scanned: ")
+				for i, gap := range s.Sample.RetentionGaps {
+					if i > 0 {
+						p(", ")
+					}
+					p("%d-%d", gap.From, gap.To)
+				}
+				p(". The original window and strata above were retained; expired ledgers were not sampled.\n\n")
+			}
 		}
 	}
 	return b.String()

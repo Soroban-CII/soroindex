@@ -4,7 +4,7 @@ Thanks for helping. This page covers setup, the checks your change must pass, ho
 
 ## Setup
 
-You need Go 1.27.2. `go.mod` pins it with `toolchain go1.27.2`, so an older supported Go can download it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
+You need Go 1.27.3. `go.mod` pins it with `toolchain go1.27.3`, so an older supported Go can download it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
 
 ```sh
 git clone https://github.com/ciscokwiz/soroindex
@@ -77,13 +77,14 @@ A new or changed `rules/sep-NNNN.json`:
 
 ## Versions
 
-Baseline checked on 7 October 2026. Go was refreshed against go.dev on 9 October
-2026 to fix reachable standard-library advisories found with 1.27.1. The language
-floor is unchanged. A bump is its own commit, with a test run.
+Baseline checked on 7 October 2026. Go was refreshed on 26 October 2026 to
+1.27.3 after the release scan found GO-2026-6809 in 1.27.2. The official release
+checksum and Docker image index were verified. The language floor is unchanged.
+A bump is its own commit, with a test run.
 
 | Component | Version | Pinned in |
 | --- | --- | --- |
-| Go toolchain (build) | go1.27.2 | `go.mod` `toolchain`, `ci.yml`, `Dockerfile` |
+| Go toolchain (build) | go1.27.3 | `go.mod` `toolchain`, `ci.yml`, `Dockerfile` |
 | Go language floor | 1.26 (the highest `go` directive in the dependency tree: modernc.org/sqlite v1.60.1) | `go.mod` `go` |
 | github.com/stellar/go-stellar-sdk | v0.7.3 | `go.mod` |
 | modernc.org/sqlite | v1.60.1 | `go.mod` |
@@ -110,7 +111,7 @@ runs the actual settings script. Both scripts default to `ciscokwiz/soroindex`;
 `REPO=owner/name` overrides the target explicitly.
 
 Build local release archives with `./scripts/build-release.sh v0.1.0` after
-activating Go 1.27.2. This requires Bash, Python 3, Git and Go; it does not publish.
+activating Go 1.27.3. This requires Bash, Python 3, Git and Go; it does not publish.
 The archives include checksums, provenance and dependency license notices.
 `scripts/publish-release.sh` previews the publication sequence. Only the operator
 runs it with `--publish`, after merging and reviewing a clean `main`, configuring

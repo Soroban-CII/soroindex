@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
   GOTOOLCHAIN: local
   SEP47IDX_RPC_URL: https://soroban-testnet.stellar.org
 

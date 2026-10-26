@@ -176,23 +176,6 @@
     ]
   },
   {
-    "title": "feat(cli): paginate undeclared gap output",
-    "area": "cli",
-    "difficulty": "medium",
-    "summary": "Bound gap queries and expose continuation for large undeclared sets.",
-    "why": "Store.Gap and the gap command currently collect the entire gap in memory.",
-    "acceptance_criteria": [
-      "Keep results labelled inferred with current ruleset provenance.",
-      "Review CLI options and introduce bounded keyset reads.",
-      "Test continuation and unchanged default output compatibility."
-    ],
-    "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
-    "pointers": [
-      "internal/store/gap.go",
-      "cmd/sep47idx/cmd_gap.go"
-    ]
-  },
-  {
     "title": "feat(cli): explain interface mismatch signatures in human output",
     "area": "cli",
     "difficulty": "trivial",
