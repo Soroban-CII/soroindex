@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Decode Protocol 30 ledgers. Testnet moved to Protocol 30 (CAP-0088
+  millisecond close times), and from ledger 5,620,968 incremental sync stopped
+  on `'3' is not a valid StellarValueType`. go-stellar-sdk is now v0.8.0, which
+  adds the `SIGNED_MS` and `EMPTY_TX_SET_MS` header arms. A regression test
+  decodes recorded testnet ledgers carrying both arms.
+
 ## v0.1.0 — release candidate, 9 October 2026
 
 - Parse SEP-47 metadata and SEP-48 interface specifications without executing Wasm.

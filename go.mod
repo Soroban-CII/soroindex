@@ -9,7 +9,7 @@ go 1.26.0
 toolchain go1.27.3
 
 require (
-	github.com/stellar/go-stellar-sdk v0.7.3
+	github.com/stellar/go-stellar-sdk v0.8.0
 	modernc.org/sqlite v1.60.1
 )
 

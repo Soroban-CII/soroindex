@@ -86,7 +86,7 @@ A bump is its own commit, with a test run.
 | --- | --- | --- |
 | Go toolchain (build) | go1.27.3 | `go.mod` `toolchain`, `ci.yml`, `Dockerfile` |
 | Go language floor | 1.26 (the highest `go` directive in the dependency tree: modernc.org/sqlite v1.60.1) | `go.mod` `go` |
-| github.com/stellar/go-stellar-sdk | v0.7.3 | `go.mod` |
+| github.com/stellar/go-stellar-sdk | v0.8.0 (Protocol 30 XDR; bumped 8 November 2026 after testnet moved to Protocol 30) | `go.mod` |
 | modernc.org/sqlite | v1.60.1 | `go.mod` |
 | github.com/klauspost/compress (transitive) | v1.18.7 | `go.mod`; patched 1.18 release checked on 9 October 2026 |
 | govulncheck | v1.8.0 | `.github/workflows/security.yml`; checked on 9 October 2026 |

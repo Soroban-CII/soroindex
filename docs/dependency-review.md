@@ -53,7 +53,7 @@ retain those notices when redistributing dependencies.
 
 | Module | Version | Root license |
 | --- | --- | --- |
-| github.com/stellar/go-stellar-sdk | v0.7.3 | Apache-2.0 |
+| github.com/stellar/go-stellar-sdk | v0.8.0 | Apache-2.0 |
 | github.com/stellar/go-xdr | v0.0.0-20260806060815-dc590f17552a | ISC |
 | modernc.org/sqlite | v1.60.1 | BSD-3-Clause; bundled notices |
 | modernc.org/libc | v1.77.1 | BSD-3-Clause; bundled notices |
