@@ -7,6 +7,8 @@
   on `'3' is not a valid StellarValueType`. go-stellar-sdk is now v0.8.0, which
   adds the `SIGNED_MS` and `EMPTY_TX_SET_MS` header arms. A regression test
   decodes recorded testnet ledgers carrying both arms.
+- Update the transitive `klauspost/compress` dependency to v1.20.3 for
+  GO-2026-6865. No 1.18 release has the fix.
 
 ## v0.1.0 — release candidate, 9 October 2026
 
