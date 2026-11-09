@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SoroIndex - Browser Inspection Client</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --primary: #2f81f7;
+      --primary-hover: #58a6ff;
+      --danger: #f85149;
+      --warning: #d29922;
+      --success: #3fb950;
+      --badge-declared: #1f6feb;
+      --badge-inferred: #a371f7;
+      --badge-verified: #3fb950;
+      --badge-protocol: #388bfd;
+      --badge-archived: #f85149;
+      --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      padding: 1.5rem;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+
+    .disclaimer-banner {
+      background: rgba(210, 153, 34, 0.15);
+      border: 1px solid var(--warning);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      color: #e3b341;
+    }
+
+    .controls-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    input, select {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.5rem 0.75rem;
+    }
+
+    input:focus, select:focus {
+      outline: 2px solid var(--primary);
+      border-color: transparent;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--primary);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: #ffffff;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      transition: background-color 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    button.btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    button.btn-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--text-muted);
+    }
+
+    button.btn-danger {
+      background: transparent;
+      border: 1px solid var(--danger);
+      color: var(--danger);
+    }
+
+    button.btn-danger:hover:not(:disabled) {
+      background: rgba(248, 81, 73, 0.15);
+    }
+
+    /* Live status & alerts */
+    .status-region {
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      display: none;
+    }
+
+    .status-region.active {
+      display: block;
+    }
+
+    .status-info {
+      background: rgba(47, 129, 247, 0.15);
+      border: 1px solid var(--primary);
+      color: #79c0ff;
+    }
+
+    .status-error {
+      background: rgba(248, 81, 73, 0.15);
+      border: 1px solid var(--danger);
+      color: #ff7b72;
+    }
+
+    .status-rate-limited {
+      background: rgba(210, 153, 34, 0.15);
+      border: 1px solid var(--warning);
+      color: #e3b341;
+    }
+
+    /* Table & Container */
+    .table-wrapper {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 65vh;
+      container-type: inline-size;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #21262d;
+    }
+
+    th, td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .cell-mono {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-declared { background: rgba(31, 111, 235, 0.2); color: #58a6ff; border: 1px solid rgba(31, 111, 235, 0.4); }
+    .badge-inferred { background: rgba(163, 113, 247, 0.2); color: #bc8cff; border: 1px solid rgba(163, 113, 247, 0.4); }
+    .badge-verified { background: rgba(63, 185, 80, 0.2); color: #7ee787; border: 1px solid rgba(63, 185, 80, 0.4); }
+    .badge-protocol { background: rgba(56, 139, 253, 0.2); color: #79c0ff; border: 1px solid rgba(56, 139, 253, 0.4); }
+    
+    .badge-active { background: rgba(63, 185, 80, 0.15); color: #7ee787; }
+    .badge-archived {
+      background: rgba(248, 81, 73, 0.25);
+      color: #ff7b72;
+      border: 1px solid var(--danger);
+      font-weight: 700;
+    }
+
+    .caveat-box {
+      margin-top: 0.35rem;
+      padding: 0.4rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      background: rgba(210, 153, 34, 0.1);
+      border-left: 3px solid var(--warning);
+      color: #d29922;
+    }
+
+    /* Pagination controls */
+    .pagination-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1rem;
+      padding: 0.5rem 0;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .cursor-label {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      max-width: 400px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Detail Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      max-width: 800px;
+      width: 100%;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 1.5rem;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+    }
+
+    .claim-card {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Responsive stacked layout via container queries */
+    @container (width < 640px) {
+      table, thead, tbody, tr, th, td {
+        display: block;
+      }
+      thead {
+        display: none;
+      }
+      tr {
+        border-bottom: 1px solid var(--border);
+        padding: 0.75rem;
+      }
+      td {
+        padding: 0.35rem 0;
+        border-bottom: none;
+      }
+      td::before {
+        content: attr(data-label) ": ";
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        text-transform: uppercase;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SoroIndex Inspection Client</h1>
+      <p style="color: var(--text-muted); font-size: 0.9rem;">
+        Minimal browser integration for contract catalog exploration, opaque cursor pagination, and evidence tier inspection.
+      </p>
+    </header>
+
+    <div class="disclaimer-banner" role="note">
+      <strong>Tested Local Workflow Notice:</strong> This client is designed for local development and self-hosted <code>soroindex</code> inspection against a locally running server (e.g. <code>http://127.0.0.1:8080</code>). It is not a public hosted production service.
+    </div>
+
+    <!-- Controls Form -->
+    <section class="controls-card" aria-labelledby="query-controls-title">
+      <h2 id="query-controls-title" style="font-size: 1.05rem; margin-bottom: 1rem;">Query Configuration</h2>
+      <form id="queryForm">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="apiUrl">API Base URL</label>
+            <input type="url" id="apiUrl" value="http://127.0.0.1:8080" required>
+          </div>
+          <div class="form-group">
+            <label for="tierSelect">Evidence Tier</label>
+            <select id="tierSelect">
+              <option value="">All Tiers</option>
+              <option value="declared">Declared (SEP-47 metadata)</option>
+              <option value="inferred">Inferred (Interface match)</option>
+              <option value="protocol">Protocol (SAC contracts)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="sepFilter">Implements (SEP numbers)</label>
+            <input type="text" id="sepFilter" placeholder="e.g. 41 or 40,41">
+          </div>
+          <div class="form-group">
+            <label for="kindSelect">Contract Kind</label>
+            <select id="kindSelect">
+              <option value="">Any Kind</option>
+              <option value="wasm">Wasm</option>
+              <option value="sac">SAC (Stellar Asset)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="limitInput">Page Limit (1..500)</label>
+            <input type="number" id="limitInput" min="1" max="500" value="20">
+          </div>
+        </div>
+
+        <div class="btn-group">
+          <button type="submit" id="btnSubmit">Query Contracts</button>
+          <button type="button" id="btnCancel" class="btn-danger" disabled>Cancel</button>
+          <button type="button" id="btnCheckHealth" class="btn-secondary">Check Health</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Live Status / Alerts Area -->
+    <div id="statusRegion" class="status-region" role="status" aria-live="polite"></div>
+
+    <!-- Results Table -->
+    <main>
+      <div tabindex="0" role="region" aria-labelledby="results-table-caption" class="table-wrapper">
+        <table id="contractsTable">
+          <caption id="results-table-caption" style="text-align: left; padding: 0.75rem 1rem; font-weight: 600; color: var(--text-muted); font-size: 0.85rem;">
+            Indexed Contracts
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Contract ID</th>
+              <th scope="col">Kind</th>
+              <th scope="col">Tier</th>
+              <th scope="col">Status</th>
+              <th scope="col">Wasm Hash / Exec Ref</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="contractsBody">
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                No query executed yet. Configure parameters above and click "Query Contracts".
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Navigation -->
+      <nav class="pagination-bar" aria-label="Catalog Pagination">
+        <div class="btn-group">
+          <button type="button" id="btnPrevPage" class="btn-secondary" disabled>&larr; Previous Page</button>
+          <button type="button" id="btnNextPage" class="btn-secondary" disabled>Next Page &rarr;</button>
+        </div>
+        <div class="cursor-label" id="cursorInfo">Cursor: (first page)</div>
+      </nav>
+    </main>
+
+    <!-- Contract Details Modal -->
+    <div id="detailModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modalTitle" style="font-size: 1.15rem;">Contract Inspection</h2>
+          <button type="button" id="btnCloseModal" class="btn-secondary" style="padding: 0.25rem 0.6rem;">&times;</button>
+        </div>
+        <div id="modalBody">Loading detail...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      // State management
+      let currentAbortController = null;
+      let cursorStack = []; // History of cursors for "Previous Page" navigation
+      let currentCursor = '';
+      let nextCursor = null;
+      let rateLimitCountdownInterval = null;
+
+      // DOM Elements
+      const queryForm = document.getElementById('queryForm');
+      const apiUrlInput = document.getElementById('apiUrl');
+      const tierSelect = document.getElementById('tierSelect');
+      const sepFilter = document.getElementById('sepFilter');
+      const kindSelect = document.getElementById('kindSelect');
+      const limitInput = document.getElementById('limitInput');
+      const btnSubmit = document.getElementById('btnSubmit');
+      const btnCancel = document.getElementById('btnCancel');
+      const btnCheckHealth = document.getElementById('btnCheckHealth');
+      const statusRegion = document.getElementById('statusRegion');
+      const contractsBody = document.getElementById('contractsBody');
+      const btnPrevPage = document.getElementById('btnPrevPage');
+      const btnNextPage = document.getElementById('btnNextPage');
+      const cursorInfo = document.getElementById('cursorInfo');
+      const detailModal = document.getElementById('detailModal');
+      const modalBody = document.getElementById('modalBody');
+      const btnCloseModal = document.getElementById('btnCloseModal');
+
+      // Helper: set status message
+      function setStatus(message, type = 'info') {
+        clearInterval(rateLimitCountdownInterval);
+        statusRegion.className = `status-region active status-${type}`;
+        statusRegion.textContent = message;
+        statusRegion.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      function hideStatus() {
+        clearInterval(rateLimitCountdownInterval);
+        statusRegion.className = 'status-region';
+        statusRegion.textContent = '';
+      }
+
+      // Handle Rate Limit (HTTP 429) with Retry-After countdown
+      function handleRateLimit(retrySeconds) {
+        let remaining = Math.max(1, parseInt(retrySeconds, 10) || 60);
+        setStatus(`Rate limit exceeded (HTTP 429). Retry allowed in ${remaining}s...`, 'rate-limited');
+
+        rateLimitCountdownInterval = setInterval(() => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            clearInterval(rateLimitCountdownInterval);
+            setStatus('Rate limit cooldown complete. You may retry your request.', 'info');
+          } else {
+            statusRegion.textContent = `Rate limit exceeded (HTTP 429). Retry allowed in ${remaining}s...`;
+          }
+        }, 1000);
+      }
+
+      // Cancel active request
+      function abortCurrentRequest() {
+        if (currentAbortController) {
+          currentAbortController.abort();
+          currentAbortController = null;
+          btnCancel.disabled = true;
+          btnSubmit.disabled = false;
+          setStatus('Request cancelled by user.', 'info');
+        }
+      }
+
+      btnCancel.addEventListener('click', abortCurrentRequest);
+
+      // Fetch Contracts
+      async function fetchContracts(cursor = '', isNewQuery = false) {
+        abortCurrentRequest();
+        hideStatus();
+
+        if (isNewQuery) {
+          cursorStack = [];
+          currentCursor = '';
+        } else {
+          currentCursor = cursor;
+        }
+
+        const baseUrl = apiUrlInput.value.replace(/\/+$/, '');
+        const params = new URLSearchParams();
+
+        if (tierSelect.value) params.set('tier', tierSelect.value);
+        if (sepFilter.value.trim()) params.set('implements', sepFilter.value.trim());
+        if (kindSelect.value) params.set('kind', kindSelect.value);
+        if (limitInput.value) params.set('limit', limitInput.value);
+        if (cursor) params.set('cursor', cursor);
+
+        const url = `${baseUrl}/v1/contracts?${params.toString()}`;
+
+        currentAbortController = new AbortController();
+        btnCancel.disabled = false;
+        btnSubmit.disabled = true;
+        setStatus('Fetching indexed contracts...', 'info');
+
+        try {
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            signal: currentAbortController.signal
+          });
+
+          btnCancel.disabled = true;
+          btnSubmit.disabled = false;
+          currentAbortController = null;
+
+          if (res.status === 429) {
+            const retryHeader = res.headers.get('Retry-After');
+            handleRateLimit(retryHeader || 60);
+            return;
+          }
+
+          if (!res.ok) {
+            let errorMsg = `HTTP Error ${res.status}`;
+            try {
+              const errData = await res.json();
+              if (errData?.error?.message) {
+                errorMsg += `: ${errData.error.code} - ${errData.error.message}`;
+              }
+            } catch (_) {}
+            setStatus(errorMsg, 'error');
+            return;
+          }
+
+          const data = await res.json();
+          renderContracts(data);
+          hideStatus();
+
+          // Update pagination state
+          nextCursor = data.next_cursor || null;
+          btnNextPage.disabled = !nextCursor;
+          btnPrevPage.disabled = cursorStack.length === 0;
+          cursorInfo.textContent = cursor ? `Cursor: ${cursor}` : 'Cursor: (first page)';
+
+        } catch (err) {
+          btnCancel.disabled = true;
+          btnSubmit.disabled = false;
+          currentAbortController = null;
+
+          if (err.name === 'AbortError') {
+            // Already handled in abortCurrentRequest
+            return;
+          }
+          setStatus(`Network/Request failure: ${err.message}`, 'error');
+        }
+      }
+
+      // Render contracts into the accessible table
+      function renderContracts(data) {
+        contractsBody.innerHTML = '';
+        const list = data.contracts || [];
+
+        if (list.length === 0) {
+          const row = document.createElement('tr');
+          row.innerHTML = `<td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">No contracts found matching filter criteria.</td>`;
+          contractsBody.appendChild(row);
+          return;
+        }
+
+        const tierDefault = data.tier || 'declared';
+
+        for (const item of list) {
+          const tr = document.createElement('tr');
+
+          // Archived badge
+          const statusBadge = item.archived
+            ? `<span class="badge badge-archived" title="Contract ledger entry is archived or deleted">ARCHIVED</span>`
+            : `<span class="badge badge-active">ACTIVE</span>`;
+
+          // Evidence Tier badge
+          const tier = item.tier || tierDefault;
+          const tierClass = `badge-${tier}`;
+          const tierBadge = `<span class="badge ${tierClass}">${tier}</span>`;
+
+          // Hash or Exec Ref
+          const hashDisplay = item.wasm_hash
+            ? `<span class="cell-mono" title="${item.wasm_hash}">${item.wasm_hash.slice(0, 16)}&hellip;</span>`
+            : (item.exec_ref ? `<span class="cell-mono">${item.exec_ref}</span>` : '<span style="color:var(--text-muted)">none</span>');
+
+          tr.innerHTML = `
+            <td data-label="Contract ID" class="cell-mono"><strong>${item.contract_id}</strong></td>
+            <td data-label="Kind"><span class="badge" style="background:rgba(255,255,255,0.05);">${item.kind}</span></td>
+            <td data-label="Tier">${tierBadge}</td>
+            <td data-label="Status">${statusBadge}</td>
+            <td data-label="Hash">${hashDisplay}</td>
+            <td data-label="Actions">
+              <button type="button" class="btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.8rem;" data-id="${item.contract_id}">Inspect Details</button>
+            </td>
+          `;
+
+          tr.querySelector('button[data-id]').addEventListener('click', () => {
+            inspectContract(item.contract_id);
+          });
+
+          contractsBody.appendChild(tr);
+        }
+      }
+
+      // Inspect detail of a specific contract
+      async function inspectContract(contractId) {
+        const baseUrl = apiUrlInput.value.replace(/\/+$/, '');
+        modalBody.innerHTML = '<p style="color:var(--text-muted); padding: 1rem 0;">Fetching contract detail and trust evidence...</p>';
+        detailModal.classList.add('open');
+
+        try {
+          const res = await fetch(`${baseUrl}/v1/contracts/${contractId}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+          });
+
+          if (!res.ok) {
+            modalBody.innerHTML = `<p style="color:var(--danger)">Failed to load contract details (HTTP ${res.status}).</p>`;
+            return;
+          }
+
+          const details = await res.json();
+          renderModalDetail(details);
+        } catch (err) {
+          modalBody.innerHTML = `<p style="color:var(--danger)">Network error: ${err.message}</p>`;
+        }
+      }
+
+      // Render contract claims and evidence tiers
+      function renderModalDetail(d) {
+        const archivedBadge = d.archived
+          ? '<span class="badge badge-archived">ARCHIVED</span>'
+          : '<span class="badge badge-active">ACTIVE</span>';
+
+        let claimsHtml = '';
+        const claims = d.claims || [];
+
+        if (claims.length === 0) {
+          claimsHtml = '<p style="color:var(--text-muted); font-size: 0.9rem;">No SEP claims recorded for this contract.</p>';
+        } else {
+          for (const c of claims) {
+            let tierLabels = [];
+            if (c.declared) tierLabels.push('<span class="badge badge-declared">Declared</span>');
+            if (c.inferred && c.inferred.status === 'match') {
+              tierLabels.push(`<span class="badge badge-inferred">Inferred (${c.inferred.ruleset_version || 'match'})</span>`);
+            }
+            if (c.protocol) tierLabels.push('<span class="badge badge-protocol">Protocol (SAC)</span>');
+
+            // Verified state & caveats
+            let verifiedHtml = '';
+            if (c.verified) {
+              tierLabels.push('<span class="badge badge-verified">Verified</span>');
+              if (c.verified.caveat) {
+                verifiedHtml = `<div class="caveat-box"><strong>Verification Caveat:</strong> ${c.verified.caveat}</div>`;
+              }
+            } else {
+              verifiedHtml = `<div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.35rem;">Source verification: <em>unresolved / not verified</em></div>`;
+            }
+
+            // Anomaly indicator
+            let anomalyHtml = '';
+            if (c.anomaly) {
+              anomalyHtml = `<div class="caveat-box" style="border-left-color: var(--danger); color: var(--danger);"><strong>Anomaly Detected:</strong> ${c.anomaly}</div>`;
+            }
+
+            claimsHtml += `
+              <div class="claim-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 0.35rem;">
+                  <strong>SEP-${c.sep}</strong>
+                  <div style="display:flex; gap: 0.35rem;">${tierLabels.join(' ')}</div>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">Source: ${c.source || 'indexer'}</div>
+                ${verifiedHtml}
+                ${anomalyHtml}
+              </div>
+            `;
+          }
+        }
+
+        modalBody.innerHTML = `
+          <div style="margin-bottom: 1rem;">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Contract ID</div>
+            <div class="cell-mono" style="font-size: 1rem; word-break: break-all; margin-bottom: 0.5rem;">${d.contract_id}</div>
+            <div style="display:flex; gap: 1rem; font-size: 0.9rem; align-items: center;">
+              <div><strong>Status:</strong> ${archivedBadge}</div>
+              <div><strong>Network:</strong> ${d.network || 'testnet'}</div>
+              <div><strong>Kind:</strong> ${d.kind}</div>
+              <div><strong>As of Ledger:</strong> ${d.as_of_ledger || 'N/A'}</div>
+            </div>
+          </div>
+
+          <h3 style="font-size: 1rem; margin: 1.25rem 0 0.5rem 0; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+            Evidence Tiers & Claims
+          </h3>
+          ${claimsHtml}
+        `;
+      }
+
+      // Close Modal
+      btnCloseModal.addEventListener('click', () => detailModal.classList.remove('open'));
+      detailModal.addEventListener('click', (e) => {
+        if (e.target === detailModal) detailModal.classList.remove('open');
+      });
+
+      // Health Check Button
+      btnCheckHealth.addEventListener('click', async () => {
+        const baseUrl = apiUrlInput.value.replace(/\/+$/, '');
+        setStatus('Checking server health...', 'info');
+        try {
+          const res = await fetch(`${baseUrl}/v1/health`);
+          if (res.status === 429) {
+            handleRateLimit(res.headers.get('Retry-After') || 60);
+            return;
+          }
+          if (!res.ok) {
+            setStatus(`Health check returned HTTP ${res.status}`, 'error');
+            return;
+          }
+          const health = await res.json();
+          setStatus(`Health OK: Status=${health.status}, Network=${health.network}, LastLedger=${health.last_ledger}, Lag=${health.lag}`, 'info');
+        } catch (err) {
+          setStatus(`Health check failed: ${err.message}`, 'error');
+        }
+      });
+
+      // Form submit handler
+      queryForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        fetchContracts('', true);
+      });
+
+      // Pagination Handlers
+      btnNextPage.addEventListener('click', () => {
+        if (nextCursor) {
+          cursorStack.push(currentCursor);
+          fetchContracts(nextCursor, false);
+        }
+      });
+
+      btnPrevPage.addEventListener('click', () => {
+        if (cursorStack.length > 0) {
+          const prevCursor = cursorStack.pop();
+          fetchContracts(prevCursor, false);
+        }
+      });
+
+    })();
+  </script>
+</body>
+</html>

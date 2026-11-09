@@ -381,4 +381,30 @@ curl --fail --silent --show-error 'http://127.0.0.1:8080/v1/contracts?implements
 }
 ```
 
+## Browser client example
+
+A standalone, zero-dependency browser inspection client is provided in `examples/browser_client.html`.
+
+### Local workflow setup
+
+> **Note:** This client is intended solely for local development, testnet inspection, and self-hosted instances. It is not a public hosted production service.
+
+1. Start the local read-only HTTP API server (enabling GET CORS):
+```sh
+soroindex serve --db path/to/index.db --listen 127.0.0.1:8080 --network testnet
+```
+
+2. Open `examples/browser_client.html` directly in any modern browser (or serve statically via `python -m http.server 8000`):
+```sh
+python -m http.server 8000 --directory examples
+```
+Then navigate to `http://localhost:8000/browser_client.html`.
+
+### Key capabilities
+
+- **Evidence Tier Distinction**: Visually isolates evidence tiers (`declared`, `inferred`, `verified`, `protocol`).
+- **Caveat & Archived Visibility**: Unresolved verification states and verified caveats (such as compiler differences or partial source matches) are surfaced prominently alongside explicit `[ARCHIVED]` status badges.
+- **Opaque Cursor Pagination**: Follows opaque `next_cursor` tokens returned by the server, preserving cursor history for forward and backward navigation.
+- **Cancellation & Rate Limit Resilience**: Leverages `AbortController` to abort in-flight requests on demand and gracefully handles HTTP 429 (`rate_limited`) by reading `Retry-After` headers and showing a countdown timer.
+
 See the [million-claim benchmark](query-benchmark.md) and [dependency review](dependency-review.md) for measured query latency and security checks.
