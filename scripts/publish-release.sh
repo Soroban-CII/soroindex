@@ -4,7 +4,7 @@ set -euo pipefail
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 [[ $# -le 1 ]] || { echo 'usage: publish-release.sh [--publish]' >&2; exit 1; }
-release_repo="${REPO:-ciscokwiz/soroindex}"
+release_repo="${REPO:-Soroban-CII/soroindex}"
 release_version=v0.1.0
 release_image="ghcr.io/${release_repo,,}:$release_version"
 if [[ "${1:-}" != --publish ]]; then

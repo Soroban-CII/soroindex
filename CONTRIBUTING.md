@@ -7,7 +7,7 @@ Thanks for helping. This page covers setup, the checks your change must pass, ho
 You need Go 1.27.3. `go.mod` pins it with `toolchain go1.27.3`, so an older supported Go can download it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
 
 ```sh
-git clone https://github.com/ciscokwiz/soroindex
+git clone https://github.com/Soroban-CII/soroindex
 cd soroindex
 make test
 ```
@@ -107,7 +107,7 @@ Already-open or closed issues with identical titles are skipped. Do not add work
 already implemented or proposed changes that bypass the fixed API/schema review.
 
 Preview settings with `DRY_RUN=1 ./scripts/repo-settings.sh`. Only the operator
-runs the actual settings script. Both scripts default to `ciscokwiz/soroindex`;
+runs the actual settings script. Both scripts default to `Soroban-CII/soroindex`;
 `REPO=owner/name` overrides the target explicitly.
 
 Build local release archives with `./scripts/build-release.sh v0.1.0` after

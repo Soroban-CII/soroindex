@@ -45,7 +45,7 @@ def gh(*args, capture=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo", default="ciscokwiz/soroindex")
+    parser.add_argument("--repo", default="Soroban-CII/soroindex")
     parser.add_argument("--create", action="store_true", help="operator authorization to create labels/issues")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo):

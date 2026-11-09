@@ -11,7 +11,7 @@
 # 3. Repository topics.
 set -euo pipefail
 
-REPO="${REPO:-ciscokwiz/soroindex}"
+REPO="${REPO:-Soroban-CII/soroindex}"
 if [[ "${DRY_RUN:-0}" == 1 ]]; then
   gh() {
     printf 'would run gh' >&2; printf ' %q' "$@" >&2; printf '\n' >&2
