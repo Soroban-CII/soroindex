@@ -107,7 +107,8 @@
     "pointers": [
       "pkg/sepmeta/spec_test.go",
       "pkg/sepmeta/spec.go"
-    ]
+    ],
+    "existing_issue": 39
   },
   {
     "title": "docs(api): publish validated OpenAPI 3.1 specification",
@@ -143,7 +144,8 @@
       "internal/store/catalog.go",
       "internal/api/catalog.go",
       "CLAUDE.md"
-    ]
+    ],
+    "existing_issue": 40
   },
   {
     "title": "feat(api): propose historical ledger query filters",
@@ -161,7 +163,8 @@
       "internal/store/details.go",
       "migrations/0001_init.sql",
       "CLAUDE.md"
-    ]
+    ],
+    "existing_issue": 41
   },
   {
     "title": "test(api): exercise concurrent WAL readers during sync",
@@ -179,7 +182,8 @@
       "internal/api/server_test.go",
       "internal/store/details.go",
       "internal/ingest/apply_test.go"
-    ]
+    ],
+    "existing_issue": 42
   },
   {
     "title": "feat(cli): show interface evidence in contract output",
@@ -197,7 +201,8 @@
       "cmd/sep47idx/cmd_contract.go",
       "cmd/sep47idx/cmd_wasm_detail.go",
       "internal/store/details.go"
-    ]
+    ],
+    "existing_issue": 43
   },
   {
     "title": "feat(ingest): implement data-lake BackfillSource",
@@ -251,7 +256,8 @@
     "pointers": [
       "internal/store/store.go",
       "docs/self-hosting.md"
-    ]
+    ],
+    "existing_issue": 44
   },
   {
     "title": "feat(sync): expose throughput and RPC retry metrics",
@@ -269,7 +275,8 @@
       "internal/sync/loop.go",
       "internal/rpc/client.go",
       "cmd/sep47idx/cmd_sync.go"
-    ]
+    ],
+    "existing_issue": 45
   },
   {
     "title": "feat(ingest): stream large seed CSV inputs in bounded batches",
@@ -286,7 +293,8 @@
     "pointers": [
       "internal/ingest/seed.go",
       "internal/ingest/seed_test.go"
-    ]
+    ],
+    "existing_issue": 46
   },
   {
     "title": "docs(phase0): chart declared versus inferred adoption",
@@ -340,7 +348,8 @@
     "pointers": [
       "docs/api.md",
       "internal/api/server_test.go"
-    ]
+    ],
+    "existing_issue": 47
   },
   {
     "title": "docs(api): add a browser client with pagination and tier labels",
@@ -357,7 +366,8 @@
     "pointers": [
       "docs/api.md",
       "internal/api/server.go"
-    ]
+    ],
+    "existing_issue": 48
   },
   {
     "title": "ci(repo): produce release SBOM and signed provenance",
@@ -375,7 +385,8 @@
       "go.mod",
       "Dockerfile",
       "docs/dependency-review.md"
-    ]
+    ],
+    "existing_issue": 49
   },
   {
     "title": "ci(repo): build and smoke-test arm64 container images",
@@ -392,7 +403,8 @@
     "pointers": [
       "Dockerfile",
       "docs/self-hosting.md"
-    ]
+    ],
+    "existing_issue": 50
   },
   {
     "title": "ci(repo): test the declared Go language floor",
@@ -410,7 +422,8 @@
       "go.mod",
       ".github/workflows/ci.yml",
       "CONTRIBUTING.md"
-    ]
+    ],
+    "existing_issue": 51
   },
   {
     "title": "ci(repo): propose reviewed dependency patch automation",
@@ -428,7 +441,8 @@
       "go.mod",
       ".github/workflows/security.yml",
       "CONTRIBUTING.md"
-    ]
+    ],
+    "existing_issue": 52
   },
   {
     "title": "feat(cli): decide and implement query exit codes for empty results",
