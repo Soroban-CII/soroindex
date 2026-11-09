@@ -381,4 +381,54 @@ curl --fail --silent --show-error 'http://127.0.0.1:8080/v1/contracts?implements
 }
 ```
 
+## Python client example
+
+A typed, standard-library integration example lives in `examples/python_client.py`. It demonstrates explicit request timeouts, opaque cursor pagination, distinguishing trust evidence across tiers (`declared`, `inferred`, `verified`, `protocol`), and handling 400, 404 and 429 without conflating them with empty query results.
+
+```python
+from examples.python_client import SoroIndexClient
+
+client = SoroIndexClient("http://127.0.0.1:8080")
+
+# 1. Health check
+health = client.get_health()
+
+# 2. Iterate through all contracts matching SEP-41 across pages
+for contract in client.iter_contracts(implements=[41], tier="inferred"):
+    print(contract["contract_id"], contract["kind"])
+
+# 3. Empty results (200 with 0 items) are distinguished from errors
+empty_page = client.list_contracts(implements=[999999], tier="declared")
+assert len(empty_page.get("contracts", [])) == 0
+```
+
+### Real fixture run output
+
+Captured from running `examples/python_client.py` against the local fixture server in `internal/api/python_client_test.go`:
+
+```text
+Connecting to soroindex at http://127.0.0.1:59898...
+Health: status=ok network=testnet last_ledger=100 latest_ledger=103 lag=3
+
+--- 1. Declared Tier (self-reported in Wasm meta) ---
+Found 2 contracts declaring SEP-41:
+  - CAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDQF (kind=wasm, hash=0000000000000000...)
+  - CABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARHO (kind=wasm, hash=0000000000000000...)
+
+--- 2. Inferred Tier (interface rules matched from Wasm bytecode) ---
+Found 3 contracts with inferred match for SEP-41:
+  - CAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDQF (kind=wasm, hash=0000000000000000...)
+  - CABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARHO (kind=wasm, hash=0000000000000000...)
+  - CABQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVX (kind=wasm, hash=0000000000000000...)
+
+--- 3. Protocol Tier (built-in Stellar Asset Contracts) ---
+Found 1 protocol SACs implementing SEP-41:
+  - CACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4JJ (kind=sac)
+
+--- 4. Empty Result vs Error Distinctions ---
+Empty query returned 200 with 0 items (not an error): 0 items
+Handled 400 Bad Request successfully: code=bad_request, message=invalid identifier, filter or cursor
+Handled 404 Not Found successfully: code=not_found, message=not found
+```
+
 See the [million-claim benchmark](query-benchmark.md) and [dependency review](dependency-review.md) for measured query latency and security checks.
