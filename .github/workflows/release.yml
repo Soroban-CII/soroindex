@@ -1,0 +1,106 @@
+# Builds a tagged release: four static archives with SHA256SUMS, and the
+# container image ghcr.io/<owner>/soroindex:<tag>.
+#
+# - Pushing a vN.N.N tag creates a DRAFT GitHub release with the archives.
+#   A maintainer reviews the notes and publishes it; nothing goes public
+#   unreviewed.
+# - If the release already exists (for example v0.1.0, published by hand),
+#   its reviewed assets are never replaced. The workflow rebuilds the
+#   archives, reports whether they match the published SHA256SUMS, and then
+#   pushes only the image.
+# - Run it manually (Actions -> release -> Run workflow) with a tag to build
+#   and push the image for an existing release.
+#
+# A new GHCR package is private. Make it public once, under the package's
+# settings.
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  # Exact build pin from go.mod's toolchain line (CLAUDE.md §3).
+  GO_VERSION: "1.27.3"
+  GOTOOLCHAIN: local
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create a draft release and upload its assets
+      packages: write # push the image to GHCR
+    steps:
+      - name: tag is vN.N.N
+        shell: bash
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "tag must be vN.N.N, got $RELEASE_TAG" >&2; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: build archives and verify checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/build-release.sh "$RELEASE_TAG"
+          (cd "dist/$RELEASE_TAG" && sha256sum --check SHA256SUMS)
+      - name: build and smoke-test the image
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${GITHUB_REPOSITORY,,}:$RELEASE_TAG"
+          echo "IMAGE=$image" >> "$GITHUB_ENV"
+          docker build --build-arg "VERSION=$RELEASE_TAG" -t "$image" .
+          docker run --rm --read-only "$image" version | tee version.txt
+          grep -q "sep47idx $RELEASE_TAG " version.txt
+          docker image inspect "$image" --format 'image size: {{.Size}} bytes, user {{.Config.User}}'
+      - name: release assets (draft for a new tag; verify an existing one)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="dist/$RELEASE_TAG"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Never replace reviewed assets. Report whether this build reproduces them.
+            # Go stamps the module version from git, so archives built before the tag
+            # existed (as v0.1.0's were) embed a pseudo-version and cannot match a
+            # rebuild at the tag byte for byte; that is reported, not hidden.
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS --dir published
+            if diff -u published/SHA256SUMS "$out/SHA256SUMS"; then
+              echo "release $RELEASE_TAG exists; this build reproduces its SHA256SUMS; assets left unchanged"
+            else
+              echo "::warning::rebuilt archives differ from the published $RELEASE_TAG SHA256SUMS; published assets left unchanged"
+            fi
+          else
+            notes="$(mktemp)"
+            printf 'Draft created by the release workflow from %s. Review and edit these notes before publishing.\n\nSee CHANGELOG.md for this version.\n' "$(git rev-parse --short HEAD)" > "$notes"
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
+              --title "soroindex $RELEASE_TAG" --notes-file "$notes" \
+              "$out"/*.tar.gz "$out/SHA256SUMS" "$out/BUILD.json"
+          fi
+      - name: push the image
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE"

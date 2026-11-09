@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities privately through [GitHub private vulnerability reporting](https://github.com/ciscokwiz/soroindex/security/advisories/new): open the repository's **Security** tab and choose **Report a vulnerability** (private vulnerability reporting). Do not open a public issue for a vulnerability.
+Report vulnerabilities privately through [GitHub private vulnerability reporting](https://github.com/Soroban-CII/soroindex/security/advisories/new): open the repository's **Security** tab and choose **Report a vulnerability** (private vulnerability reporting). Do not open a public issue for a vulnerability.
 
 Include what you found, how to reproduce it, and the commit or version affected. We aim to acknowledge a report within 7 days and to agree a disclosure date with you.
 

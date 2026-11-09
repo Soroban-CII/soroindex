@@ -34,7 +34,7 @@ $ stellar contract info meta --wasm target/wasm32v1-none/release/your_contract.w
 [{"sc_meta_v0":{"key":"sep","val":"41"}},{"sc_meta_v0":{"key":"rsver","val":"1.98.1"}}, ...]
 ```
 
-That output shape is from the `token_full_sep` fixture, built with stellar-cli 28.0.0. The implemented `sep47idx wasm <hash> --network testnet --db <index.db> --json` command shows the stored declaration, anomalies and interface verdict. See the [CLI reference](cli.md) for a captured run.
+That output shape is from the `token_full_sep` fixture, built with stellar-cli 28.0.0. The implemented `sep47idx wasm <hash> --network testnet --db <index.db> --json` command shows the stored declaration, anomalies and interface verdict. Without `--json`, it also names each missing function and each function whose types differ from the SEP, with the expected and found signatures. See the [CLI reference](cli.md) for a captured run.
 
 ## Declaring is a claim, not proof
 

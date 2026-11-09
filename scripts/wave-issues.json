@@ -15,7 +15,8 @@
       "rules/schema.json",
       "internal/match/match_test.go",
       "docs/rule-files.md"
-    ]
+    ],
+    "existing_issue": 20
   },
   {
     "title": "feat(rules): add reviewed SEP-50 non-fungible tokens rules",
@@ -33,7 +34,8 @@
       "rules/schema.json",
       "internal/match/match_test.go",
       "docs/rule-files.md"
-    ]
+    ],
+    "existing_issue": 21
   },
   {
     "title": "feat(rules): add reviewed SEP-56 tokenized vaults rules",
@@ -51,7 +53,8 @@
       "rules/schema.json",
       "internal/match/match_test.go",
       "docs/rule-files.md"
-    ]
+    ],
+    "existing_issue": 22
   },
   {
     "title": "test(sepmeta): add Unicode whitespace boundary vectors",
@@ -68,7 +71,8 @@
     "pointers": [
       "pkg/sepmeta/sep47_test.go",
       "pkg/sepmeta/sep47.go"
-    ]
+    ],
+    "existing_issue": 23
   },
   {
     "title": "test(sepmeta): seed fuzzing with real mainnet custom sections",
@@ -85,7 +89,8 @@
     "pointers": [
       "pkg/sepmeta/fuzz_test.go",
       "report/mainnet-raw.csv"
-    ]
+    ],
+    "existing_issue": 24
   },
   {
     "title": "test(sepmeta): add nested UDT and union spec vectors",
@@ -119,7 +124,8 @@
     "pointers": [
       "internal/api",
       "docs/api.md"
-    ]
+    ],
+    "existing_issue": 15
   },
   {
     "title": "feat(api): propose declared and inferred disagreement filters",
@@ -176,15 +182,15 @@
     ]
   },
   {
-    "title": "feat(cli): explain interface mismatch signatures in human output",
+    "title": "feat(cli): show interface evidence in contract output",
     "area": "cli",
     "difficulty": "trivial",
-    "summary": "Show missing and mismatched functions in ordinary contract/wasm output.",
-    "why": "JSON exposes evidence but human output only lists verdict summaries.",
+    "summary": "Give `sep47idx contract` the same plain-text evidence `sep47idx wasm` now prints: the missing and mismatched functions behind each inferred status, and clear wording for the states that are not a match result.",
+    "why": "`wasm` names what to fix (Missing / Mismatched lines). `contract`, which most users run first, still prints only a status. A not-yet-matched Wasm, a Wasm with no spec, and an unresolved CAP-85 reference all need distinct wording so none reads as a mismatch.",
     "acceptance_criteria": [
-      "Print expected and observed types from stored match evidence.",
-      "Distinguish not-run from no_spec and unresolved references.",
-      "Capture output and test partial/mismatch fixtures without rerunning the matcher."
+      "Reuse the wasm command's evidence rendering for each claim's inferred status in human `contract` output.",
+      "Print distinct text for no match row, `no_spec`, and an unresolved or archived executable reference.",
+      "Tests cover a partial match, a no_spec Wasm and an unresolved reference without rerunning the matcher."
     ],
     "tech_stack": "Go standard library, SQLite and the existing pinned tooling; additions require maintainer review.",
     "pointers": [
@@ -209,7 +215,8 @@
       "internal/ingest/seed.go",
       "internal/ingest/ledgers.go",
       "scripts/hubble-export.sql"
-    ]
+    ],
+    "existing_issue": 28
   },
   {
     "title": "feat(rpc): fail over across network-verified providers",
@@ -226,7 +233,8 @@
     "pointers": [
       "internal/rpc/client.go",
       "internal/sync/loop.go"
-    ]
+    ],
+    "existing_issue": 29
   },
   {
     "title": "feat(store): add a consistent online backup command",
@@ -295,7 +303,8 @@
     "pointers": [
       "docs/adoption.md",
       "report/mainnet-summary.json"
-    ]
+    ],
+    "existing_issue": 30
   },
   {
     "title": "feat(phase0): retain dated adoption snapshots and trends",
@@ -313,7 +322,8 @@
       "internal/phase0/report.go",
       "internal/phase0/markdown.go",
       "docs/adoption.md"
-    ]
+    ],
+    "existing_issue": 31
   },
   {
     "title": "docs(api): add a typed Python client example",
@@ -418,6 +428,25 @@
       "go.mod",
       ".github/workflows/security.yml",
       "CONTRIBUTING.md"
+    ]
+  },
+  {
+    "title": "feat(cli): decide and implement query exit codes for empty results",
+    "area": "cli",
+    "difficulty": "trivial",
+    "existing_issue": 17,
+    "summary": "`sep47idx query` exits 0 when nothing matches. Issue #17 asked for exit code 2; CLAUDE.md §5.12 reserves 2 for \"not found\". Decide whether an empty filter result is \"not found\" and implement it consistently for text, JSON and CSV.",
+    "why": "Scripts that ask \"is anything implementing SEP-41?\" need to tell an empty answer from success without parsing output.",
+    "acceptance_criteria": [
+      "The decision and its reason are recorded in docs/cli.md.",
+      "Text, --json, --csv and --csv --all behave the same way for an empty result.",
+      "Tests cover an empty result in each output mode."
+    ],
+    "tech_stack": "Go standard library `flag`; no new dependency.",
+    "pointers": [
+      "cmd/sep47idx/cmd_query.go",
+      "cmd/sep47idx/cmd_query_test.go",
+      "docs/cli.md"
     ]
   }
 ]

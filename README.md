@@ -2,10 +2,10 @@
 
 A public index of Soroban smart contracts by the SEPs they declare, the interfaces they match, and how both change on upgrade.
 
-[![CI](https://github.com/ciscokwiz/soroindex/actions/workflows/ci.yml/badge.svg)](https://github.com/ciscokwiz/soroindex/actions/workflows/ci.yml)
+[![CI](https://github.com/Soroban-CII/soroindex/actions/workflows/ci.yml/badge.svg)](https://github.com/Soroban-CII/soroindex/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Soroban-CII/soroindex/pkg/sepmeta.svg)](https://pkg.go.dev/github.com/Soroban-CII/soroindex/pkg/sepmeta)
-[![Release](https://img.shields.io/github/v/release/ciscokwiz/soroindex)](https://github.com/ciscokwiz/soroindex/releases)
+[![Release](https://img.shields.io/github/v/release/Soroban-CII/soroindex)](https://github.com/Soroban-CII/soroindex/releases)
 
 A public index of Soroban smart contracts that answers "which contracts are tokens?" and similar questions. For every deployed contract it records what the contract says it implements, what its code interface actually matches, and reserves a separate testnet tier for future conformance results. It tracks how those answers change when a contract is upgraded. Anyone can query it through an HTTP API or a command-line tool.
 
@@ -31,10 +31,10 @@ Almost no contract declares what it implements yet. So this project leads with t
 
 ## Quick start
 
-The v0.1.0 candidate is built and tested locally; release and registry publication await operator review. Build the Docker image from source for now. Requires Go 1.27.3 for seeding and Docker; no Rust or CGO.
+[v0.1.0](https://github.com/Soroban-CII/soroindex/releases/tag/v0.1.0) was released on 9 November 2026, with static `sep47idx` binaries for linux and macOS (amd64 and arm64) and a `SHA256SUMS` file. No container image is published, so build the image from the `Dockerfile` as shown below. Building from source needs Go 1.27.3; no Rust or CGO.
 
 ```sh
-git clone https://github.com/ciscokwiz/soroindex
+git clone https://github.com/Soroban-CII/soroindex
 cd soroindex
 go build -o sep47idx ./cmd/sep47idx
 mkdir -p data
@@ -62,7 +62,7 @@ Use `tier=declared` to query metadata claims separately. The sample may contain 
 4. `internal/store` is SQLite with migrations, and invariants enforced in SQL.
 5. `sep47idx` is the command-line tool. Its read-only HTTP API exposes the same stored evidence and tier filters.
 
-Details: [source documentation](docs/index.md). The [documentation site](https://ciscokwiz.github.io/soroindex/) awaits the operator’s Pages deployment.
+Details: [source documentation](docs/index.md). The [documentation site](https://soroban-cii.github.io/soroindex/) is built from `docs/` and published by GitHub Pages.
 
 ## Trust tiers
 
@@ -91,7 +91,7 @@ SEP-47 (contract interface discovery) and SEP-48 (contract interface specificati
 
 ## Contributing
 
-The [Wave application package](docs/wave/APPLICATION.md) distinguishes built features from the 24 remaining issues and publication tasks. The backlog is below the 25-issue publication minimum; add only substantive unsolved work. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, `make` targets and the commit rules. Security issues: [SECURITY.md](SECURITY.md). This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
+The [Wave application package](docs/wave/APPLICATION.md) separates what is built from the 25 remaining issues in [`scripts/wave-issues.json`](scripts/wave-issues.json). 11 of those are already open on GitHub; `scripts/create-issues.sh` opens the rest. Add only substantive unsolved work. Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, `make` targets and the commit rules. Security issues: [SECURITY.md](SECURITY.md). This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
 
 ## Maintainers
 
@@ -101,7 +101,7 @@ The [Wave application package](docs/wave/APPLICATION.md) distinguishes built fea
 
 ## Contributors
 
-[![Contributors](https://contrib.rocks/image?repo=ciscokwiz/soroindex)](https://github.com/ciscokwiz/soroindex/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=Soroban-CII/soroindex)](https://github.com/Soroban-CII/soroindex/graphs/contributors)
 
 ## License
 
