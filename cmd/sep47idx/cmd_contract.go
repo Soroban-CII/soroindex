@@ -54,7 +54,8 @@ func runContract(args []string, stdout, stderr io.Writer) int {
 				if _, err = fmt.Fprintf(stdout, "%d..%s  %s\n", v.FromLedger, to, hash); err != nil {
 					return err
 				}
-				if err = printClaims(stdout, v.Claims); err != nil {
+				isUnresolved := v.ExecRef != nil && v.WasmHash == nil
+				if err = printClaims(stdout, v.Claims, isUnresolved, false); err != nil {
 					return err
 				}
 			}
@@ -74,23 +75,40 @@ func runContract(args []string, stdout, stderr io.Writer) int {
 		if _, err = fmt.Fprintf(stdout, "%s (%s, %s), archived=%t, as of ledger %d\nWasm: %s\n", id, d.Network, d.Kind, d.Archived, d.AsOfLedger, hash); err != nil {
 			return err
 		}
+		isUnresolved := d.Kind == "wasm_ref" && d.WasmHash == nil
 		if d.ExecRef != nil {
-			if _, err = fmt.Fprintf(stdout, "Executable reference: %s / %s\n", d.ExecRef.Owner, d.ExecRef.Tag); err != nil {
+			refStatus := ""
+			if isUnresolved {
+				if d.Archived {
+					refStatus = " (archived reference)"
+				} else {
+					refStatus = " (unresolved reference)"
+				}
+			}
+			if _, err = fmt.Fprintf(stdout, "Executable reference: %s / %s%s\n", d.ExecRef.Owner, d.ExecRef.Tag, refStatus); err != nil {
 				return err
 			}
 		}
-		return printClaims(stdout, d.Claims)
+		return printClaims(stdout, d.Claims, isUnresolved, d.Archived)
 	})
 	return readExit("contract", err, stderr)
 }
 
-func printClaims(out io.Writer, claims []store.ClaimDetail) error {
+func printClaims(out io.Writer, claims []store.ClaimDetail, isUnresolvedRef, isArchivedRef bool) error {
 	if len(claims) == 0 {
+		if isUnresolvedRef {
+			if isArchivedRef {
+				_, err := fmt.Fprintln(out, "Unresolved executable reference: reference entry is archived.")
+				return err
+			}
+			_, err := fmt.Fprintln(out, "Unresolved executable reference: reference entry not found.")
+			return err
+		}
 		_, err := fmt.Fprintln(out, "No stored SEP evidence.")
 		return err
 	}
 	for _, c := range claims {
-		inferred, verified := "not run", "not run"
+		inferred, verified := "no match row", "not run"
 		if c.Inferred != nil {
 			inferred = c.Inferred.Status + " (" + c.Inferred.RulesetVersion + ")"
 		}
@@ -99,6 +117,17 @@ func printClaims(out io.Writer, claims []store.ClaimDetail) error {
 		}
 		if _, err := fmt.Fprintf(out, "SEP-%d: declared=%t, inferred=%s, verified=%s, protocol=%t\n", c.SEP, c.Declared, inferred, verified, c.Protocol); err != nil {
 			return err
+		}
+		if c.Inferred != nil {
+			if c.Inferred.Status == "no_spec" {
+				if _, err := fmt.Fprintln(out, "  No spec: Wasm has no contractspecv0 section"); err != nil {
+					return err
+				}
+			} else {
+				if err := writeEvidence(out, c.SEP, c.Inferred.Missing, c.Inferred.Mismatched); err != nil {
+					return err
+				}
+			}
 		}
 		if c.Verified != nil {
 			if _, err := fmt.Fprintln(out, "A pass means the suite's checks passed; it is not a security audit."); err != nil {

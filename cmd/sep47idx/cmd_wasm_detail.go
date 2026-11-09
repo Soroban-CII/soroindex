@@ -27,13 +27,24 @@ func signature(s match.Signature) string {
 // complete. Without it, human output gives only a count, and an author has to
 // rerun with --json to learn what to fix.
 func writeMatchEvidence(w io.Writer, m store.WasmMatch) error {
+	return writeEvidence(w, m.SEP, m.Missing, m.Mismatched)
+}
+
+func writeEvidence(w io.Writer, sep int, missingRaw, mismatchedRaw json.RawMessage) error {
+	if len(missingRaw) == 0 && len(mismatchedRaw) == 0 {
+		return nil
+	}
 	var missing []string
 	var mismatched []match.Mismatch
-	if err := json.Unmarshal(m.Missing, &missing); err != nil {
-		return fmt.Errorf("stored missing functions for SEP-%d: %w", m.SEP, err)
+	if len(missingRaw) > 0 {
+		if err := json.Unmarshal(missingRaw, &missing); err != nil {
+			return fmt.Errorf("stored missing functions for SEP-%d: %w", sep, err)
+		}
 	}
-	if err := json.Unmarshal(m.Mismatched, &mismatched); err != nil {
-		return fmt.Errorf("stored mismatched functions for SEP-%d: %w", m.SEP, err)
+	if len(mismatchedRaw) > 0 {
+		if err := json.Unmarshal(mismatchedRaw, &mismatched); err != nil {
+			return fmt.Errorf("stored mismatched functions for SEP-%d: %w", sep, err)
+		}
 	}
 	if len(missing) > 0 {
 		if _, err := fmt.Fprintf(w, "  Missing: %s\n", strings.Join(missing, ", ")); err != nil {
