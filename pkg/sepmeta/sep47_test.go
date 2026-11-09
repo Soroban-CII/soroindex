@@ -102,6 +102,16 @@ func TestParseSEP47Rules(t *testing.T) {
 		}
 		return e
 	}
+	exact4096Anomalies := make([]string, 1366)
+	fiftyStrings := make([]string, 50)
+	fiftyInts := make([]int, 50)
+	fiftyEmptyAnomalies := make([]string, 50)
+	for i := 0; i < 50; i++ {
+		fiftyStrings[i] = fmt.Sprintf("%d", i+1)
+		fiftyInts[i] = i + 1
+		fiftyEmptyAnomalies[i] = ""
+	}
+
 	tests := []struct {
 		name        string
 		entries     []MetaEntry
@@ -113,6 +123,7 @@ func TestParseSEP47Rules(t *testing.T) {
 		{"canonical number is accepted", sep("41"), Strict, []int{41}, []string{""}, 1},
 		{"list keeps first-seen order", sep("46,41"), Strict, []int{46, 41}, []string{"", ""}, 1},
 		{"ASCII whitespace is trimmed", sep(" 41 ,\t46\n"), Strict, []int{41, 46}, []string{"", ""}, 1},
+		{"Unicode whitespace is not trimmed and yields non-numeric", sep("\u00a041", "41\u00a0", "\u200341\u2003"), Lenient, []int{}, []string{AnomalyNonNumeric, AnomalyNonNumeric, AnomalyNonNumeric}, 3},
 		{"leading zero is accepted in lenient mode", sep("041"), Lenient, []int{41}, []string{AnomalyLeadingZero}, 1},
 		{"leading zero is dropped in strict mode", sep("041"), Strict, []int{}, []string{AnomalyLeadingZero}, 1},
 		{"SEP- prefix is accepted in lenient mode", sep("SEP-41"), Lenient, []int{41}, []string{AnomalyPrefixedToken}, 1},
@@ -123,6 +134,7 @@ func TestParseSEP47Rules(t *testing.T) {
 		{"letters are non-numeric", sep("abc"), Lenient, []int{}, []string{AnomalyNonNumeric}, 1},
 		{"decimal point is non-numeric", sep("4.1"), Lenient, []int{}, []string{AnomalyNonNumeric}, 1},
 		{"sign is non-numeric", sep("-1", "+41"), Lenient, []int{}, []string{AnomalyNonNumeric, AnomalyNonNumeric}, 2},
+		{"plus prefix token is non-numeric", sep("+41"), Strict, []int{}, []string{AnomalyNonNumeric}, 1},
 		{"non-ASCII digits are non-numeric", sep("٤١"), Lenient, []int{}, []string{AnomalyNonNumeric}, 1},
 		{"empty value is one empty token", sep(""), Lenient, []int{}, []string{AnomalyEmptyToken}, 1},
 		{"double comma yields an empty token", sep("41,,46"), Lenient, []int{41, 46}, []string{"", AnomalyEmptyToken, ""}, 1},
@@ -130,6 +142,8 @@ func TestParseSEP47Rules(t *testing.T) {
 		{"six digits are accepted", sep("999999"), Strict, []int{999999}, []string{""}, 1},
 		{"seven digits are oversized", sep("1234567"), Lenient, []int{}, []string{AnomalyOversized}, 1},
 		{"value over 4 KiB is one oversized token", sep(strings.Repeat("41,", 1400)), Lenient, []int{}, []string{AnomalyOversized}, 1},
+		{"value of exactly 4096 bytes is parsed and not marked oversized", sep(strings.Repeat("41,", 1365) + "1"), Strict, []int{41, 1}, exact4096Anomalies, 1},
+		{"fifty separate entries are all retained and unioned", sep(fiftyStrings...), Strict, fiftyInts, fiftyEmptyAnomalies, 50},
 		{"duplicates are deduplicated", sep("41,41"), Strict, []int{41}, []string{"", ""}, 1},
 		{"separate entries are unioned with no anomaly", sep("41", "40"), Strict, []int{41, 40}, []string{"", ""}, 2},
 		{"duplicate across entries is deduplicated", sep("41", "41,40"), Strict, []int{41, 40}, []string{"", "", ""}, 2},

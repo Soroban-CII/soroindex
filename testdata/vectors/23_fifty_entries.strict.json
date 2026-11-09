@@ -1,0 +1,357 @@
+{
+  "seps": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50
+  ],
+  "tokens": [
+    {
+      "raw": "1",
+      "sep": 1,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "2",
+      "sep": 2,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "3",
+      "sep": 3,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "4",
+      "sep": 4,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "5",
+      "sep": 5,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "6",
+      "sep": 6,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "7",
+      "sep": 7,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "8",
+      "sep": 8,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "9",
+      "sep": 9,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "10",
+      "sep": 10,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "11",
+      "sep": 11,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "12",
+      "sep": 12,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "13",
+      "sep": 13,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "14",
+      "sep": 14,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "15",
+      "sep": 15,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "16",
+      "sep": 16,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "17",
+      "sep": 17,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "18",
+      "sep": 18,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "19",
+      "sep": 19,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "20",
+      "sep": 20,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "21",
+      "sep": 21,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "22",
+      "sep": 22,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "23",
+      "sep": 23,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "24",
+      "sep": 24,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "25",
+      "sep": 25,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "26",
+      "sep": 26,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "27",
+      "sep": 27,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "28",
+      "sep": 28,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "29",
+      "sep": 29,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "30",
+      "sep": 30,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "31",
+      "sep": 31,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "32",
+      "sep": 32,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "33",
+      "sep": 33,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "34",
+      "sep": 34,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "35",
+      "sep": 35,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "36",
+      "sep": 36,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "37",
+      "sep": 37,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "38",
+      "sep": 38,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "39",
+      "sep": 39,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "40",
+      "sep": 40,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "41",
+      "sep": 41,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "42",
+      "sep": 42,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "43",
+      "sep": 43,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "44",
+      "sep": 44,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "45",
+      "sep": 45,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "46",
+      "sep": 46,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "47",
+      "sep": 47,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "48",
+      "sep": 48,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "49",
+      "sep": 49,
+      "anomaly": "",
+      "accepted": true
+    },
+    {
+      "raw": "50",
+      "sep": 50,
+      "anomaly": "",
+      "accepted": true
+    }
+  ],
+  "entry_count": 50
+}

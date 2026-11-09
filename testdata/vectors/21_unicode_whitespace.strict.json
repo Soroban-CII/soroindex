@@ -1,0 +1,24 @@
+{
+  "seps": [],
+  "tokens": [
+    {
+      "raw": " 41",
+      "sep": 0,
+      "anomaly": "non_numeric",
+      "accepted": false
+    },
+    {
+      "raw": "41 ",
+      "sep": 0,
+      "anomaly": "non_numeric",
+      "accepted": false
+    },
+    {
+      "raw": " 41 ",
+      "sep": 0,
+      "anomaly": "non_numeric",
+      "accepted": false
+    }
+  ],
+  "entry_count": 3
+}
