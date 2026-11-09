@@ -81,3 +81,38 @@ no hosted deployment or image publication is claimed.
 For a database that is actively being synced, retain the SQLite WAL/SHM files
 alongside the database. A frozen copy should be checkpointed before distribution.
 Avoid mounting only the main `.db` file while its writer is active.
+
+### Image size (9 November 2026)
+
+The image was rebuilt from `main` (`3abe5a3` plus documentation commits) with
+`VERSION=v0.1.0`. The proxy CA was passed as the `ca-certificates` build secret
+and the proxy settings as build args, as described above:
+
+```text
+$ docker run --rm --read-only soroindex:check version
+sep47idx v0.1.0 (go1.27.3, linux/amd64)
+$ docker image inspect soroindex:check --format 'image size: {{.Size}} bytes, user {{.Config.User}}'
+image size: 27772533 bytes, user 65532:65532
+$ docker inspect soroindex:check --format 'env={{.Config.Env}}'
+env=[PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt]
+```
+
+That is 27,772,533 bytes, about 26.5 MiB. Outside `/app/licenses`, the image
+holds only `/app/sep47idx` and an empty `/app/data`. It contains no database,
+no proxy settings and no CA bundle; `docker history` shows neither.
+
+## Published images
+
+`.github/workflows/release.yml` builds and pushes `ghcr.io/soroban-cii/soroindex:<tag>`:
+
+- Pushing a `vN.N.N` tag builds the archives and the image, creates a **draft**
+  GitHub release for a maintainer to review, and pushes the image.
+- For a release that already exists, such as v0.1.0, run it from
+  **Actions → release → Run workflow** with the tag. It never replaces published
+  assets. It reports whether the rebuilt archives match the published
+  `SHA256SUMS`, then pushes the image. v0.1.0's archives were built before the
+  tag existed, so Go stamped them with a pseudo-version
+  (`v0.0.0-20261109093629-3abe5a30038d`), and a rebuild at the tag cannot match
+  them byte for byte. `sep47idx version` reports `v0.1.0` in both.
+
+A new GHCR package starts private. Make it public once, in the package's settings.
