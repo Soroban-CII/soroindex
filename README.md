@@ -31,7 +31,7 @@ Almost no contract declares what it implements yet. So this project leads with t
 
 ## Quick start
 
-The v0.1.0 candidate is built and tested locally; release and registry publication await operator review. Build the Docker image from source for now. Requires Go 1.27.3 for seeding and Docker; no Rust or CGO.
+[v0.1.0](https://github.com/Soroban-CII/soroindex/releases/tag/v0.1.0) was released on 9 November 2026, with static `sep47idx` binaries for linux and macOS (amd64 and arm64) and a `SHA256SUMS` file. No container image is published, so build the image from the `Dockerfile` as shown below. Building from source needs Go 1.27.3; no Rust or CGO.
 
 ```sh
 git clone https://github.com/Soroban-CII/soroindex
@@ -62,7 +62,7 @@ Use `tier=declared` to query metadata claims separately. The sample may contain 
 4. `internal/store` is SQLite with migrations, and invariants enforced in SQL.
 5. `sep47idx` is the command-line tool. Its read-only HTTP API exposes the same stored evidence and tier filters.
 
-Details: [source documentation](docs/index.md). The [documentation site](https://soroban-cii.github.io/soroindex/) awaits the operator’s Pages deployment.
+Details: [source documentation](docs/index.md). The [documentation site](https://soroban-cii.github.io/soroindex/) is built from `docs/` and published by GitHub Pages.
 
 ## Trust tiers
 
