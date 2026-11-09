@@ -284,6 +284,16 @@ Shows parsed metadata, declaration tokens, anomalies and interface matches.
 `--limit` and `--cursor` paginate current live contracts using the code. Missing
 hashes exit 2; hashes that are not 64 lowercase hex characters exit 1.
 
+Text output lists what kept an inferred match from being complete. Under each
+`Inferred SEP-N` line it prints `Missing: f, g` for absent functions and
+`Mismatched f: expected (A, B) -> C, found (A) -> C` for a function with the
+wrong types. A function defined twice prints `defined more than once`. For an
+input that accepts several types, such as `transfer.to`, "expected" shows the
+first accepted type. `--json` carries the same evidence in `missing` and
+`mismatched`. `TestMatchEvidenceFromRealMatcher` checks this output against the
+real matcher on the `token_partial.wasm` fixture, which prints
+`Missing: burn, burn_from`.
+
 ```text
 $ /workspace/scratch/stage-g/sep47idx wasm 7494c2bb5e9f6dd3f831b078400746b86f748a65cf14f593b1adb3572e2feea5 --db /workspace/scratch/stage-g/testnet.db --json
 {
