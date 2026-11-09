@@ -25,6 +25,11 @@ The affected `s2` package was not imported, but the dependency was updated to
 1.18.7, the latest patched release in that minor line checked at the module proxy.
 The broader 1.20 minor upgrade was unnecessary for this fix.
 
+On 8 November 2026 the CI scan reported GO-2026-6865 (panic on two-block
+frames) in 1.18.7. It is reachable through the SDK's `xdr` stream decoder. The
+fix is first in v1.20.2, and no 1.18 patch release carries it, so the module
+moved to v1.20.3, the newest 1.20 patch at the module proxy.
+
 Final output:
 
 ```text
@@ -53,7 +58,7 @@ retain those notices when redistributing dependencies.
 
 | Module | Version | Root license |
 | --- | --- | --- |
-| github.com/stellar/go-stellar-sdk | v0.7.3 | Apache-2.0 |
+| github.com/stellar/go-stellar-sdk | v0.8.0 | Apache-2.0 |
 | github.com/stellar/go-xdr | v0.0.0-20260806060815-dc590f17552a | ISC |
 | modernc.org/sqlite | v1.60.1 | BSD-3-Clause; bundled notices |
 | modernc.org/libc | v1.77.1 | BSD-3-Clause; bundled notices |
@@ -61,7 +66,7 @@ retain those notices when redistributing dependencies.
 | modernc.org/memory | v1.12.1 | BSD-3-Clause; bundled notices |
 | github.com/dustin/go-humanize | v1.0.1 | MIT |
 | github.com/google/uuid | v1.6.0 | BSD-3-Clause |
-| github.com/klauspost/compress | v1.18.7 | BSD-3-Clause; bundled notices |
+| github.com/klauspost/compress | v1.20.3 | BSD-3-Clause; bundled notices |
 | github.com/pkg/errors | v0.9.1 | BSD-2-Clause |
 | github.com/remyoudompheng/bigfft | v0.0.0-20230129092748-24d4a6f8daec | BSD-3-Clause |
 | golang.org/x/sys | v0.48.0 | BSD-3-Clause |

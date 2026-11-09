@@ -9,14 +9,14 @@ go 1.26.0
 toolchain go1.27.3
 
 require (
-	github.com/stellar/go-stellar-sdk v0.7.3
+	github.com/stellar/go-stellar-sdk v0.8.0
 	modernc.org/sqlite v1.60.1
 )
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/klauspost/compress v1.18.7 // indirect
+	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

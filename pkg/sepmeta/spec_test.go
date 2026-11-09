@@ -160,7 +160,8 @@ func TestTypeName(t *testing.T) {
 		})
 	}
 	t.Run("every scalar spec type has a name", func(t *testing.T) {
-		// 19 scalar variants exist in go-stellar-sdk v0.7.3; a new one added by
+		// 19 scalar variants exist in go-stellar-sdk v0.8.0 (unchanged since
+		// v0.7.3); a new one added by
 		// an SDK upgrade must be named here, not rendered as unknown.
 		if len(scalarNames) != 19 {
 			t.Fatalf("scalarNames has %d entries, want 19", len(scalarNames))
