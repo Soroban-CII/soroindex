@@ -3,7 +3,9 @@ package sync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Soroban-CII/soroindex/internal/ingest"
@@ -142,5 +144,92 @@ func TestFollowCancellation(t *testing.T) {
 	}}
 	if err := l.Run(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatal(err)
+	}
+}
+
+// dumpAll renders every row of every table, in a stable order, so two dumps
+// are equal exactly when the database contents are equal.
+func dumpAll(t *testing.T, s *store.Store) string {
+	t.Helper()
+	tables, err := s.DB.Query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for tables.Next() {
+		var n string
+		if err := tables.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, n)
+	}
+	if err := tables.Close(); err != nil {
+		t.Fatal(err)
+	}
+	var b strings.Builder
+	for _, n := range names {
+		rows, err := s.DB.Query(`SELECT * FROM "` + n + `" ORDER BY 1`) // #nosec G202 -- table names come from sqlite_master in a test
+		if err != nil {
+			t.Fatal(err)
+		}
+		cols, err := rows.Columns()
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&b, "== %s %v\n", n, cols)
+		for rows.Next() {
+			vals := make([]any, len(cols))
+			ptrs := make([]any, len(cols))
+			for i := range vals {
+				ptrs[i] = &vals[i]
+			}
+			if err := rows.Scan(ptrs...); err != nil {
+				t.Fatal(err)
+			}
+			fmt.Fprintf(&b, "%v\n", vals)
+		}
+		if err := rows.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return b.String()
+}
+
+// TestRetentionGapLeavesEveryTableUnchanged strengthens
+// TestRetentionGapWritesNothing: instead of counting sync_state rows, it
+// compares a dump of every table before and after the refused run, on an
+// index that already holds a contract, a version and a resume point.
+func TestRetentionGapLeavesEveryTableUnchanged(t *testing.T) {
+	ctx := context.Background()
+	s := testStore(t)
+	tx, err := s.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.UpsertContract(ctx, store.ContractRow{ID: "C1", Kind: "sac", UpdatedLedger: 9}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.SetVersion(ctx, store.Version{ContractID: "C1", FromLedger: 9}); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.SetLastLedger(ctx, 9); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	before := dumpAll(t, s)
+	if !strings.Contains(before, "C1") || !strings.Contains(before, "last_ledger") {
+		t.Fatalf("setup not visible in dump:\n%s", before)
+	}
+	l := Loop{Store: s, Source: &source{oldest: 11, latest: 20}, Apply: func(context.Context, *store.Tx, ingest.ContractFacts) error {
+		t.Fatal("apply called across retention gap")
+		return nil
+	}}
+	if err := l.Run(ctx); !errors.Is(err, ErrRetentionGap) {
+		t.Fatal(err)
+	}
+	if after := dumpAll(t, s); after != before {
+		t.Fatalf("database changed across a refused run:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
