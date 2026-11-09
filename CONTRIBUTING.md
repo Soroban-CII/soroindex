@@ -22,7 +22,7 @@ GOPROXY=https://proxy.golang.org,direct make test
 
 | Target | What it runs | CI job |
 | --- | --- | --- |
-| `make test` | `go test ./...` | `test` (with `-race`) |
+| `make test` | `go test ./...` | `test` (with `-race`, under build pin and 1.26 floor) |
 | `make lint` | `golangci-lint run ./...` (govet, staticcheck, errcheck, gosec, revive) | `lint` |
 | `make rules-check` | Validates `rules/sep-*.json` against `rules/schema.json` | `lint` |
 | `make tidy-check` | Fails if `go.mod`/`go.sum` are not tidy | `lint` |
@@ -85,7 +85,7 @@ A bump is its own commit, with a test run.
 | Component | Version | Pinned in |
 | --- | --- | --- |
 | Go toolchain (build) | go1.27.3 | `go.mod` `toolchain`, `ci.yml`, `Dockerfile` |
-| Go language floor | 1.26 (the highest `go` directive in the dependency tree: modernc.org/sqlite v1.60.1) | `go.mod` `go` |
+| Go language floor | 1.26 (the highest `go` directive in the dependency tree: modernc.org/sqlite v1.60.1; tested on go1.26.10 in CI) | `go.mod` `go`, `.github/workflows/ci.yml` |
 | github.com/stellar/go-stellar-sdk | v0.8.0 (Protocol 30 XDR; bumped 8 November 2026 after testnet moved to Protocol 30) | `go.mod` |
 | modernc.org/sqlite | v1.60.1 | `go.mod` |
 | github.com/klauspost/compress (transitive) | v1.20.3 | `go.mod`; moved off 1.18 on 8 November 2026 for GO-2026-6865 (no patched 1.18 release) |
