@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 — 9 November 2026
+
+Released from commit `3abe5a3`. The release candidate was first cut on 9 October 2026.
 
 - Decode Protocol 30 ledgers. Testnet moved to Protocol 30 (CAP-0088
   millisecond close times), and from ledger 5,620,968 incremental sync stopped
@@ -9,9 +11,6 @@
   decodes recorded testnet ledgers carrying both arms.
 - Update the transitive `klauspost/compress` dependency to v1.20.3 for
   GO-2026-6865. No 1.18 release has the fix.
-
-## v0.1.0 — release candidate, 9 October 2026
-
 - Parse SEP-47 metadata and SEP-48 interface specifications without executing Wasm.
 - Infer SEP-41 interfaces using reviewed versioned rules; keep declared, inferred,
   protocol and deferred verified evidence separate.
@@ -29,6 +28,7 @@
   testnet integration workflows. The compiler patch was refreshed on 26 October
   2026 to address GO-2026-6809 before publication.
 
-No verifier execution, hosted API, published container or GitHub release is
-claimed until the operator completes publication. The deployed-fixture live
-upgrade check was waived; offline tests cover upgrade behavior.
+The GitHub release carries the four static archives, `SHA256SUMS` and
+`BUILD.json`. No container image, hosted API or verifier run is published. The
+deployed-fixture live upgrade check was waived; offline tests cover upgrade
+behavior.
