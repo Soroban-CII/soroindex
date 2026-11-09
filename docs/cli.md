@@ -358,8 +358,17 @@ $ /workspace/scratch/stage-g/sep47idx wasm 7494c2bb5e9f6dd3f831b078400746b86f748
 ## stats
 
 Reads adoption, the inferred undeclared gap, anomaly tokens and the last indexed
-ledger from one database snapshot. It requires no network request. Use API
-health for fresh RPC tip and lag; a stored sync point does not imply freshness.
+ledger from one database snapshot. By default it makes no network request, and
+a stored sync point does not imply freshness.
+
+`--lag` adds a fresh sync check. It asks the configured RPC (`--rpc-url` or
+`SEP47IDX_RPC_URL`; testnet has a default) for its network and latest ledger.
+It refuses a provider on another network. It reports `latest_ledger` and
+`lag` (latest minus last indexed) in JSON, and a final
+`Sync: RPC latest ledger N, lag L ledgers` line in text. A provider behind the
+index is an error, not a negative lag. Without `--lag`, the JSON has no `lag`
+field, so a missing value is never mistaken for lag 0.
+`TestStatsCLILag` in `cmd/sep47idx/cmd_stats_test.go` covers each case.
 
 ```text
 $ /workspace/scratch/stage-g/sep47idx stats --db /workspace/scratch/stage-g/testnet.db
