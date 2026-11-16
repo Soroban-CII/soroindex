@@ -172,6 +172,46 @@ stderr:
 next cursor: eyJ2IjoxLCJpZCI6IkNBRVdUUVFXM1JHS1Y2N0lLMks2NEJOWFJGVVlUUE5JREtTVEdaVUxWM0UzSlFNUVFFQ1RCUkNSIn0
 ```
 
+### Empty results
+
+A query that matches no contract exits 2, the code this CLI uses for "not
+found". The output is still written: the text form prints the tier and a count
+of zero, `--json` prints a valid document with an empty `contracts` array and
+`--csv` prints its header row. What the exit code adds is the answer to the
+question a script asks: is anything in the index for this filter?
+
+```text
+$ sep47idx query --db /path/to/testnet.db --implements 41 --tier verified
+Tier: verified; 0 contracts on this page
+stderr:
+sep47idx query: no contract matches the filter
+$ echo $?
+2
+```
+
+The decision and its reason:
+
+- Exit 0 says "ok". For a filter query it would claim the index holds
+  something for that filter. It does not, so exit 0 would answer a different
+  question than the one that was asked.
+- Exit 1 is for a failure: a database that cannot be opened, a flag that
+  cannot be parsed, a write that fails. None of those happened, so the
+  command did not fail.
+- Exit 2 already means "not found" in this CLI. `contract` and `wasm` use it
+  for an identifier that is not in the index, and `gap` uses it for a SEP
+  without a rule file. A filter that matches nothing belongs to the same
+  family: the answer is not in the index.
+
+The code does not depend on the output mode, so a caller may switch between
+the text form, JSON and CSV without changing what the exit code means.
+`--csv --all` reports the same code as `--csv`, because the code says whether
+the filter matched anything at all, not whether one page was full. A filter
+that matches contracts keeps exit 0 in every mode, with or without `--all`.
+
+An empty result is not an error. The output is still written and the command
+still says what it found, on stderr, so a caller reading only stdout sees the
+same bytes in every mode.
+
 ### Complete CSV export
 
 Use `query --csv --all` to stream all remaining pages, with one header and at
