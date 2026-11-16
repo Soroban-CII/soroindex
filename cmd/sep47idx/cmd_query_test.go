@@ -172,6 +172,71 @@ func TestQueryCSVAllPagesAndResume(t *testing.T) {
 	}
 }
 
+func TestQueryEmptyResultExitsNotFound(t *testing.T) {
+	db, _, _ := readFixture(t)
+	t.Setenv("SEP47IDX_DB", db)
+	t.Setenv("SEP47IDX_TIER", "protocol")
+	cases := []struct {
+		name string
+		args []string
+	}{
+		{"text", []string{"query", "--kind", "sac", "--tier", "declared"}},
+		{"json", []string{"query", "--kind", "sac", "--tier", "declared", "--json"}},
+		{"csv", []string{"query", "--kind", "sac", "--tier", "declared", "--csv"}},
+		{"csv all", []string{"query", "--kind", "sac", "--tier", "declared", "--csv", "--all"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var out, errb bytes.Buffer
+			if code := run(c.args, &out, &errb); code != exitNotFound {
+				t.Fatal(code, out.String(), errb.String())
+			}
+			if !strings.Contains(errb.String(), "no contract matches the filter") {
+				t.Fatal(errb.String())
+			}
+			switch c.name {
+			case "text":
+				if !strings.Contains(out.String(), "0 contracts on this page") {
+					t.Fatal(out.String())
+				}
+			case "json":
+				var p store.Page
+				if err := json.Unmarshal(out.Bytes(), &p); err != nil || len(p.Contracts) != 0 {
+					t.Fatal(err, out.String())
+				}
+			default:
+				rows, err := csv.NewReader(&out).ReadAll()
+				if err != nil || len(rows) != 1 || rows[0][0] != "contract_id" {
+					t.Fatal(rows, err)
+				}
+			}
+		})
+	}
+}
+
+func TestQueryWithRowsKeepsExitOK(t *testing.T) {
+	db, id, _ := readFixture(t)
+	t.Setenv("SEP47IDX_DB", db)
+	t.Setenv("SEP47IDX_TIER", "protocol")
+	for _, args := range [][]string{
+		{"query", "--implements", "41", "--tier", "declared"},
+		{"query", "--implements", "41", "--tier", "declared", "--json"},
+		{"query", "--implements", "41", "--tier", "declared", "--csv"},
+		{"query", "--implements", "41", "--tier", "declared", "--csv", "--all"},
+	} {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != exitOK {
+			t.Fatal(args, code, errb.String())
+		}
+		if !strings.Contains(out.String(), id) {
+			t.Fatal(args, out.String())
+		}
+		if strings.Contains(errb.String(), "no contract matches the filter") {
+			t.Fatal(args, errb.String())
+		}
+	}
+}
+
 func TestCSVExportStopsOnQueryFailureCancellationAndOutputFailure(t *testing.T) {
 	cursor := "next-page"
 	page := store.Page{Tier: "declared", Contracts: []store.ContractSummary{{ID: "first", Kind: "wasm"}}, NextCursor: &cursor}
@@ -186,7 +251,7 @@ func TestCSVExportStopsOnQueryFailureCancellationAndOutputFailure(t *testing.T) 
 		return store.Page{}, queryError
 	}
 	filter := store.Filter{Limit: 2, Tier: "declared"}
-	err := exportQueryCSV(context.Background(), &out, page, filter, true, query)
+	_, err := exportQueryCSV(context.Background(), &out, page, filter, true, query)
 	if !errors.Is(err, queryError) || calls != 1 || !strings.Contains(err.Error(), cursor) {
 		t.Fatal(err, calls)
 	}
@@ -195,12 +260,12 @@ func TestCSVExportStopsOnQueryFailureCancellationAndOutputFailure(t *testing.T) 
 		t.Fatal(rows, err)
 	}
 	calls = 0
-	if err := exportQueryCSV(context.Background(), failWriter{}, page, filter, true, query); err == nil || calls != 0 {
+	if _, err := exportQueryCSV(context.Background(), failWriter{}, page, filter, true, query); err == nil || calls != 0 {
 		t.Fatal(err, calls)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	writer := &cancelCSVWriter{cancel: cancel}
-	if err := exportQueryCSV(ctx, writer, page, filter, true, query); !errors.Is(err, context.Canceled) || calls != 0 {
+	if _, err := exportQueryCSV(ctx, writer, page, filter, true, query); !errors.Is(err, context.Canceled) || calls != 0 {
 		t.Fatal(err, calls)
 	}
 	if rows, err := csv.NewReader(&writer.Buffer).ReadAll(); err != nil || len(rows) != 2 {
@@ -209,7 +274,7 @@ func TestCSVExportStopsOnQueryFailureCancellationAndOutputFailure(t *testing.T) 
 	ctx, cancel = context.WithCancel(context.Background())
 	cancel()
 	out.Reset()
-	if err := exportQueryCSV(ctx, &out, page, filter, true, query); !errors.Is(err, context.Canceled) || calls != 0 || out.Len() != 0 {
+	if _, err := exportQueryCSV(ctx, &out, page, filter, true, query); !errors.Is(err, context.Canceled) || calls != 0 || out.Len() != 0 {
 		t.Fatal(err, calls, out.String())
 	}
 }

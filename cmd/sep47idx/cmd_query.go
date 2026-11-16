@@ -47,6 +47,7 @@ func runQuery(args []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return readExit("query", err, stderr)
 	}
+	matched := 0
 	err = readIndex(cfg, func(ctx context.Context, s *store.Store, rulesets map[int]string) error {
 		filter := store.Filter{Implements: seps, ImplementsAny: alternatives, Tier: *tier, Kind: *kind, Limit: *limit, Cursor: *cursor, Rulesets: rulesets}
 		page, err := s.Contracts(ctx, filter)
@@ -54,16 +55,20 @@ func runQuery(args []string, stdout, stderr io.Writer) int {
 			return err
 		}
 		if cfg.JSON {
+			matched = len(page.Contracts)
 			return jsonOutput(stdout, page)
 		}
 		if *csvMode {
-			if err = exportQueryCSV(ctx, stdout, page, filter, *allPages, s.Contracts); err != nil {
+			count, err := exportQueryCSV(ctx, stdout, page, filter, *allPages, s.Contracts)
+			matched = count
+			if err != nil {
 				return err
 			}
 			if *allPages {
 				return nil
 			}
 		} else {
+			matched = len(page.Contracts)
 			if _, err = fmt.Fprintf(stdout, "Tier: %s; %d contracts on this page\n", page.Tier, len(page.Contracts)); err != nil {
 				return err
 			}
@@ -85,19 +90,27 @@ func runQuery(args []string, stdout, stderr io.Writer) int {
 		}
 		return err
 	})
-	return readExit("query", err, stderr)
+	code := readExit("query", err, stderr)
+	if code == exitOK && matched == 0 {
+		errorf(stderr, "sep47idx query: no contract matches the filter\n")
+		return exitNotFound
+	}
+	return code
 }
 
 // exportQueryCSV flushes each bounded page before fetching its successor.
 // Each query observes its own database state; this is not a cross-page snapshot.
-func exportQueryCSV(ctx context.Context, out io.Writer, page store.Page, filter store.Filter, all bool, query func(context.Context, store.Filter) (store.Page, error)) error {
+// It reports how many contracts were written, so the caller can tell an empty
+// result from a full one.
+func exportQueryCSV(ctx context.Context, out io.Writer, page store.Page, filter store.Filter, all bool, query func(context.Context, store.Filter) (store.Page, error)) (int, error) {
 	w := csv.NewWriter(out)
 	if err := w.Write([]string{"contract_id", "kind", "wasm_hash", "exec_ref_owner", "exec_ref_tag", "archived", "tier"}); err != nil {
-		return err
+		return 0, err
 	}
+	written := 0
 	for {
 		if err := ctx.Err(); err != nil {
-			return err
+			return written, err
 		}
 		for _, c := range page.Contracts {
 			hash, owner, tag := "", "", ""
@@ -108,24 +121,25 @@ func exportQueryCSV(ctx context.Context, out io.Writer, page store.Page, filter 
 				owner, tag = c.ExecRef.Owner, c.ExecRef.Tag
 			}
 			if err := w.Write([]string{c.ID, c.Kind, hash, owner, tag, strconv.FormatBool(c.Archived), page.Tier}); err != nil {
-				return err
+				return written, err
 			}
+			written++
 		}
 		w.Flush()
 		if err := w.Error(); err != nil {
-			return err
+			return written, err
 		}
 		if !all || page.NextCursor == nil {
-			return nil
+			return written, nil
 		}
 		filter.Cursor = *page.NextCursor
 		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("CSV export before cursor %q: %w", filter.Cursor, err)
+			return written, fmt.Errorf("CSV export before cursor %q: %w", filter.Cursor, err)
 		}
 		var err error
 		page, err = query(ctx, filter)
 		if err != nil {
-			return fmt.Errorf("CSV export before cursor %q: %w", filter.Cursor, err)
+			return written, fmt.Errorf("CSV export before cursor %q: %w", filter.Cursor, err)
 		}
 	}
 }
