@@ -39,6 +39,8 @@ nav:
   - For contract authors: contract-authors.md
   - Writing a rule file: rule-files.md
   - Self-hosting: self-hosting.md
+  - Query benchmark: query-benchmark.md
+  - Query plans: query-plans.md
   - Adoption report: adoption.md
   - Prior art: prior-art.md
   - Contributing: contributing.md
