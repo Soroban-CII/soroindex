@@ -31,6 +31,8 @@ GOPROXY=https://proxy.golang.org,direct make test
 | `make build` | Static binary, `CGO_ENABLED=0` | `build` (linux/darwin × amd64/arm64) |
 | `make fixtures` | Rebuilds `testdata/wasm` from Rust sources (needs Rust and stellar-cli) | — |
 | `make docs` | `mkdocs build --strict` | `docs` workflow |
+| `make bench` | p50/p95 for every API query and the materialized alternative, 1M-claim fixture | — |
+| `make bench-10m` | The same at 10M claims and 1M contracts (about 4 GB of disk, about an hour; see `docs/query-benchmark.md`) | — |
 
 The required checks are `lint`, `test`, `fuzz-smoke` and `build`. Security and docs workflows provide additional review evidence.
 
