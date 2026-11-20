@@ -71,7 +71,7 @@ func usage() string {
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		fmt.Fprintf(&b, "  %-10s %s\n", n, commands[n].summary)
+		fmt.Fprintf(&b, "  %-12s %s\n", n, commands[n].summary)
 	}
 	return b.String()
 }

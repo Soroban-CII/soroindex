@@ -89,6 +89,14 @@ when a review will take longer than expected.
    operator go-ahead, a testnet-only implementation and separately supplied
    credentials. No security audit claim follows from a conformance pass.
 
+5. Run `sep47idx maintenance` on each deployed index with its sync stopped
+   (docs/self-hosting.md, "Maintenance"). Record the integrity result, the size
+   before and after and the duration. An integrity failure is an incident:
+   keep the damaged file, restore the last good backup and resume sync from
+   it; never delete or rebuild the file to make the check pass. A refusal
+   because the write lock is held means sync was still running; stop it and
+   rerun, do not retry in a loop.
+
 See CONTRIBUTING.md for pinned tooling/checks and docs/cli.md for command flags.
 If a patch raises the language floor or changes public API/schema semantics,
 record the reason and obtain the required operator review before implementation.
@@ -128,6 +136,8 @@ Standards review: <SEP source SHAs/versions, findings; or not due / not run>
 Dependency review: <versions, updates, check outcomes; or not due / not run>
 Adoption report: <source date/ledger, coverage, report commit, Stage J decision;
                   or not due / not run>
+Index maintenance: <database, integrity result, size before -> after, duration;
+                    or not due / not run>
 Wave backlog and reviews: <real remaining work and outstanding reviews;
                           or not due / nothing to report>
 Risks / blockers: <specific observation, owner, next action; or none observed>

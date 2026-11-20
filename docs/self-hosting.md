@@ -39,6 +39,41 @@ On 7 October 2026 a seed of all 156,173 mainnet contracts through a public endpo
 
 The index is one SQLite file per network in WAL mode. Back it up with `sqlite3 data/mainnet.db ".backup backup.db"` while the indexer runs, or copy the `.db` file while it is stopped. A database records its network passphrase and refuses to open for another network.
 
+## Maintenance
+
+`sep47idx maintenance` checks integrity, refreshes the query planner's
+statistics (`ANALYZE`) and reclaims free pages. Run it monthly, after a large
+reseed, and before taking a backup you intend to keep. The
+[CLI reference](cli.md#maintenance) shows a captured run.
+
+1. Stop the sync process (`sync --follow`). Maintenance takes the write lock and
+   refuses to start while a sync batch holds it. A follow process idle between
+   batches is not detected, and its next batch would fail after its 10 s busy
+   timeout if maintenance were still running.
+2. Run it against the same database and network as the sync:
+
+   ```sh
+   sep47idx maintenance --network mainnet --db data/mainnet.db
+   ```
+
+3. Exit 0 means every step passed. Exit 1 with `integrity_check` problems means
+   the file is damaged: maintenance changed nothing else. Keep it for diagnosis,
+   restore the last good backup, and resume sync from it.
+4. Start sync again.
+
+The API can keep serving throughout; it opens the database read-only.
+
+A database created by `sync` has `auto_vacuum` off, so SQLite cannot vacuum it
+incrementally, and maintenance says so. To switch it on, run once with
+`--enable-incremental-vacuum`. That does one full `VACUUM`, which rewrites the
+file and needs free disk about the size of the database. Later runs vacuum
+incrementally inside the locked transaction.
+
+`ANALYZE` changes the statistics the query planner uses. The query-plan tests
+in `internal/store/queryplan_test.go` assert the plans on an analyzed fixture,
+so an analyzed index plans the same way the tests check
+([query plans](query-plans.md)).
+
 ## Run the API
 
 Seed an index before serving. `serve` opens it read-only; run synchronization as a
