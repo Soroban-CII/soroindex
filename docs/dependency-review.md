@@ -92,3 +92,51 @@ The command runs from the CLI package because the repository root has no Go
 files, and module scanning does not accept `./...` patterns. Local validation
 used the unmodified official database snapshot described above; the CI commands
 use the live database. Hosted results must be checked after pushing.
+
+## Release SBOM and build provenance (issue #49)
+
+Each tagged release now produces two additional supply-chain artifacts alongside
+the binary archives.
+
+**SBOM.** `cyclonedx-gomod app` (v1.9.0) generates a CycloneDX 1.6 JSON SBOM
+from the CLI package entry point (`cmd/sep47idx`) at build time. The SBOM names
+the Go compiler version, source module path, source VCS revision and all runtime
+module dependencies with their version and SPDX licence expression. It is
+attached to the GitHub release as `sep47idx-<tag>-sbom.cdx.json` and its
+SHA-256 is appended to the release `SHA256SUMS` file so integrity can be
+checked alongside the binary archives.
+
+```sh
+# Verify the SBOM checksum after downloading the release:
+sha256sum --check SHA256SUMS
+```
+
+**Provenance.** `actions/attest-build-provenance` (v2.3.0) writes a
+Sigstore-signed SLSA provenance attestation for both the binary archives and the
+container image immediately after each is published. The attestation records the
+exact source commit, builder runner, workflow ref and trigger, and is stored in
+the GitHub attestation API.
+
+```sh
+# Inspect attestations for a release tag:
+gh attestation verify sep47idx-<tag>-linux-amd64.tar.gz \
+    --repo Soroban-CII/soroindex
+```
+
+**Local verification.** Build the binary from the release tag, generate the
+SBOM and compare checksums:
+
+```sh
+git checkout v<tag>
+go build -trimpath -ldflags "-s -w -X main.version=v<tag>" -o /tmp/sep47idx ./cmd/sep47idx
+go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0
+cyclonedx-gomod app -main cmd/sep47idx -std -licenses -json -output /tmp/sep47idx-<tag>-sbom.cdx.json
+# Compare the generated SBOM against the published one from the release.
+```
+
+The `actions/attest-build-provenance` action pin should be updated to a commit
+SHA before shipping to production. Run the following to find the correct hash:
+
+```sh
+gh api repos/actions/attest-build-provenance/git/ref/tags/v2.3.0 --jq .object.sha
+```

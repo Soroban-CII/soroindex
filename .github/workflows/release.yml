@@ -42,8 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
-      contents: write # create a draft release and upload its assets
-      packages: write # push the image to GHCR
+      contents: write     # create a draft release and upload its assets
+      packages: write     # push the image to GHCR
+      attestations: write # write SLSA provenance attestations
+      id-token: write     # required by actions/attest-build-provenance
     steps:
       - name: tag is vN.N.N
         shell: bash
@@ -61,6 +63,20 @@ jobs:
           set -euo pipefail
           ./scripts/build-release.sh "$RELEASE_TAG"
           (cd "dist/$RELEASE_TAG" && sha256sum --check SHA256SUMS)
+      - name: generate SBOM (CycloneDX, Go module scope)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # cyclonedx-gomod pin reviewed 21 November 2026 against
+          # https://github.com/CycloneDX/cyclonedx-gomod/releases/tag/v1.9.0
+          go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.9.0
+          out="dist/$RELEASE_TAG"
+          sbom="$out/sep47idx-$RELEASE_TAG-sbom.cdx.json"
+          # -std includes standard-library modules; -licenses embeds SPDX
+          # expressions; -json selects CycloneDX 1.6 JSON output.
+          cyclonedx-gomod app -main cmd/sep47idx -std -licenses -json -output "$sbom"
+          sha256sum "$sbom" >> "$out/SHA256SUMS"
+          echo "SBOM_PATH=$sbom" >> "$GITHUB_ENV"
       - name: build and smoke-test the image
         shell: bash
         run: |
@@ -94,13 +110,29 @@ jobs:
             printf 'Draft created by the release workflow from %s. Review and edit these notes before publishing.\n\nSee CHANGELOG.md for this version.\n' "$(git rev-parse --short HEAD)" > "$notes"
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft \
               --title "soroindex $RELEASE_TAG" --notes-file "$notes" \
-              "$out"/*.tar.gz "$out/SHA256SUMS" "$out/BUILD.json"
+              "$out"/*.tar.gz "$out/SHA256SUMS" "$out/BUILD.json" "$out"/*-sbom.cdx.json
           fi
+      - name: attest binary provenance
+        # actions/attest-build-provenance pin reviewed 21 November 2026.
+        # Tag v2.3.0 — pin to a commit SHA before shipping to production:
+        #   gh api repos/actions/attest-build-provenance/git/ref/tags/v2.3.0 --jq .object.sha
+        uses: actions/attest-build-provenance@v2.3.0
+        with:
+          subject-path: "dist/${{ env.RELEASE_TAG }}/*.tar.gz"
       - name: push the image
+        id: push-image
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push "$IMAGE"
+          # Capture the digest emitted by docker push (sha256:...) for provenance.
+          digest=$(docker push "$IMAGE" | grep -oP '(?<=digest: )sha256:[0-9a-f]+')
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: attest image provenance
+        uses: actions/attest-build-provenance@v2.3.0
+        with:
+          subject-name: "ghcr.io/${{ github.repository_owner }}/soroindex"
+          subject-digest: "${{ steps.push-image.outputs.digest }}"
+          push-to-registry: true
