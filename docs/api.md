@@ -21,7 +21,7 @@ not passed to handlers that otherwise reject query parameters.
 
 | Endpoint | Parameters and result |
 | --- | --- |
-| `/v1/contracts` | `implements` is a comma list with AND; `implements_any` is OR. Both together require the AND list and at least one OR entry. `tier` is declared (default), inferred, verified or protocol; `kind` is wasm, wasm_ref or sac. `/contracts` is an alias. `ids` switches to a bulk lookup; see below. |
+| `/v1/contracts` | `implements` is a comma list with AND; `implements_any` is OR. Both together require the AND list and at least one OR entry. `tier` is declared (default), inferred, verified or protocol; `kind` is wasm, wasm_ref or sac. `archived` is `true` (archived only) or `false` (live only, default). `exec_ref_owner` filters by CAP-85 executable reference owner contract ID. `/contracts` is an alias. `ids` switches to a bulk lookup; see below. |
 | `/v1/contracts/{id}` | Fixed contract detail, all version ranges, claims, archival and executable reference. Takes only `network`. |
 | `/v1/contracts/{id}/history` | Claims for each version. Accepts `limit` and `cursor`. |
 | `/v1/wasm/{hash}` | Metadata, declarations, anomalies and matches; current live users accept `limit` and `cursor`. |
@@ -29,6 +29,7 @@ not passed to handlers that otherwise reject query parameters.
 | `/v1/stats` | Stored adoption, undeclared gap, anomaly token counts, archival and last indexed ledger. Takes only `network`. |
 | `/v1/stats/toolchains` | Rust, soroban-sdk and Stellar CLI versions from stored meta, with declaration and SEP-41 match rates per version. Takes only `network`. |
 | `/v1/health` | Network, stored last ledger, fresh RPC tip and lag. Takes only `network`. |
+| `/v1/events/upgrades` | Server-Sent Events stream of contract version upgrades. Query: `since` (ledger number, optional) to replay from that ledger. `Last-Event-ID` header also supported for resume. Events have `id=<ledger>` and `data=<VersionChange JSON>`. Connection limits and idle timeouts follow server settings. Takes only `network`. |
 
 Pages default to 50 rows, at most 500. Pass `next_cursor` back unchanged with the
 same filters; null means the end. Cursors are opaque base64url values. History
