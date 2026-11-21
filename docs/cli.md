@@ -1,23 +1,24 @@
 # CLI reference
 
-The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. The help output and new command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2).
+The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. Command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2). The help output and the `maintenance` captures come from a darwin/arm64 build on 20 November 2026 (Go 1.27.4).
 
 Every flag also has an environment variable: `SEP47IDX_` plus the flag name in capitals, dashes as underscores (`--rpc-url` is `SEP47IDX_RPC_URL`). A flag on the command line overrides the variable. Exit codes: `0` ok, `1` error, `2` not found.
 
 ```text
-$ /workspace/scratch/stage-g/sep47idx help
+$ ./sep47idx help
 usage: sep47idx <command> [flags]
 
 commands:
-  contract   show a contract's claims and optional full history
-  gap        list contracts that match a SEP's interface but declare nothing (inferred)
-  phase0     measure SEP-47 adoption and write the adoption report
-  query      query current contracts by SEP and trust tier
-  serve      serve the index through the read-only JSON API
-  stats      show stored adoption gap anomalies and sync progress
-  sync       seed the index, sync ledgers or recompute matches
-  version    print the binary version
-  wasm       show parsed Wasm metadata and interface evidence
+  contract     show a contract's claims and optional full history
+  gap          list contracts that match a SEP's interface but declare nothing (inferred)
+  maintenance  check integrity, refresh query statistics and vacuum while no sync is writing
+  phase0       measure SEP-47 adoption and write the adoption report
+  query        query current contracts by SEP and trust tier
+  serve        serve the index through the read-only JSON API
+  stats        show stored adoption gap anomalies and sync progress
+  sync         seed the index, sync ledgers or recompute matches
+  version      print the binary version
+  wasm         show parsed Wasm metadata and interface evidence
 ```
 
 ## Common flags
@@ -442,6 +443,119 @@ serving testnet read-only on 127.0.0.1:8080
 
 The [API reference](api.md) contains actual requests and responses from this
 server. No public deployment is claimed.
+
+## maintenance
+
+Keeps a long-running index healthy without hand-written SQL. It takes the
+database write lock (`BEGIN IMMEDIATE`), then runs `PRAGMA integrity_check`,
+`ANALYZE` and, when the file's `auto_vacuum` mode is incremental,
+`PRAGMA incremental_vacuum`, commits, and checkpoints the WAL. It reports each
+step's result and duration, the size before and after, and the total time.
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--enable-incremental-vacuum` | off | Switch `auto_vacuum` to `INCREMENTAL`. SQLite applies this only through one full `VACUUM`, which rewrites the file and needs free disk about the size of the database. Later runs then vacuum incrementally. |
+| `--timeout` | `1h` | Give up after this long. An unfinished run rolls back. |
+
+Rules:
+
+- **It refuses, without waiting, if another process holds the write lock**,
+  which is what a sync does while it writes a batch. Stop `sync --follow` first.
+  The lock check catches a batch in flight, but not a follow process that is
+  idle between batches; if maintenance runs then, that sync's next batch waits
+  up to its 10 s busy timeout and fails if maintenance takes longer.
+- If the integrity check finds problems, it prints them, exits 1, and changes
+  nothing else: no `ANALYZE`, no vacuum. Keep the file for diagnosis and
+  restore from a backup.
+- It never creates or migrates a database. It refuses a missing file, another
+  network, or a schema that is older or newer than the binary.
+- The read-only API can keep serving during maintenance.
+
+Exit codes: `0` when every step succeeded, `1` otherwise (lock held, integrity
+problems, bad arguments).
+
+Captured on 20 November 2026 with a local darwin/arm64 build (Go 1.27.4) against
+a testnet index synced from ledger 5,829,500 to 5,830,967 a minute earlier:
+
+```text
+$ ./sep47idx stats --db testnet.db
+testnet: last indexed ledger 5830967; 311 stored contracts, 0 archived
+Live: 232 Wasm, 16 Wasm references (0 unresolved), 63 SAC (protocol)
+Declared: 1/248 measured contracts, 1/98 used hashes
+Undeclared SEP-41 gap (inferred, sep41-v0.5.2): 40 contracts, 5 hashes
+Anomalies: map[]
+
+$ ./sep47idx maintenance --db testnet.db
+database: testnet.db
+lock:                      write lock held (0 ms)
+integrity_check:           ok (1 ms)
+analyze:                   query statistics refreshed (0 ms)
+commit:                    write lock released (0 ms)
+incremental_vacuum:        skipped: auto_vacuum is none, so SQLite cannot vacuum incrementally (0 free page(s)); run once with --enable-incremental-vacuum, which does a full VACUUM (0 ms)
+wal_checkpoint:            WAL checkpointed and truncated (0 ms)
+size before:               569344 bytes (139 pages of 4096, 0 free); on disk 569344 bytes
+size after:                602112 bytes (147 pages of 4096, 0 free); on disk 602112 bytes
+duration:                  3 ms
+
+$ ./sep47idx maintenance --db testnet.db --enable-incremental-vacuum
+database: testnet.db
+lock:                      write lock held (0 ms)
+integrity_check:           ok (1 ms)
+analyze:                   query statistics refreshed (0 ms)
+commit:                    write lock released (0 ms)
+enable_incremental_vacuum: full VACUUM done; auto_vacuum is now incremental (3 ms)
+wal_checkpoint:            WAL checkpointed and truncated (0 ms)
+size before:               602112 bytes (147 pages of 4096, 0 free); on disk 602112 bytes
+size after:                598016 bytes (146 pages of 4096, 0 free); on disk 598016 bytes
+duration:                  7 ms
+```
+
+The first run grew the file by eight pages: `ANALYZE` created the
+`sqlite_stat1` statistics table. Once `auto_vacuum` is incremental, the vacuum
+runs inside the locked transaction (`--json` output, trimmed):
+
+```text
+$ ./sep47idx maintenance --db testnet.db --json
+{
+  "database": "testnet.db",
+  "integrity_ok": true,
+  "integrity": [
+    "ok"
+  ],
+  "auto_vacuum": "incremental",
+  "freed_pages": 0,
+  "steps": [
+...
+    {
+      "name": "incremental_vacuum",
+      "result": "freed 0 page(s)",
+      "duration_ms": 0
+    },
+...
+  ],
+...
+  "duration_ms": 3
+}
+```
+
+With a second connection holding `BEGIN IMMEDIATE` (opened with the `sqlite3`
+shell to stand in for a sync batch):
+
+```text
+$ ./sep47idx maintenance --db testnet.db; echo "exit $?"
+database: testnet.db
+lock:                      error: another process holds the database write lock (stop sync before running maintenance): database is locked (5) (SQLITE_BUSY) (0 ms)
+size before:               598016 bytes (146 pages of 4096, 0 free); on disk 598016 bytes
+size after:                unchanged (stopped before any change)
+duration:                  1 ms
+sep47idx maintenance: another process holds the database write lock (stop sync before running maintenance): database is locked (5) (SQLITE_BUSY)
+exit 1
+```
+
+The corrupted-database path is covered by `TestMaintainReportsCorruptedCopy` in
+`internal/store/maintenance_test.go`: it flips one byte of a stored hash inside
+an index page, and maintenance reports `row … missing from index …`, exits with
+`ErrIntegrity`, and leaves the file byte-for-byte unchanged.
 
 ## verify
 

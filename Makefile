@@ -11,7 +11,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)
 
 export CGO_ENABLED := 0
 
-.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check rules-check clean
+.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check rules-check bench bench-10m clean
 
 all: lint test build
 
@@ -37,6 +37,18 @@ fuzz:
 ## fuzz-smoke: the CI variant of fuzz (30s per target)
 fuzz-smoke:
 	$(MAKE) fuzz FUZZTIME=30s
+
+## bench: p50/p95 for every API query and the materialized alternative on
+## the deterministic 1M-claim fixture (docs/query-benchmark.md)
+## bench-10m: the same at 10M claims and 1M contracts (about 4 GB of disk;
+## set SEP47IDX_BENCH_DB=/path/fixture.db to keep and reuse the fixture)
+BENCHTIME ?= 10x
+BENCH     := -run '^$$' -bench '^Benchmark(APIQueries|MaterializedDesign)$$' -benchtime=$(BENCHTIME) -count=1 -timeout 3h -v
+bench:
+	$(GO) test ./internal/store $(BENCH)
+
+bench-10m:
+	SEP47IDX_BENCH_HASHES=1000000 SEP47IDX_BENCH_CONTRACTS=1000000 $(GO) test ./internal/store $(BENCH)
 
 ## build: static binary for the host platform
 build:
