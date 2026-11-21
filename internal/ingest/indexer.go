@@ -68,72 +68,108 @@ func (ix *Indexer) EnsureWasm(ctx context.Context, tx *store.Tx, hashes []string
 	return len(need), nil
 }
 
-// writeAnalysis stores one Wasm's parse, claims, anomalies and matches.
-func (ix *Indexer) writeAnalysis(ctx context.Context, tx *store.Tx, hash string, code []byte, seenLedger uint32) error {
+// analysis is every row writeAnalysis stores for one Wasm. It is built
+// before anything is written, so Inspect can show exactly what the indexer
+// would store without opening a database.
+type analysis struct {
+	wasm      store.WasmRow
+	claims    map[string][]store.ClaimRow // by active source; an empty slice clears that source
+	anomalies []store.AnomalyRow
+	matches   []store.MatchRow
+}
+
+// analyze parses one Wasm and turns the result into rows. A claim source
+// error is logged and the claims found before it are kept.
+func (ix *Indexer) analyze(ctx context.Context, hash string, code []byte, seenLedger uint32) (analysis, error) {
 	r := Analyze(hash, code, ix.Rules, ix.Matcher, ix.Limits)
 	metaJSON, err := metaJSON(code, ix.Limits)
 	if err != nil {
-		return err
+		return analysis{}, err
 	}
 	fnJSON := ""
 	if r.HasSpec {
 		b, err := json.Marshal(r.Functions)
 		if err != nil {
-			return fmt.Errorf("encode functions of %s: %w", hash, err)
+			return analysis{}, fmt.Errorf("encode functions of %s: %w", hash, err)
 		}
 		fnJSON = string(b)
 	}
-	if err := tx.UpsertWasm(ctx, store.WasmRow{
+	a := analysis{wasm: store.WasmRow{
 		Hash: hash, SizeBytes: r.Size, FirstSeenLedger: seenLedger, HasMeta: r.HasMeta, HasSpec: r.HasSpec,
 		SEPEntryCount: r.Claims.EntryCount, MetaJSON: metaJSON, FunctionsJSON: fnJSON, ParseStatus: r.ParseStatus, ParseError: r.ParseError,
 		ParserVersion: sepmeta.ParserVersion,
-	}); err != nil {
-		return err
-	}
+	}, claims: map[string][]store.ClaimRow{}}
 
-	// Claims: every active source replaces its own set. A source error is
-	// recorded in the log; claims it found before the error are kept.
 	found, derr := ix.Claims.Discover(ctx, claims.WasmArtifact{Hash: hash, Code: code}, claims.ContractRef{})
-	if derr != nil {
+	if derr != nil && ix.Log != nil {
 		ix.Log.LogAttrs(ctx, slog.LevelWarn, "claim source error", slog.String("wasm", hash), slog.String("err", derr.Error()))
 	}
-	bySource := map[string][]store.ClaimRow{}
 	for _, s := range ix.Claims.Active() {
-		bySource[s.Name()] = []store.ClaimRow{}
+		a.claims[s.Name()] = []store.ClaimRow{}
 	}
 	for _, c := range found {
-		bySource[c.Source] = append(bySource[c.Source], store.ClaimRow{SEP: c.SEP, RawToken: c.RawToken, Anomaly: c.Anomaly})
+		a.claims[c.Source] = append(a.claims[c.Source], store.ClaimRow{SEP: c.SEP, RawToken: c.RawToken, Anomaly: c.Anomaly})
 	}
-	for src, rows := range bySource {
+	for _, t := range r.Claims.Tokens {
+		if !t.Accepted && t.Anomaly != "" {
+			a.anomalies = append(a.anomalies, store.AnomalyRow{RawToken: t.Raw, Anomaly: t.Anomaly})
+		}
+	}
+	a.matches, err = ix.matchRows(hash, r.Matches)
+	return a, err
+}
+
+// writeAnalysis stores one Wasm's parse, claims, anomalies and matches.
+func (ix *Indexer) writeAnalysis(ctx context.Context, tx *store.Tx, hash string, code []byte, seenLedger uint32) error {
+	a, err := ix.analyze(ctx, hash, code, seenLedger)
+	if err != nil {
+		return err
+	}
+	if err := tx.UpsertWasm(ctx, a.wasm); err != nil {
+		return err
+	}
+	for src, rows := range a.claims {
 		if err := tx.ReplaceClaims(ctx, hash, src, rows); err != nil {
 			return err
 		}
 	}
-
-	var anomalies []store.AnomalyRow
-	for _, t := range r.Claims.Tokens {
-		if !t.Accepted && t.Anomaly != "" {
-			anomalies = append(anomalies, store.AnomalyRow{RawToken: t.Raw, Anomaly: t.Anomaly})
-		}
-	}
-	if err := tx.ReplaceAnomalies(ctx, hash, anomalies); err != nil {
+	if err := tx.ReplaceAnomalies(ctx, hash, a.anomalies); err != nil {
 		return err
 	}
-	return ix.writeMatches(ctx, tx, hash, r.Matches)
+	for _, m := range a.matches {
+		if err := tx.UpsertMatch(ctx, m); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (ix *Indexer) writeMatches(ctx context.Context, tx *store.Tx, hash string, ms []match.Result) error {
+	rows, err := ix.matchRows(hash, ms)
+	if err != nil {
+		return err
+	}
+	for _, m := range rows {
+		if err := tx.UpsertMatch(ctx, m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// matchRows encodes match results as interface_matches rows, each with the
+// SHA-256 of the rule file that produced it.
+func (ix *Indexer) matchRows(hash string, ms []match.Result) ([]store.MatchRow, error) {
 	now := ix.Now().UTC().Format(time.RFC3339)
-	// Compute SHA-256 of the rule file for each match.
-	// The rule files live in rules/sep-NNNN.json; look up by SEP number.
+	out := make([]store.MatchRow, 0, len(ms))
 	for _, m := range ms {
 		missing, err1 := json.Marshal(m.Missing)
 		mism, err2 := json.Marshal(m.Mismatched)
 		variants, err3 := json.Marshal(m.MatchedVariants)
 		if err1 != nil || err2 != nil || err3 != nil {
-			return fmt.Errorf("encode match for %s: %v %v %v", hash, err1, err2, err3)
+			return nil, fmt.Errorf("encode match for %s: %v %v %v", hash, err1, err2, err3)
 		}
-		// Find the rule file for this SEP number and compute its SHA-256.
+		// The rule files live in rules/sep-NNNN.json; look up by SEP number.
 		var ruleFileSHA256 string
 		for _, rf := range ix.Rules {
 			if rf.SEP == m.SEP {
@@ -145,12 +181,10 @@ func (ix *Indexer) writeMatches(ctx context.Context, tx *store.Tx, hash string, 
 				break
 			}
 		}
-		if err := tx.UpsertMatch(ctx, store.MatchRow{Hash: hash, SEP: m.SEP, RulesetVersion: m.RulesetVersion, RuleFileSHA256: ruleFileSHA256, Status: string(m.Status),
-			OKCount: m.OKCount, MissingJSON: string(missing), MismatchedJSON: string(mism), MatchedVariantsJSON: string(variants), ComputedAt: now}); err != nil {
-			return err
-		}
+		out = append(out, store.MatchRow{Hash: hash, SEP: m.SEP, RulesetVersion: m.RulesetVersion, RuleFileSHA256: ruleFileSHA256, Status: string(m.Status),
+			OKCount: m.OKCount, MissingJSON: string(missing), MismatchedJSON: string(mism), MatchedVariantsJSON: string(variants), ComputedAt: now})
 	}
-	return nil
+	return out, nil
 }
 
 // metaJSON renders all meta key/value pairs for wasm.meta_json, or "" when
