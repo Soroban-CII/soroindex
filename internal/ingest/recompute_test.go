@@ -43,9 +43,18 @@ func TestRecomputeOnlyStaleRows(t *testing.T) {
 	}
 	callsAfterFetch := f.calls
 
-	// Bump the ruleset version and make the bump change an outcome: the new
-	// rules drop burn_from, so token_full_sep matches 9 of 9.
-	bumped := ix.Rules[0]
+	// Bump the SEP-41 ruleset version and make the bump change an outcome: the
+	// new rules drop burn_from, so token_full_sep matches 9 of 9.
+	var bumped match.RuleFile
+	for _, r := range ix.Rules {
+		if r.SEP == 41 {
+			bumped = r
+			break
+		}
+	}
+	if bumped.SEP != 41 {
+		t.Fatal("no SEP-41 rule in ix.Rules")
+	}
 	bumped.RulesetVersion = "sep41-v0.5.2-r1"
 	var req []match.FnRule
 	for _, r := range bumped.Required {

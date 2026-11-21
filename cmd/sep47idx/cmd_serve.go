@@ -49,7 +49,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 		return readExit("serve", err, stderr)
 	}
 	defer func() { _ = s.Close() }()
-	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency})
+	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, AuthHeaderName: cfg.RPCHeaderName, AuthHeaderValue: cfg.RPCHeaderValue})
 	if err != nil {
 		return readExit("serve", err, stderr)
 	}

@@ -74,7 +74,7 @@ func TestInstanceUpgradeExactlyOneVersion(t *testing.T) {
 		t.Fatalf("versions %d closed %d: %v", count, closed, err)
 	}
 	var status string
-	if err := s.DB.QueryRow(`SELECT status FROM interface_matches WHERE wasm_hash = ?`, h2).Scan(&status); err != nil || status != "partial" {
+	if err := s.DB.QueryRow(`SELECT status FROM interface_matches WHERE wasm_hash = ? AND sep = 41`, h2).Scan(&status); err != nil || status != "partial" {
 		t.Fatalf("upgrade status %q: %v", status, err)
 	}
 }

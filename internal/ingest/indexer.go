@@ -172,5 +172,6 @@ func (ix *Indexer) ApplyContract(ctx context.Context, tx *store.Tx, row store.Co
 	}
 	return tx.SetVersion(ctx, store.Version{
 		ContractID: row.ID, WasmHash: row.CurrentWasmHash, ExecRefOwner: row.ExecRefOwner, ExecRefTag: row.ExecRefTag, FromLedger: from,
+		CreatedTxHash: row.CreatedTxHash, CreatedSourceAccount: row.CreatedSourceAccount,
 	})
 }

@@ -5,7 +5,9 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -32,6 +34,9 @@ var (
 	// ErrSchemaTooOld means a read-only open found a schema older than the
 	// binary; only a read-write open (sync) can migrate it.
 	ErrSchemaTooOld = errors.New("database schema is older than this binary; run sync to migrate it")
+	// ErrChecksumMismatch means a migration file on disk differs from what
+	// was applied to the database; the file must not be edited after it ships.
+	ErrChecksumMismatch = errors.New("migration checksum mismatch: file has been edited after it was applied")
 )
 
 // sync_state keys (CLAUDE.md §5.8).
@@ -59,9 +64,16 @@ type Options struct {
 }
 
 type migration struct {
-	version int
-	name    string
-	sql     string
+	version  int
+	name     string
+	sql      string
+	checksum string // lowercase hex SHA-256 of sql
+}
+
+// checksumSQL returns the lowercase hex SHA-256 of a migration SQL string.
+func checksumSQL(sql string) string {
+	h := sha256.Sum256([]byte(sql))
+	return hex.EncodeToString(h[:])
 }
 
 func loadMigrations() ([]migration, error) {
@@ -80,7 +92,8 @@ func loadMigrations() ([]migration, error) {
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, migration{version: v, name: n, sql: string(b)})
+		s := string(b)
+		out = append(out, migration{version: v, name: n, sql: s, checksum: checksumSQL(s)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].version < out[j].version })
 	for i, m := range out {
@@ -161,6 +174,11 @@ func (s *Store) init(ctx context.Context, passphrase string) error {
 			return err
 		}
 	}
+	if !s.readOnly {
+		if err := s.verifyChecksums(ctx, ms); err != nil {
+			return err
+		}
+	}
 	stored, err := s.State(ctx, KeyNetworkPassphrase)
 	switch {
 	case errors.Is(err, ErrNotFound):
@@ -203,6 +221,9 @@ func (s *Store) migrate(ctx context.Context, ms []migration) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after Commit
+	// checksumTableExists tracks whether migration_checksums is available
+	// within this transaction (it may be created mid-loop by migration 0003).
+	checksumTableExists := false
 	for _, m := range ms {
 		if _, err := tx.ExecContext(ctx, m.sql); err != nil {
 			return fmt.Errorf("apply migration %s: %w", m.name, err)
@@ -211,6 +232,82 @@ func (s *Store) migrate(ctx context.Context, ms []migration) error {
 			`INSERT INTO sync_state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
 			KeySchemaVersion, strconv.Itoa(m.version)); err != nil {
 			return fmt.Errorf("record migration %s: %w", m.name, err)
+		}
+		// Once migration_checksums exists (created by or before this migration),
+		// record the checksum of every migration including the one that created it.
+		if !checksumTableExists {
+			var n int
+			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='migration_checksums'`).Scan(&n); err == nil && n > 0 {
+				checksumTableExists = true
+			}
+		}
+		if checksumTableExists {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO migration_checksums (version, name, checksum) VALUES (?, ?, ?) ON CONFLICT (version) DO UPDATE SET name=excluded.name, checksum=excluded.checksum`,
+				m.version, m.name, m.checksum); err != nil {
+				return fmt.Errorf("record checksum for %s: %w", m.name, err)
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// verifyChecksums compares stored checksums for applied migrations against
+// the binary's embedded copies. It also backfills checksums for applied
+// migrations that predate migration 0003 (the first run after upgrading).
+func (s *Store) verifyChecksums(ctx context.Context, ms []migration) error {
+	var n int
+	if err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='migration_checksums'`).Scan(&n); err != nil || n == 0 {
+		return nil // table not yet created; nothing to check
+	}
+	// Build a map of stored checksums.
+	rows, err := s.DB.QueryContext(ctx, `SELECT version, checksum FROM migration_checksums`)
+	if err != nil {
+		return fmt.Errorf("read migration checksums: %w", err)
+	}
+	stored := map[int]string{}
+	for rows.Next() {
+		var ver int
+		var sum string
+		if err := rows.Scan(&ver, &sum); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan migration checksum: %w", err)
+		}
+		stored[ver] = sum
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read migration checksums: %w", err)
+	}
+	_ = rows.Close()
+
+	// Verify stored checksums; backfill any that are missing.
+	needBackfill := false
+	for _, m := range ms {
+		if sum, ok := stored[m.version]; ok {
+			if sum != m.checksum {
+				return fmt.Errorf("%w: migration %s stored=%s binary=%s", ErrChecksumMismatch, m.name, sum, m.checksum)
+			}
+		} else {
+			needBackfill = true
+		}
+	}
+	if !needBackfill {
+		return nil
+	}
+	// Backfill missing checksums in one transaction.
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, m := range ms {
+		if _, ok := stored[m.version]; ok {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO migration_checksums (version, name, checksum) VALUES (?, ?, ?) ON CONFLICT (version) DO NOTHING`,
+			m.version, m.name, m.checksum); err != nil {
+			return fmt.Errorf("backfill checksum for %s: %w", m.name, err)
 		}
 	}
 	return tx.Commit()
@@ -241,3 +338,107 @@ func (s *Store) SetState(ctx context.Context, key, value string) error {
 
 // IsReadOnly lets HTTP servers reject handles capable of changing the index.
 func (s *Store) IsReadOnly() bool { return s.readOnly }
+
+// MigrationRow describes one migration in a status or dry-run report.
+type MigrationRow struct {
+	Version  int    `json:"version"`
+	Name     string `json:"name"`
+	Applied  bool   `json:"applied"`
+	Checksum string `json:"checksum"`
+	Tampered bool   `json:"tampered,omitempty"` // stored checksum differs from binary
+}
+
+// MigrateStatusOptions configures MigrateStatus and MigrateDryRun.
+type MigrateStatusOptions struct {
+	Passphrase string
+	ReadOnly   bool // open the database read-only (for status)
+}
+
+// MigrateStatus opens the database and returns applied/pending migration rows.
+// It makes no changes.
+func MigrateStatus(ctx context.Context, dbPath string, _ MigrateStatusOptions) ([]MigrationRow, error) {
+	ms, err := loadMigrations()
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{}
+	q.Add("_pragma", "foreign_keys(1)")
+	q.Add("_pragma", "busy_timeout(10000)")
+	q.Set("mode", "ro")
+	dsn := "file:" + dbPath + "?" + q.Encode()
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open %s: %w", dbPath, err)
+	}
+	defer func() { _ = db.Close() }()
+
+	var current int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='sync_state'`).Scan(&current); err != nil {
+		return nil, err
+	}
+	appliedVer := 0
+	if current > 0 {
+		var v string
+		err := db.QueryRowContext(ctx, `SELECT value FROM sync_state WHERE key = ?`, KeySchemaVersion).Scan(&v)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("read schema_version: %w", err)
+		}
+		if err == nil {
+			if appliedVer, err = strconv.Atoi(v); err != nil {
+				return nil, fmt.Errorf("parse schema_version: %w", err)
+			}
+		}
+	}
+	// Read stored checksums.
+	stored := map[int]string{}
+	var hasChecksums int
+	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='migration_checksums'`).Scan(&hasChecksums)
+	if hasChecksums > 0 {
+		rows, err := db.QueryContext(ctx, `SELECT version, checksum FROM migration_checksums`)
+		if err != nil {
+			return nil, fmt.Errorf("read migration_checksums: %w", err)
+		}
+		for rows.Next() {
+			var ver int
+			var sum string
+			if e := rows.Scan(&ver, &sum); e != nil {
+				_ = rows.Close()
+				return nil, e
+			}
+			stored[ver] = sum
+		}
+		_ = rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+
+	out := make([]MigrationRow, len(ms))
+	for i, m := range ms {
+		r := MigrationRow{Version: m.version, Name: m.name, Checksum: m.checksum}
+		if m.version <= appliedVer {
+			r.Applied = true
+			if storedSum, ok := stored[m.version]; ok && storedSum != m.checksum {
+				r.Tampered = true
+			}
+		}
+		out[i] = r
+	}
+	return out, nil
+}
+
+// MigrateDryRun returns pending migrations that would be applied, with no
+// changes to the database.
+func MigrateDryRun(ctx context.Context, dbPath string, o MigrateStatusOptions) ([]MigrationRow, error) {
+	rows, err := MigrateStatus(ctx, dbPath, o)
+	if err != nil {
+		return nil, err
+	}
+	var pending []MigrationRow
+	for _, r := range rows {
+		if !r.Applied {
+			pending = append(pending, r)
+		}
+	}
+	return pending, nil
+}

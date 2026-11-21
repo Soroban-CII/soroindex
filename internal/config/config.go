@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -47,22 +48,30 @@ func NetworkByName(name string) (Network, error) {
 	return Network{}, fmt.Errorf("%w %q (want mainnet or testnet)", ErrUnknownNetwork, name)
 }
 
+// ErrCredentialsInURL is returned when the RPC URL contains a username or
+// password. Credentials in URLs end up in logs; use --rpc-header-name /
+// --rpc-header-value instead.
+var ErrCredentialsInURL = errors.New("RPC URL must not contain credentials; use --rpc-header-name and --rpc-header-value instead")
+
 // Common holds the flags every command shares (CLAUDE.md §5.12).
 type Common struct {
-	Network     Network
-	RPCURL      string
-	DB          string
-	JSON        bool
-	RPCTimeout  time.Duration
-	Concurrency int
+	Network        Network
+	RPCURL         string
+	DB             string
+	JSON           bool
+	RPCTimeout     time.Duration
+	Concurrency    int
+	RPCHeaderName  string // header name, e.g. "Authorization"; not secret
+	RPCHeaderValue string // header value; never logged or stored
 }
 
 // commonRaw holds flag values before resolution.
 type commonRaw struct {
-	network, rpcURL, db string
-	json                bool
-	rpcTimeout          time.Duration
-	concurrency         int
+	network, rpcURL, db           string
+	json                          bool
+	rpcTimeout                    time.Duration
+	concurrency                   int
+	rpcHeaderName, rpcHeaderValue string
 }
 
 // RegisterCommon adds the shared flags to fs and returns a function that
@@ -76,6 +85,8 @@ func RegisterCommon(fs *flag.FlagSet) func() (Common, error) {
 	fs.BoolVar(&r.json, "json", false, "print JSON (env SEP47IDX_JSON)")
 	fs.DurationVar(&r.rpcTimeout, "rpc-timeout", 30*time.Second, "timeout per RPC attempt (env SEP47IDX_RPC_TIMEOUT)")
 	fs.IntVar(&r.concurrency, "rpc-concurrency", 4, "RPC requests in flight (env SEP47IDX_RPC_CONCURRENCY)")
+	fs.StringVar(&r.rpcHeaderName, "rpc-header-name", "", "HTTP header name to send on every RPC request, e.g. Authorization (env SEP47IDX_RPC_HEADER_NAME)")
+	fs.StringVar(&r.rpcHeaderValue, "rpc-header-value", "", "value for --rpc-header-name; never logged or stored (env SEP47IDX_RPC_HEADER_VALUE)")
 	return func() (Common, error) {
 		if err := ApplyEnv(fs, os.LookupEnv); err != nil {
 			return Common{}, err
@@ -84,7 +95,11 @@ func RegisterCommon(fs *flag.FlagSet) func() (Common, error) {
 		if err != nil {
 			return Common{}, err
 		}
-		c := Common{Network: n, RPCURL: r.rpcURL, DB: r.db, JSON: r.json, RPCTimeout: r.rpcTimeout, Concurrency: r.concurrency}
+		c := Common{
+			Network: n, RPCURL: r.rpcURL, DB: r.db, JSON: r.json,
+			RPCTimeout: r.rpcTimeout, Concurrency: r.concurrency,
+			RPCHeaderName: r.rpcHeaderName, RPCHeaderValue: r.rpcHeaderValue,
+		}
 		if c.RPCURL == "" {
 			c.RPCURL = n.DefaultRPCURL
 		}
@@ -94,8 +109,29 @@ func RegisterCommon(fs *flag.FlagSet) func() (Common, error) {
 		if c.RPCTimeout <= 0 || c.Concurrency <= 0 {
 			return Common{}, errors.New("--rpc-timeout and --rpc-concurrency must be positive")
 		}
+		if (c.RPCHeaderName == "") != (c.RPCHeaderValue == "") {
+			return Common{}, errors.New("--rpc-header-name and --rpc-header-value must both be set or both be unset")
+		}
+		if err := ValidateRPCURL(c.RPCURL); err != nil {
+			return Common{}, err
+		}
 		return c, nil
 	}
+}
+
+// ValidateRPCURL returns ErrCredentialsInURL if url has a userinfo component.
+func ValidateRPCURL(rawURL string) error {
+	if rawURL == "" {
+		return nil
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid RPC URL: %w", err)
+	}
+	if u.User != nil {
+		return ErrCredentialsInURL
+	}
+	return nil
 }
 
 // RequireRPC returns an error naming the flag when no RPC URL is known.
