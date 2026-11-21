@@ -108,9 +108,7 @@ func TestCheckerReportsDifferences(t *testing.T) {
 		expiredID + "/archived": "true",
 	}
 	for _, d := range res.Differences {
-		if _, ok := want[d.ContractID+"/"+d.Field]; ok {
-			delete(want, d.ContractID+"/"+d.Field)
-		}
+		delete(want, d.ContractID+"/"+d.Field)
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing differences %v in %+v", want, res.Differences)
