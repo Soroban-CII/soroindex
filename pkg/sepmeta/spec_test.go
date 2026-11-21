@@ -10,6 +10,290 @@ import (
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
+// makeUDT builds a ScSpecTypeDef referencing a user-defined type by name.
+func makeUDT(name string) xdr.ScSpecTypeDef {
+	return xdr.ScSpecTypeDef{Type: xdr.ScSpecTypeScSpecTypeUdt, Udt: &xdr.ScSpecTypeUdt{Name: name}}
+}
+
+// encodeSpecEntries marshals a slice of spec entries to a byte stream suitable
+// for DecodeSpec. It fails the test on any marshal error.
+func encodeSpecEntries(t *testing.T, entries []xdr.ScSpecEntry) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	for _, e := range entries {
+		if _, err := xdr.Marshal(&buf, e); err != nil {
+			t.Fatalf("marshal spec entry: %v", err)
+		}
+	}
+	return buf.Bytes()
+}
+
+// TestNestedUDTAndUnionSpecVectors is issue #39.
+// It exercises structs, unions, enum references, forward references and
+// truncated payloads with explicit bounds assertions.
+// All vectors are deterministic and network-free.
+func TestNestedUDTAndUnionSpecVectors(t *testing.T) {
+	t.Run("TypeName renders nested containers with udt inner types", func(t *testing.T) {
+		tests := []struct {
+			want string
+			def  xdr.ScSpecTypeDef
+		}{
+			// UDT nested as Vec element (struct-like UDT reference).
+			{"Vec<udt:TokenEvent>", xdr.ScSpecTypeDef{
+				Type: xdr.ScSpecTypeScSpecTypeVec,
+				Vec:  &xdr.ScSpecTypeVec{ElementType: makeUDT("TokenEvent")},
+			}},
+			// UDT nested in Option (union-like UDT reference).
+			{"Option<udt:VoteOutcome>", xdr.ScSpecTypeDef{
+				Type:   xdr.ScSpecTypeScSpecTypeOption,
+				Option: &xdr.ScSpecTypeOption{ValueType: makeUDT("VoteOutcome")},
+			}},
+			// Two UDT sides in Result (enum reference on error side).
+			{"Result<udt:Status,udt:AppError>", xdr.ScSpecTypeDef{
+				Type: xdr.ScSpecTypeScSpecTypeResult,
+				Result: &xdr.ScSpecTypeResult{
+					OkType:    makeUDT("Status"),
+					ErrorType: makeUDT("AppError"),
+				},
+			}},
+			// Map with udt key and value.
+			{"Map<udt:AccountRef,udt:Balance>", xdr.ScSpecTypeDef{
+				Type: xdr.ScSpecTypeScSpecTypeMap,
+				Map: &xdr.ScSpecTypeMap{
+					KeyType:   makeUDT("AccountRef"),
+					ValueType: makeUDT("Balance"),
+				},
+			}},
+			// Deeply nested: Vec<Option<udt:Data>>.
+			{"Vec<Option<udt:Data>>", xdr.ScSpecTypeDef{
+				Type: xdr.ScSpecTypeScSpecTypeVec,
+				Vec: &xdr.ScSpecTypeVec{ElementType: xdr.ScSpecTypeDef{
+					Type:   xdr.ScSpecTypeScSpecTypeOption,
+					Option: &xdr.ScSpecTypeOption{ValueType: makeUDT("Data")},
+				}},
+			}},
+			// UDT inside BytesN wrapper is not a container, but confirms udt name
+			// renders even when nested directly beside a named-size type.
+			{"udt:Proof", makeUDT("Proof")},
+		}
+		for _, tt := range tests {
+			t.Run("renders "+tt.want, func(t *testing.T) {
+				if got := TypeName(tt.def); got != tt.want {
+					t.Fatalf("TypeName = %q, want %q", got, tt.want)
+				}
+			})
+		}
+	})
+
+	t.Run("Functions extracts UDT-typed inputs and outputs from in-memory spec", func(t *testing.T) {
+		entries := []xdr.ScSpecEntry{
+			// Struct-typed parameters: transfer_struct(from: udt:Account, amount: udt:Amount) -> udt:Receipt.
+			{
+				Kind: xdr.ScSpecEntryKindScSpecEntryFunctionV0,
+				FunctionV0: &xdr.ScSpecFunctionV0{
+					Name: xdr.ScSymbol("transfer_struct"),
+					Inputs: []xdr.ScSpecFunctionInputV0{
+						{Name: "from", Type: makeUDT("Account")},
+						{Name: "amount", Type: makeUDT("Amount")},
+					},
+					Outputs: []xdr.ScSpecTypeDef{makeUDT("Receipt")},
+				},
+			},
+			// Union-typed input: process(cmd: udt:Command) -> void.
+			{
+				Kind: xdr.ScSpecEntryKindScSpecEntryFunctionV0,
+				FunctionV0: &xdr.ScSpecFunctionV0{
+					Name: xdr.ScSymbol("process"),
+					Inputs: []xdr.ScSpecFunctionInputV0{
+						{Name: "cmd", Type: makeUDT("Command")},
+					},
+					Outputs: []xdr.ScSpecTypeDef{},
+				},
+			},
+			// Enum reference as return value: get_status() -> udt:Status.
+			{
+				Kind: xdr.ScSpecEntryKindScSpecEntryFunctionV0,
+				FunctionV0: &xdr.ScSpecFunctionV0{
+					Name:    xdr.ScSymbol("get_status"),
+					Inputs:  []xdr.ScSpecFunctionInputV0{},
+					Outputs: []xdr.ScSpecTypeDef{makeUDT("Status")},
+				},
+			},
+			// Forward reference: fn uses udt:DefinedLater whose struct entry follows.
+			{
+				Kind: xdr.ScSpecEntryKindScSpecEntryFunctionV0,
+				FunctionV0: &xdr.ScSpecFunctionV0{
+					Name: xdr.ScSymbol("forward_fn"),
+					Inputs: []xdr.ScSpecFunctionInputV0{
+						{Name: "x", Type: makeUDT("DefinedLater")},
+					},
+					Outputs: []xdr.ScSpecTypeDef{},
+				},
+			},
+			// The DefinedLater struct definition follows the function that references it.
+			// Functions() skips this entry; it must not appear in the output.
+			{
+				Kind: xdr.ScSpecEntryKindScSpecEntryUdtStructV0,
+				UdtStructV0: &xdr.ScSpecUdtStructV0{
+					Name: "DefinedLater",
+					Fields: []xdr.ScSpecUdtStructFieldV0{
+						{Name: "val", Type: xdr.ScSpecTypeDef{Type: xdr.ScSpecTypeScSpecTypeU32}},
+					},
+				},
+			},
+		}
+
+		fns := Functions(entries)
+		// Struct entry is skipped; expect exactly the 4 function entries.
+		if len(fns) != 4 {
+			t.Fatalf("want 4 functions, got %d: %v", len(fns), fns)
+		}
+		want := []FnSig{
+			sig("transfer_struct", ins("udt:Account", "udt:Amount"), "udt:Receipt"),
+			sig("process", ins("udt:Command")),
+			sig("get_status", nil, "udt:Status"),
+			sig("forward_fn", ins("udt:DefinedLater")),
+		}
+		for i, w := range want {
+			g := fns[i]
+			if g.Name != w.Name {
+				t.Errorf("fn[%d] name = %q, want %q", i, g.Name, w.Name)
+			}
+			if !reflect.DeepEqual(g.Inputs, w.Inputs) {
+				t.Errorf("fn[%d] inputs = %v, want %v", i, g.Inputs, w.Inputs)
+			}
+			if !reflect.DeepEqual(g.Outputs, w.Outputs) {
+				t.Errorf("fn[%d] outputs = %v, want %v", i, g.Outputs, w.Outputs)
+			}
+		}
+	})
+
+	t.Run("DecodeSpec with UDT types round-trips cleanly and reports correct signatures", func(t *testing.T) {
+		entries := []xdr.ScSpecEntry{
+			{
+				Kind: xdr.ScSpecEntryKindScSpecEntryFunctionV0,
+				FunctionV0: &xdr.ScSpecFunctionV0{
+					Name: xdr.ScSymbol("do_work"),
+					Inputs: []xdr.ScSpecFunctionInputV0{
+						{Name: "cfg", Type: makeUDT("Config")},
+						{Name: "data", Type: xdr.ScSpecTypeDef{
+							Type: xdr.ScSpecTypeScSpecTypeVec,
+							Vec:  &xdr.ScSpecTypeVec{ElementType: makeUDT("Item")},
+						}},
+					},
+					Outputs: []xdr.ScSpecTypeDef{
+						{Type: xdr.ScSpecTypeScSpecTypeResult, Result: &xdr.ScSpecTypeResult{
+							OkType:    makeUDT("Output"),
+							ErrorType: makeUDT("AppError"),
+						}},
+					},
+				},
+			},
+		}
+		section := encodeSpecEntries(t, entries)
+
+		got, err := DecodeSpec(section, DefaultLimits())
+		if err != nil {
+			t.Fatalf("DecodeSpec: %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("want 1 entry, got %d", len(got))
+		}
+		fns := Functions(got)
+		if len(fns) != 1 {
+			t.Fatalf("want 1 function, got %d", len(fns))
+		}
+		wantIn := []string{"udt:Config", "Vec<udt:Item>"}
+		if !reflect.DeepEqual(fns[0].Inputs, wantIn) {
+			t.Errorf("inputs = %v, want %v", fns[0].Inputs, wantIn)
+		}
+		wantOut := []string{"Result<udt:Output,udt:AppError>"}
+		if !reflect.DeepEqual(fns[0].Outputs, wantOut) {
+			t.Errorf("outputs = %v, want %v", fns[0].Outputs, wantOut)
+		}
+	})
+
+	t.Run("truncated payloads with UDT types return ErrTruncated and partial results", func(t *testing.T) {
+		entry1 := xdr.ScSpecEntry{
+			Kind: xdr.ScSpecEntryKindScSpecEntryFunctionV0,
+			FunctionV0: &xdr.ScSpecFunctionV0{
+				Name: xdr.ScSymbol("fn_a"),
+				Inputs: []xdr.ScSpecFunctionInputV0{
+					{Name: "x", Type: makeUDT("TypeA")},
+				},
+				Outputs: []xdr.ScSpecTypeDef{},
+			},
+		}
+		entry2 := xdr.ScSpecEntry{
+			Kind: xdr.ScSpecEntryKindScSpecEntryFunctionV0,
+			FunctionV0: &xdr.ScSpecFunctionV0{
+				Name:    xdr.ScSymbol("fn_b"),
+				Inputs:  []xdr.ScSpecFunctionInputV0{},
+				Outputs: []xdr.ScSpecTypeDef{makeUDT("TypeB")},
+			},
+		}
+
+		section := encodeSpecEntries(t, []xdr.ScSpecEntry{entry1, entry2})
+
+		// Measure where entry1 ends.
+		var e1buf bytes.Buffer
+		if _, err := xdr.Marshal(&e1buf, entry1); err != nil {
+			t.Fatal(err)
+		}
+		boundary := e1buf.Len()
+
+		// Exactly at the boundary: one clean entry, no error.
+		got, err := DecodeSpec(section[:boundary], DefaultLimits())
+		if err != nil {
+			t.Fatalf("at boundary: unexpected err %v", err)
+		}
+		if len(got) != 1 {
+			t.Fatalf("at boundary: want 1 entry, got %d", len(got))
+		}
+
+		// One byte before the boundary: ErrTruncated; at most 0 complete entries.
+		got, err = DecodeSpec(section[:boundary-1], DefaultLimits())
+		if !errors.Is(err, ErrTruncated) {
+			t.Fatalf("boundary-1: want ErrTruncated, got %v (entries=%d)", err, len(got))
+		}
+		if len(got) > 1 {
+			t.Fatalf("boundary-1: at most 1 complete entry expected, got %d", len(got))
+		}
+
+		// Mid-way into entry2: ErrTruncated, one complete entry.
+		mid := boundary + (len(section)-boundary)/2
+		if mid > boundary && mid < len(section) {
+			got, err = DecodeSpec(section[:mid], DefaultLimits())
+			if !errors.Is(err, ErrTruncated) {
+				t.Fatalf("mid-entry2: want ErrTruncated, got %v", err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("mid-entry2: want 1 complete entry, got %d", len(got))
+			}
+		}
+
+		// Full section: 2 entries, correct signatures, no error.
+		got, err = DecodeSpec(section, DefaultLimits())
+		if err != nil {
+			t.Fatalf("full: unexpected err %v", err)
+		}
+		if len(got) != 2 {
+			t.Fatalf("full: want 2 entries, got %d", len(got))
+		}
+		fns := Functions(got)
+		if len(fns) != 2 {
+			t.Fatalf("full: want 2 functions, got %d", len(fns))
+		}
+		// Bounds: fn_a has one UDT input; fn_b has one UDT output.
+		if len(fns[0].Inputs) != 1 || fns[0].Inputs[0] != "udt:TypeA" {
+			t.Errorf("fn_a inputs: want [udt:TypeA], got %v", fns[0].Inputs)
+		}
+		if len(fns[1].Outputs) != 1 || fns[1].Outputs[0] != "udt:TypeB" {
+			t.Errorf("fn_b outputs: want [udt:TypeB], got %v", fns[1].Outputs)
+		}
+	})
+}
+
 func sig(name string, in []string, out ...string) FnSig {
 	if in == nil {
 		in = []string{}
