@@ -14,16 +14,21 @@ import (
 
 func sep41(t *testing.T) RuleFile {
 	t.Helper()
+	return loadRule(t, 41)
+}
+
+func loadRule(t *testing.T, sep int) RuleFile {
+	t.Helper()
 	rules, err := LoadRules(os.DirFS("../../rules"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, r := range rules {
-		if r.SEP == 41 {
+		if r.SEP == sep {
 			return r
 		}
 	}
-	t.Fatal("no sep-0041.json")
+	t.Fatalf("no rule file for SEP-%d", sep)
 	return RuleFile{}
 }
 
@@ -251,6 +256,154 @@ func TestParseRuleFileRejects(t *testing.T) {
 			}
 		})
 	}
+}
+
+// fullNFT returns a spec satisfying every SEP-50 rule, using u64 for TokenID/Balance.
+func fullNFT() []sepmeta.FnSig {
+	return []sepmeta.FnSig{
+		fn("balance",             []string{"Address"},                               "u64"),
+		fn("owner_of",            []string{"u64"},                                   "Address"),
+		fn("transfer",            []string{"Address", "Address", "u64"}),
+		fn("transfer_from",       []string{"Address", "Address", "Address", "u64"}),
+		fn("approve",             []string{"Address", "Address", "u64", "u32"}),
+		fn("approve_for_all",     []string{"Address", "Address", "u32"}),
+		fn("get_approved",        []string{"u64"},                                   "Option<Address>"),
+		fn("is_approved_for_all", []string{"Address", "Address"},                   "bool"),
+		fn("name",                nil,                                               "String"),
+		fn("symbol",              nil,                                               "String"),
+		fn("token_uri",           []string{"u64"},                                   "String"),
+	}
+}
+
+// fullVault returns a spec satisfying every SEP-56 rule (SEP-41 base + vault functions).
+func fullVault() []sepmeta.FnSig {
+	return []sepmeta.FnSig{
+		fn("allowance",         []string{"Address", "Address"},                               "i128"),
+		fn("approve",           []string{"Address", "Address", "i128", "u32"}),
+		fn("balance",           []string{"Address"},                                          "i128"),
+		fn("transfer",          []string{"Address", "MuxedAddress", "i128"}),
+		fn("transfer_from",     []string{"Address", "Address", "Address", "i128"}),
+		fn("burn",              []string{"Address", "i128"}),
+		fn("burn_from",         []string{"Address", "Address", "i128"}),
+		fn("decimals",          nil,                                                          "u32"),
+		fn("name",              nil,                                                          "String"),
+		fn("symbol",            nil,                                                          "String"),
+		fn("total_supply",      nil,                                                          "i128"),
+		fn("query_asset",       nil,                                                          "Address"),
+		fn("total_assets",      nil,                                                          "i128"),
+		fn("convert_to_shares", []string{"i128"},                                             "i128"),
+		fn("convert_to_assets", []string{"i128"},                                             "i128"),
+		fn("max_deposit",       []string{"Address"},                                          "i128"),
+		fn("preview_deposit",   []string{"i128"},                                             "i128"),
+		fn("deposit",           []string{"i128", "Address", "Address", "Address"},            "i128"),
+		fn("max_mint",          []string{"Address"},                                          "i128"),
+		fn("preview_mint",      []string{"i128"},                                             "i128"),
+		fn("mint",              []string{"i128", "Address", "Address", "Address"},            "i128"),
+		fn("max_withdraw",      []string{"Address"},                                          "i128"),
+		fn("preview_withdraw",  []string{"i128"},                                             "i128"),
+		fn("withdraw",          []string{"i128", "Address", "Address", "Address"},            "i128"),
+		fn("max_redeem",        []string{"Address"},                                          "i128"),
+		fn("preview_redeem",    []string{"i128"},                                             "i128"),
+		fn("redeem",            []string{"i128", "Address", "Address", "Address"},            "i128"),
+	}
+}
+
+func TestMatchSEP50Rules(t *testing.T) {
+	r := loadRule(t, 50)
+	if len(r.Required) != 11 {
+		t.Fatalf("SEP-50 required count = %d, want 11", len(r.Required))
+	}
+	t.Run("full NFT is match", func(t *testing.T) {
+		got := Match(fullNFT(), r)
+		if got.Status != StatusMatch || got.OKCount != 11 {
+			t.Fatalf("status %s ok %d, want match 11", got.Status, got.OKCount)
+		}
+	})
+	t.Run("u32 TokenID as input also matches", func(t *testing.T) {
+		fns := fullNFT()
+		for i, f := range fns {
+			for j, in := range f.Inputs {
+				if in == "u64" {
+					fns[i].Inputs[j] = "u32"
+				}
+			}
+			// Do not change balance output: rule file specifies u64 output.
+		}
+		got := Match(fns, r)
+		if got.Status != StatusMatch || got.OKCount != 11 {
+			t.Fatalf("u32 input variant: status %s ok %d, want match 11", got.Status, got.OKCount)
+		}
+	})
+	t.Run("missing 6 of 11 is mismatch", func(t *testing.T) {
+		got := Match(without(fullNFT(), "approve", "approve_for_all", "get_approved", "is_approved_for_all", "token_uri", "transfer_from"), r)
+		if got.Status != StatusMismatch || got.OKCount != 5 {
+			t.Fatalf("status %s ok %d, want mismatch 5", got.Status, got.OKCount)
+		}
+	})
+	t.Run("missing 5 of 11 is partial", func(t *testing.T) {
+		got := Match(without(fullNFT(), "approve", "approve_for_all", "get_approved", "is_approved_for_all", "token_uri"), r)
+		if got.Status != StatusPartial || got.OKCount != 6 {
+			t.Fatalf("status %s ok %d, want partial 6", got.Status, got.OKCount)
+		}
+	})
+	t.Run("wrong output on balance is mismatched", func(t *testing.T) {
+		fns := append(without(fullNFT(), "balance"), fn("balance", []string{"Address"}, "i128"))
+		got := Match(fns, r)
+		if got.Status != StatusPartial || got.OKCount != 10 || len(got.Mismatched) != 1 {
+			t.Fatalf("status %s ok %d mis %d, want partial 10 1-mismatch", got.Status, got.OKCount, len(got.Mismatched))
+		}
+	})
+	t.Run("ruleset version and SEP carried", func(t *testing.T) {
+		got := Match(fullNFT(), r)
+		if got.RulesetVersion != "sep50-v0.1.0" || got.SEP != 50 {
+			t.Errorf("result carries %d/%s", got.SEP, got.RulesetVersion)
+		}
+	})
+}
+
+func TestMatchSEP56Rules(t *testing.T) {
+	r := loadRule(t, 56)
+	if len(r.Required) != 27 {
+		t.Fatalf("SEP-56 required count = %d, want 27", len(r.Required))
+	}
+	t.Run("full vault is match", func(t *testing.T) {
+		got := Match(fullVault(), r)
+		if got.Status != StatusMatch || got.OKCount != 27 {
+			t.Fatalf("status %s ok %d, want match 27", got.Status, got.OKCount)
+		}
+	})
+	t.Run("transfer.to Address also matches", func(t *testing.T) {
+		fns := fullVault()
+		for i, f := range fns {
+			if f.Name == "transfer" && len(f.Inputs) > 1 && f.Inputs[1] == "MuxedAddress" {
+				fns[i].Inputs[1] = "Address"
+			}
+		}
+		got := Match(fns, r)
+		if got.Status != StatusMatch || got.OKCount != 27 {
+			t.Fatalf("Address variant: status %s ok %d, want match 27", got.Status, got.OKCount)
+		}
+	})
+	t.Run("missing vault functions only is partial", func(t *testing.T) {
+		got := Match(without(fullVault(), "total_supply", "query_asset", "total_assets",
+			"convert_to_shares", "convert_to_assets", "max_deposit", "preview_deposit",
+			"deposit", "max_mint", "preview_mint", "mint", "max_withdraw", "preview_withdraw"), r)
+		if got.Status != StatusPartial || got.OKCount != 14 {
+			t.Fatalf("status %s ok %d, want partial 14", got.Status, got.OKCount)
+		}
+	})
+	t.Run("empty spec is mismatch", func(t *testing.T) {
+		got := Match(nil, r)
+		if got.Status != StatusMismatch || got.OKCount != 0 {
+			t.Fatalf("status %s ok %d, want mismatch 0", got.Status, got.OKCount)
+		}
+	})
+	t.Run("ruleset version and SEP carried", func(t *testing.T) {
+		got := Match(fullVault(), r)
+		if got.RulesetVersion != "sep56-v0.1.2" || got.SEP != 56 {
+			t.Errorf("result carries %d/%s", got.SEP, got.RulesetVersion)
+		}
+	})
 }
 
 func TestLoadRules(t *testing.T) {
