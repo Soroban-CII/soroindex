@@ -140,7 +140,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	if !s.limiter.allow(r.RemoteAddr, s.options.RateLimit, time.Now()) {
+	if !s.limiter.allowN(r.RemoteAddr, s.options.RateLimit, lookupCost(r.URL.Path, q), time.Now()) {
 		w.Header().Set("Retry-After", "60")
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "request limit exceeded")
 		return

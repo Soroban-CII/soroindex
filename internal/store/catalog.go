@@ -248,3 +248,103 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 	}
 	return page, nil
 }
+
+// MaxLookupIDs caps one bulk lookup. A wallet holding more tokens pages
+// through them in several requests.
+const MaxLookupIDs = 100
+
+// Lookup is the bulk answer for a list of contract IDs. Found contracts keep
+// the requested order and the ContractSummary shape of /v1/contracts. IDs the
+// index does not know are listed in NotFound, never dropped. Archived
+// contracts are returned with archived set, because a caller asking about a
+// specific contract should learn it is archived rather than that it is unknown.
+type Lookup struct {
+	Contracts     []ContractSummary `json:"contracts"`
+	NotFound      []string          `json:"not_found"`
+	ParserVersion string            `json:"parser_version"`
+	AsOfLedger    uint32            `json:"as_of_ledger"`
+}
+
+// ParseContractIDs splits a comma list and validates every entry as a contract
+// strkey before anything is queried. Duplicates collapse to their first
+// position. The error names the 1-based position of the first invalid entry.
+func ParseContractIDs(s string) ([]string, error) {
+	if s == "" {
+		return nil, fmt.Errorf("%w: ids is empty", ErrBadQuery)
+	}
+	parts := strings.Split(s, ",")
+	if len(parts) > MaxLookupIDs {
+		return nil, fmt.Errorf("%w: at most %d ids per request", ErrBadQuery, MaxLookupIDs)
+	}
+	out := make([]string, 0, len(parts))
+	seen := map[string]bool{}
+	for i, id := range parts {
+		if ValidateContractID(id) != nil {
+			return nil, fmt.Errorf("%w: ids entry %d is not a contract ID", ErrBadQuery, i+1)
+		}
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+// LookupContracts reads the summaries of ids in one snapshot. Callers pass
+// IDs from ParseContractIDs; they are validated again here so the store never
+// queries with an unchecked value.
+func (s *Store) LookupContracts(ctx context.Context, ids []string) (Lookup, error) {
+	l := Lookup{Contracts: []ContractSummary{}, NotFound: []string{}, ParserVersion: sepmeta.ParserVersion}
+	if len(ids) == 0 || len(ids) > MaxLookupIDs {
+		return l, ErrBadQuery
+	}
+	for _, id := range ids {
+		if err := ValidateContractID(id); err != nil {
+			return l, err
+		}
+	}
+	list, err := json.Marshal(ids)
+	if err != nil {
+		return l, err
+	}
+	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return l, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if l.AsOfLedger, err = readLedger(ctx, tx); err != nil {
+		return l, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT c.contract_id,c.kind,c.current_wasm_hash,c.exec_ref_owner,c.exec_ref_tag,c.archived
+		FROM contracts c WHERE c.contract_id IN (SELECT value FROM json_each(?))`, string(list))
+	if err != nil {
+		return l, err
+	}
+	found := map[string]ContractSummary{}
+	for rows.Next() {
+		var c ContractSummary
+		var owner, tag sql.NullString
+		if err = rows.Scan(&c.ID, &c.Kind, &c.WasmHash, &owner, &tag, &c.Archived); err != nil {
+			break
+		}
+		if c.Kind == "wasm_ref" {
+			c.ExecRef = &Reference{owner.String, tag.String}
+		}
+		found[c.ID] = c
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	_ = rows.Close()
+	if err != nil {
+		return l, err
+	}
+	for _, id := range ids {
+		if c, ok := found[id]; ok {
+			l.Contracts = append(l.Contracts, c)
+		} else {
+			l.NotFound = append(l.NotFound, id)
+		}
+	}
+	return l, tx.Commit()
+}

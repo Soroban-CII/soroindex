@@ -3,14 +3,20 @@ package api
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/Soroban-CII/soroindex/internal/store"
 )
 
 func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
-	q, err := parseQuery(r, "implements", "implements_any", "tier", "kind", "limit", "cursor")
+	q, err := parseQuery(r, "ids", "implements", "implements_any", "tier", "kind", "limit", "cursor")
 	if detailError(w, err) {
+		return
+	}
+	if _, ok := q["ids"]; ok {
+		s.lookup(w, r, q)
 		return
 	}
 	all, err := store.ParseSEPs(q.Get("implements"))
@@ -39,6 +45,52 @@ func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, 500, "internal", "cannot query contracts")
+		return
+	}
+	writeJSON(w, 200, result)
+}
+
+// idsPerCharge is how many looked-up IDs count as one request against the
+// per-IP rate limit. A full 100-ID lookup costs 10, so bulk is cheaper than
+// one request per contract but not free.
+const idsPerCharge = 10
+
+// lookupCost is the rate-limit charge for a request: 1, or one per started
+// block of idsPerCharge IDs for a bulk lookup. It is computed from the raw
+// list before validation so that invalid lists are charged too; it is
+// capped at the charge for the largest allowed list.
+func lookupCost(path string, q url.Values) int {
+	if path != "/v1/contracts" && path != "/contracts" {
+		return 1
+	}
+	values, ok := q["ids"]
+	if !ok || len(values) != 1 {
+		return 1
+	}
+	n := strings.Count(values[0], ",") + 1
+	if n > store.MaxLookupIDs {
+		n = store.MaxLookupIDs
+	}
+	return (n + idsPerCharge - 1) / idsPerCharge
+}
+
+// lookup answers ?ids=. The list is exclusive with filters and pagination:
+// mixing them would leave it unclear whether an absent ID is unknown or only
+// filtered out.
+func (s *Server) lookup(w http.ResponseWriter, r *http.Request, q url.Values) {
+	if len(q) != 1 {
+		writeError(w, 400, "bad_request", "ids cannot be combined with other parameters")
+		return
+	}
+	ids, err := store.ParseContractIDs(q.Get("ids"))
+	if err != nil {
+		// The message names a position and the cap, never the raw input.
+		writeError(w, 400, "bad_request", err.Error())
+		return
+	}
+	b := backendFrom(r.Context())
+	result, err := b.Store.LookupContracts(r.Context(), ids)
+	if detailError(w, err) {
 		return
 	}
 	writeJSON(w, 200, result)
