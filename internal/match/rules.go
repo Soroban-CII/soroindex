@@ -21,12 +21,12 @@ var ErrInvalidRules = errors.New("invalid rule file")
 
 // RuleFile is one SEP's interface rules (rules/sep-NNNN.json).
 type RuleFile struct {
-	SEP            int    `json:"sep"`
-	RulesetVersion string `json:"ruleset_version"`
-	Source         string `json:"source"`
+	SEP            int      `json:"sep"`
+	RulesetVersion string   `json:"ruleset_version"`
+	Source         string   `json:"source"`
 	Required       []FnRule `json:"required"`
 	Optional       []FnRule `json:"optional"`
-	Requires       []int  `json:"requires"` // other SEP numbers this SEP requires to match
+	Requires       []int    `json:"requires"` // other SEP numbers this SEP requires to match
 }
 
 // FnRule describes one function. Inputs has one element per parameter, each
@@ -198,7 +198,7 @@ func checkRequiresCycles(rules []RuleFile) error {
 			}
 			if cycleStart >= 0 {
 				cycle := append(path[cycleStart:], sep)
-				return fmt.Errorf("requires cycle: %s -> %s", 
+				return fmt.Errorf("requires cycle: %s -> %s",
 					strings.Join(mapSep(cycle[:len(cycle)-1], seps), " -> "),
 					strings.Join(mapSep(cycle[1:], seps), " -> "))
 			}
@@ -214,7 +214,8 @@ func checkRequiresCycles(rules []RuleFile) error {
 				}
 			}
 		}
-		path = path[:len(path)-1]
+		// Backtrack path (DFS cleanup; value not used after return).
+		_ = path[:len(path)-1]
 		state[sep] = 2
 		return nil
 	}
