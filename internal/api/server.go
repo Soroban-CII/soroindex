@@ -86,6 +86,7 @@ func New(o Options) (*Server, error) {
 	s.mux.HandleFunc("GET /v1/wasm/{hash}", s.wasm)
 	s.mux.HandleFunc("GET /v1/seps", s.seps)
 	s.mux.HandleFunc("GET /v1/stats", s.stats)
+	s.mux.HandleFunc("GET /v1/stats/toolchains", s.toolchains)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint not found")
 	})
