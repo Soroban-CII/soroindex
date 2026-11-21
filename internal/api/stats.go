@@ -7,7 +7,8 @@ func (s *Server) stats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "bad_request", "stats takes no query parameters")
 		return
 	}
-	d, err := s.options.Store.Stats(r.Context(), s.options.Network, s.options.Rulesets)
+	b := backendFrom(r.Context())
+	d, err := b.Store.Stats(r.Context(), b.Network, s.options.Rulesets)
 	if detailError(w, err) {
 		return
 	}

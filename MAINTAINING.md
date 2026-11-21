@@ -54,6 +54,21 @@ A deliberately frozen demo database is not a live-follow success. Never change
 or reset its progress marker to make this check pass. A retention gap requires
 an operator-reviewed backfill/reseed, not skipping missing ledgers.
 
+### Check index against RPC
+
+Run the data-quality checker against the same database and network:
+
+```sh
+sep47idx check --network testnet --db /absolute/path/to/testnet.db --sample 100 --seed 1
+```
+
+The same database and seed always compare the same contracts. Exit 0 means no
+differences. Exit 1 means at least one stored contract disagrees with RPC, or
+the run failed; investigate before treating the index as healthy. Entries
+changed after the index's `last_ledger` are skipped and counted, so run this
+after sync has caught up. Record the sample size, seed, checked count and
+difference count in the report.
+
 ### Triage issues and PRs
 
 Review new reports, reproduce actionable failures, check duplication and label
@@ -131,6 +146,7 @@ Repository / commit / network / deployment: <actual values>
 Sync lag: <timestamp, indexed ledger, RPC tip, lag or exact error>
 Forward progress: <first timestamp + ledger; second timestamp + ledger;
                    elapsed >=60 seconds; delta; pass / investigate / not run>
+Data quality: <network, sample, seed, checked, changed_after_index, archived, differences; or not run>
 Issue and PR triage: <links, concrete actions, review deadlines; or nothing to report>
 Standards review: <SEP source SHAs/versions, findings; or not due / not run>
 Dependency review: <versions, updates, check outcomes; or not due / not run>

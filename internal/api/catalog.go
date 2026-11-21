@@ -31,7 +31,8 @@ func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	result, err := s.options.Store.Contracts(r.Context(), store.Filter{Implements: all, ImplementsAny: anySEPs, Tier: q.Get("tier"), Kind: q.Get("kind"), Limit: limit, Cursor: q.Get("cursor"), Rulesets: s.options.Rulesets})
+	b := backendFrom(r.Context())
+	result, err := b.Store.Contracts(r.Context(), store.Filter{Implements: all, ImplementsAny: anySEPs, Tier: q.Get("tier"), Kind: q.Get("kind"), Limit: limit, Cursor: q.Get("cursor"), Rulesets: s.options.Rulesets})
 	if errors.Is(err, store.ErrBadQuery) {
 		writeError(w, 400, "bad_request", "invalid filter or cursor")
 		return
