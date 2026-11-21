@@ -58,6 +58,43 @@ func writeMatchEvidence(w io.Writer, m store.WasmMatch) error {
 	return nil
 }
 
+// writeEvidence prints what a Wasm's code says and matches. `wasm` and
+// `inspect` share it, so a local check reads exactly like the indexed one.
+func writeEvidence(w io.Writer, meta json.RawMessage, parseError *string, claims []store.WasmClaim, anomalies []store.WasmAnomaly, matches []store.WasmMatch) error {
+	if _, err := fmt.Fprintf(w, "Metadata: %s\n", meta); err != nil {
+		return err
+	}
+	if parseError != nil {
+		if _, err := fmt.Fprintf(w, "Parse error: %s\n", *parseError); err != nil {
+			return err
+		}
+	}
+	for _, c := range claims {
+		// Anomaly is a pointer; printing it with %v would show an address.
+		anomaly := "none"
+		if c.Anomaly != nil {
+			anomaly = *c.Anomaly
+		}
+		if _, err := fmt.Fprintf(w, "Declared SEP-%d (%s), token=%q, anomaly=%s\n", c.SEP, c.Source, c.RawToken, anomaly); err != nil {
+			return err
+		}
+	}
+	for _, a := range anomalies {
+		if _, err := fmt.Fprintf(w, "Anomaly %s: %q\n", a.Anomaly, a.RawToken); err != nil {
+			return err
+		}
+	}
+	for _, m := range matches {
+		if _, err := fmt.Fprintf(w, "Inferred SEP-%d: %s (%s), %d functions matched\n", m.SEP, m.Status, m.RulesetVersion, m.OKCount); err != nil {
+			return err
+		}
+		if err := writeMatchEvidence(w, m); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func init() {
 	commands["wasm"] = command{summary: "show parsed Wasm metadata and interface evidence", run: runWasm}
 }
@@ -90,26 +127,11 @@ func runWasm(args []string, stdout, stderr io.Writer) int {
 		if cfg.JSON {
 			return jsonOutput(stdout, d)
 		}
-		if _, err = fmt.Fprintf(stdout, "%s: %s (parser %s), as of ledger %d\nMetadata: %s\n", hash, d.ParseStatus, d.ParserVersion, d.AsOfLedger, d.Meta); err != nil {
+		if _, err = fmt.Fprintf(stdout, "%s: %s (parser %s), as of ledger %d\n", hash, d.ParseStatus, d.ParserVersion, d.AsOfLedger); err != nil {
 			return err
 		}
-		for _, c := range d.Claims {
-			if _, err = fmt.Fprintf(stdout, "Declared SEP-%d (%s), token=%q, anomaly=%v\n", c.SEP, c.Source, c.RawToken, c.Anomaly); err != nil {
-				return err
-			}
-		}
-		for _, a := range d.Anomalies {
-			if _, err = fmt.Fprintf(stdout, "Anomaly %s: %q\n", a.Anomaly, a.RawToken); err != nil {
-				return err
-			}
-		}
-		for _, m := range d.Matches {
-			if _, err = fmt.Fprintf(stdout, "Inferred SEP-%d: %s (%s), %d functions matched\n", m.SEP, m.Status, m.RulesetVersion, m.OKCount); err != nil {
-				return err
-			}
-			if err = writeMatchEvidence(stdout, m); err != nil {
-				return err
-			}
+		if err = writeEvidence(stdout, d.Meta, d.ParseError, d.Claims, d.Anomalies, d.Matches); err != nil {
+			return err
 		}
 		if _, err = fmt.Fprintf(stdout, "Live contracts on this page: %d\n", len(d.Contracts)); err != nil {
 			return err
