@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -87,6 +89,7 @@ func New(o Options) (*Server, error) {
 	s.mux.HandleFunc("GET /v1/seps", s.seps)
 	s.mux.HandleFunc("GET /v1/stats", s.stats)
 	s.mux.HandleFunc("GET /v1/stats/toolchains", s.toolchains)
+	s.mux.HandleFunc("GET /v1/events/upgrades", s.upgradesSSE)
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "endpoint not found")
 	})
@@ -235,4 +238,96 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	}{code, message}})
+}
+
+// upgradesSSE streams contract version upgrades as Server-Sent Events.
+// Query parameter: since (uint32 ledger number, optional) - resume from this ledger.
+// Last-Event-ID header is also supported for automatic resume.
+// The stream sends events with id=<ledger> and data=<JSON VersionChange>.
+// Connection limits and idle timeouts are enforced by the HTTP server settings.
+type testTickerIntervalKeyType struct{}
+
+// TestTickerIntervalKey is a context key for overriding the SSE ticker interval in tests.
+var TestTickerIntervalKey = testTickerIntervalKeyType{}
+
+func (s *Server) upgradesSSE(w http.ResponseWriter, r *http.Request) {
+	// Only allow GET.
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", "GET")
+		writeError(w, http.StatusMethodNotAllowed, "bad_request", "only GET is supported")
+		return
+	}
+
+	// Parse since parameter (from query or Last-Event-ID header).
+	since := uint32(0)
+	if v := r.URL.Query().Get("since"); v != "" {
+		n, err := strconv.ParseUint(v, 10, 32)
+		if err != nil {
+			writeError(w, 400, "bad_request", "invalid since parameter")
+			return
+		}
+		since = uint32(n)
+	}
+	// Last-Event-ID header takes precedence over query parameter.
+	if lei := r.Header.Get("Last-Event-ID"); lei != "" {
+		n, err := strconv.ParseUint(lei, 10, 32)
+		if err == nil {
+			since = uint32(n)
+		}
+	}
+
+	b := backendFrom(r.Context())
+
+	// Set SSE headers.
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no") // Disable nginx buffering.
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, 500, "internal", "streaming not supported")
+		return
+	}
+
+	// Send initial retry comment to set reconnection delay.
+	_, _ = fmt.Fprintf(w, "retry: 5000\n\n")
+	flusher.Flush()
+
+	// Stream version changes.
+	ctx := r.Context()
+	tickerInterval := 5 * time.Second
+	if v := ctx.Value(TestTickerIntervalKey); v != nil {
+		if d, ok := v.(time.Duration); ok && d > 0 {
+			tickerInterval = d
+		}
+	}
+	ticker := time.NewTicker(tickerInterval)
+	defer ticker.Stop()
+
+	lastSentLedger := since
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			changes, err := b.Store.VersionChanges(ctx, lastSentLedger, 1000)
+			if err != nil {
+				// Log error but keep connection alive.
+				slog.ErrorContext(ctx, "SSE version changes query failed", "error", err)
+				continue
+			}
+			for _, change := range changes {
+				data, err := json.Marshal(change)
+				if err != nil {
+					slog.ErrorContext(ctx, "SSE marshal failed", "error", err)
+					continue
+				}
+				// Use the ledger as event ID for resume.
+				_, _ = fmt.Fprintf(w, "id: %d\ndata: %s\n\n", change.Ledger, data)
+				lastSentLedger = change.Ledger
+			}
+			flusher.Flush()
+		}
+	}
 }
