@@ -159,3 +159,27 @@ func joinInts(xs []int) string {
 	}
 	return strings.Join(parts, " | ")
 }
+
+// RenderTrend renders a Markdown trend table from recorded snapshots. It
+// returns an empty string when the trend has no points.
+func RenderTrend(tr Trend) string {
+	if len(tr.Points) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	p := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
+	p("## Trend (%s)\n\n", title(tr.Network))
+	p("One row per census run, oldest first. ")
+	p("Comparisons across rows are only meaningful when the method column is identical.\n\n")
+	p("| Run (UTC) | Ledger | Declares any (hash) | Declares any (contract) | Method | Parser | Rulesets |\n")
+	p("| --- | ---: | ---: | ---: | --- | --- | --- |\n")
+	for _, pt := range tr.Points {
+		p("| %s | %d | %s | %s | %s | %s | %s |\n",
+			pt.GeneratedAt, pt.LatestLedger,
+			fmtRate(pt.DeclaresAnyHash), fmtRate(pt.DeclaresAnyCt),
+			pt.Method, pt.ParserVersion,
+			strings.Join(pt.RulesetVersions, ", "))
+	}
+	p("\n")
+	return b.String()
+}

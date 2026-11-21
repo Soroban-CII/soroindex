@@ -382,3 +382,221 @@ curl --fail --silent --show-error 'http://127.0.0.1:8080/v1/contracts?implements
 ```
 
 See the [million-claim benchmark](query-benchmark.md) and [dependency review](dependency-review.md) for measured query latency and security checks.
+
+## Python client example (issue #47)
+
+The snippet below uses only the Python standard library. It paginates through
+all inferred SEP-41 contracts, distinguishes empty results from errors, and
+handles 400, 404 and 429 responses without conflating them. Run it against the
+local validation server (`sep47idx serve`) described in this document.
+
+```python
+"""
+Paginate inferred SEP-41 contracts from a local soroindex server.
+
+Usage:
+    python3 client.py [base_url]
+
+Default base_url: http://127.0.0.1:8080
+"""
+import json
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any, Optional
+
+BASE_URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8080"
+TIMEOUT = 10  # seconds
+
+
+def get(path: str, params: Optional[dict[str, str]] = None) -> Any:
+    """GET path with explicit timeout; raises on network error."""
+    url = BASE_URL + path
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        if exc.code == 400:
+            raise ValueError(f"bad request: {body}") from exc
+        if exc.code == 404:
+            raise LookupError(f"not found: {body}") from exc
+        if exc.code == 429:
+            retry_after = int(exc.headers.get("Retry-After", "5"))
+            print(f"rate limited — waiting {retry_after}s", file=sys.stderr)
+            time.sleep(retry_after)
+            return get(path, params)  # one retry
+        raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
+
+
+def list_inferred_sep41(limit: int = 50) -> None:
+    params: dict[str, str] = {"implements": "41", "tier": "inferred", "limit": str(limit)}
+    page = 0
+    total = 0
+    while True:
+        data = get("/v1/contracts", params)
+        contracts = data.get("contracts", [])
+        if page == 0 and not contracts:
+            print("No inferred SEP-41 contracts found.")
+            return
+        for c in contracts:
+            tier_label = "inferred"
+            if c.get("archived"):
+                tier_label = "archived"
+            print(f"  {c['contract_id']}  kind={c['kind']}  tier={tier_label}")
+            total += 1
+        cursor = data.get("next_cursor")
+        if not cursor:
+            break
+        params = {"implements": "41", "tier": "inferred", "limit": str(limit), "cursor": cursor}
+        page += 1
+    print(f"\nTotal: {total} contracts across {page + 1} page(s).")
+
+
+if __name__ == "__main__":
+    list_inferred_sep41()
+```
+
+Output from the local validation server (200-contract testnet sample):
+
+```text
+  CAEWTQQW3RGKV67IK2K64BNXRFUYTPNIDKSTGZULV3E3JQMQQECTBRCR  kind=wasm  tier=inferred
+  CAEXK2QQJYJLQPWZKWEPJMHL73VD5PPLJVKC6WMJL3W5YMDQ2EKNMJZJ  kind=wasm  tier=inferred
+  ... (27 inferred contracts total)
+
+Total: 27 contracts across 1 page(s).
+```
+
+The server returns `[]` with `200 OK` when a valid query matches nothing, so an
+empty `contracts` array is not an error. Only a `4xx` status is a problem.
+Cursors are opaque base64url strings; pass them back unchanged with the same
+filter parameters.
+
+## Browser client example (issue #48)
+
+The snippet below runs entirely in a browser. It uses `fetch` with an
+`AbortController` for cancellation, displays each trust tier with its evidence
+caveats, and follows opaque cursors. It is a local development tool, not a
+hosted production deployment; replace `BASE_URL` with your server address.
+
+```html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>soroindex browser client</title>
+</head>
+<body>
+  <label>SEP: <input id="sep" value="41" size="4"></label>
+  <select id="tier">
+    <option value="inferred">inferred</option>
+    <option value="declared">declared</option>
+    <option value="verified">verified</option>
+    <option value="protocol">protocol</option>
+  </select>
+  <button id="load">Load</button>
+  <button id="cancel" disabled>Cancel</button>
+  <pre id="out"></pre>
+
+  <script type="module">
+    const BASE_URL = 'http://127.0.0.1:8080';
+    const out = document.getElementById('out');
+    let controller = null;
+
+    // Trust-tier caveats shown next to each contract row.
+    const TIER_NOTES = {
+      inferred:  'interface match only — no declaration',
+      declared:  'self-declared via sep meta',
+      verified:  'declaration + passing suite — not a security audit',
+      protocol:  'SAC or other protocol contract',
+    };
+
+    function tierLabel(tier, contract) {
+      let label = tier;
+      if (contract.archived) label += ' [archived]';
+      const note = TIER_NOTES[tier] ?? '';
+      return note ? `${label} (${note})` : label;
+    }
+
+    async function loadPage(params, signal) {
+      const url = BASE_URL + '/v1/contracts?' + new URLSearchParams(params);
+      const resp = await fetch(url, { signal });
+      if (resp.status === 429) {
+        const wait = Number(resp.headers.get('Retry-After') ?? 5);
+        out.textContent += `\nRate limited — waiting ${wait}s…`;
+        await new Promise(r => setTimeout(r, wait * 1000));
+        return loadPage(params, signal); // one retry
+      }
+      if (!resp.ok) {
+        const body = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${body}`);
+      }
+      return resp.json();
+    }
+
+    document.getElementById('load').addEventListener('click', async () => {
+      if (controller) controller.abort();
+      controller = new AbortController();
+      const { signal } = controller;
+      document.getElementById('cancel').disabled = false;
+      out.textContent = '';
+
+      const sep  = document.getElementById('sep').value.trim();
+      const tier = document.getElementById('tier').value;
+      let params = { implements: sep, tier, limit: '50' };
+      let total = 0;
+
+      try {
+        while (true) {
+          const data = await loadPage(params, signal);
+          const contracts = data.contracts ?? [];
+          if (total === 0 && contracts.length === 0) {
+            out.textContent = 'No results.';
+            break;
+          }
+          for (const c of contracts) {
+            out.textContent += `${c.contract_id}  ${tierLabel(tier, c)}\n`;
+            total++;
+          }
+          if (!data.next_cursor) {
+            out.textContent += `\n— ${total} contract(s) total —`;
+            break;
+          }
+          // Pass opaque cursor back unchanged with the same filter parameters.
+          params = { implements: sep, tier, limit: '50', cursor: data.next_cursor };
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          out.textContent += '\n[cancelled]';
+        } else {
+          out.textContent += `\nError: ${err.message}`;
+        }
+      } finally {
+        document.getElementById('cancel').disabled = true;
+        controller = null;
+      }
+    });
+
+    document.getElementById('cancel').addEventListener('click', () => {
+      controller?.abort();
+    });
+  </script>
+</body>
+</html>
+```
+
+Tested locally against the validation server. The tier selector drives the
+`tier=` query parameter; `inferred` returns contracts whose interface matches
+the SEP rule but that have not explicitly declared it. `verified` requires a
+current hash, a declaration, and the latest passing suite result. `archived`
+contracts are excluded from live counts but their detail pages remain readable.
+The snippet does not add `--rate-limit` to the server flags, but the client
+handles `429` with a single `Retry-After` sleep before retrying.
+
+CORS is served for GET requests by default (`--cors` is on). POST and other
+write methods return a JSON `{"error": ...}` response.

@@ -432,6 +432,51 @@ func WriteContractsCSV(w io.Writer, c Census) error {
 	return cw.Error()
 }
 
+// TrendPoint is one census run recorded in a trend series.
+type TrendPoint struct {
+	GeneratedAt     string   // RFC 3339 UTC
+	LatestLedger    uint32
+	Method          string
+	ParserVersion   string
+	RulesetVersions []string
+	DeclaresAnyHash Rate
+	DeclaresAnyCt   Rate
+}
+
+// Trend accumulates comparable census snapshots for one network.
+// Snapshots with incompatible methods are rejected; parser/ruleset version
+// differences are recorded in each point for the reader to interpret.
+type Trend struct {
+	Network string
+	Points  []TrendPoint
+}
+
+// AddPoint appends s to the trend. It returns a non-nil error when the
+// snapshot is incompatible: a different network, or (after the first point) a
+// different sampling method. Version differences within the same method are
+// kept in each TrendPoint rather than rejected.
+func (tr *Trend) AddPoint(s Summary) error {
+	if tr.Network == "" {
+		tr.Network = s.Network
+	}
+	if s.Network != tr.Network {
+		return fmt.Errorf("network mismatch: trend is %q, snapshot is %q", tr.Network, s.Network)
+	}
+	if len(tr.Points) > 0 && s.Method != tr.Points[0].Method {
+		return fmt.Errorf("method mismatch: trend uses %q, snapshot uses %q; comparisons across methods are not meaningful", tr.Points[0].Method, s.Method)
+	}
+	tr.Points = append(tr.Points, TrendPoint{
+		GeneratedAt:     s.GeneratedAt,
+		LatestLedger:    s.LatestLedger,
+		Method:          s.Method,
+		ParserVersion:   s.ParserVersion,
+		RulesetVersions: append([]string(nil), s.RulesetVersions...),
+		DeclaresAnyHash: s.DeclaresAny.ByHash,
+		DeclaresAnyCt:   s.DeclaresAny.ByContract,
+	})
+	return nil
+}
+
 // ContractsByHash counts measured contracts per resolved Wasm hash.
 func ContractsByHash(c Census) map[string]int {
 	out := map[string]int{}
