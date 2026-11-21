@@ -42,10 +42,12 @@ type ClaimDetail struct {
 
 // VersionSummary exposes half-open ledger ranges and executable references.
 type VersionSummary struct {
-	WasmHash   *string    `json:"wasm_hash"`
-	FromLedger uint32     `json:"from_ledger"`
-	ToLedger   *uint32    `json:"to_ledger"`
-	ExecRef    *Reference `json:"exec_ref"`
+	WasmHash             *string    `json:"wasm_hash"`
+	FromLedger           uint32     `json:"from_ledger"`
+	ToLedger             *uint32    `json:"to_ledger"`
+	ExecRef              *Reference `json:"exec_ref"`
+	CreatedTxHash        *string    `json:"created_tx_hash,omitempty"`
+	CreatedSourceAccount *string    `json:"created_source_account,omitempty"`
 }
 
 // ContractDetail implements the fixed contract response in CLAUDE.md section 5.11.
@@ -100,7 +102,7 @@ func summaries(ctx context.Context, q reader, id string) ([]VersionSummary, erro
 }
 
 func versionRange(ctx context.Context, q reader, id string, after uint32, limit int) ([]VersionSummary, error) {
-	rows, err := q.QueryContext(ctx, `SELECT wasm_hash,from_ledger,to_ledger,exec_ref_owner,exec_ref_tag FROM contract_versions WHERE contract_id = ? AND from_ledger > ? ORDER BY from_ledger LIMIT ?`, id, after, limit)
+	rows, err := q.QueryContext(ctx, `SELECT wasm_hash,from_ledger,to_ledger,exec_ref_owner,exec_ref_tag,created_tx_hash,created_source_account FROM contract_versions WHERE contract_id = ? AND from_ledger > ? ORDER BY from_ledger LIMIT ?`, id, after, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -110,8 +112,8 @@ func versionRange(ctx context.Context, q reader, id string, after uint32, limit 
 		var v VersionSummary
 		var from int64
 		var to sql.NullInt64
-		var owner, tag sql.NullString
-		if err := rows.Scan(&v.WasmHash, &from, &to, &owner, &tag); err != nil {
+		var owner, tag, txHash, srcAcct sql.NullString
+		if err := rows.Scan(&v.WasmHash, &from, &to, &owner, &tag, &txHash, &srcAcct); err != nil {
 			return nil, err
 		}
 		v.FromLedger, err = toLedger(from)
@@ -127,6 +129,12 @@ func versionRange(ctx context.Context, q reader, id string, after uint32, limit 
 		}
 		if owner.Valid {
 			v.ExecRef = &Reference{owner.String, tag.String}
+		}
+		if txHash.Valid {
+			v.CreatedTxHash = &txHash.String
+		}
+		if srcAcct.Valid {
+			v.CreatedSourceAccount = &srcAcct.String
 		}
 		out = append(out, v)
 	}
