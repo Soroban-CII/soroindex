@@ -25,16 +25,42 @@ mod oracle { soroban_sdk::contractmeta!(key = "sep", val = "40"); }
 
 The key is exactly `sep`, lowercase. Write numbers plainly: `41`, not `041` or `SEP-41`. The index accepts those in lenient mode but records an anomaly.
 
-## Check the result
+## Check the result before you deploy
 
-Build with `stellar contract build`, then read the meta:
+Build with `stellar contract build`, then run `sep47idx inspect` on the file. It
+runs the same parser, claim sources and matcher as the indexer, offline, with no
+database or RPC. It shows what the index will record once the code is deployed.
+
+Captured on 21 November 2026 from the committed `token_partial.wasm` fixture,
+which declares SEP-41 but leaves out `burn` and `burn_from`:
 
 ```text
-$ stellar contract info meta --wasm target/wasm32v1-none/release/your_contract.wasm --output json
-[{"sc_meta_v0":{"key":"sep","val":"41"}},{"sc_meta_v0":{"key":"rsver","val":"1.98.1"}}, ...]
+$ sep47idx inspect token_partial.wasm
+2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880: ok (parser 1), local file token_partial.wasm, not indexed
+Metadata: [{"key":"sep","value":"41"},{"key":"rsver","value":"1.98.1"},{"key":"rssdkver","value":"28.0.0#48d506712f964094d14176e2f0b02afcd1054567"},{"key":"rssdk_spec_shaking","value":"2"},{"key":"cliver","value":"28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"}]
+Declared SEP-41 (sep47-meta), token="41", anomaly=none
+Inferred SEP-41: partial (sep41-v0.5.2), 8 functions matched
+  Missing: burn, burn_from
 ```
 
-That output shape is from the `token_full_sep` fixture, built with stellar-cli 28.0.0. The implemented `sep47idx wasm <hash> --network testnet --db <index.db> --json` command shows the stored declaration, anomalies and interface verdict. Without `--json`, it also names each missing function and each function whose types differ from the SEP, with the expected and found signatures. See the [CLI reference](cli.md) for a captured run.
+The first line is the Wasm hash the network will use for this code. `Declared`
+lines are your `sep` meta. `Anomaly` lines flag tokens such as `041` or `SEP-41`.
+Under each `Inferred` line, `Missing` and `Mismatched` name what to fix, with the
+expected and found signatures.
+
+To fail a CI build unless the interface matches, add `--require-match`:
+
+```text
+$ sep47idx inspect token_partial.wasm --require-match 41
+...
+sep47idx inspect: required interface does not match: SEP-41 is partial
+$ echo $?
+1
+```
+
+`--json` prints the same fields as `sep47idx wasm <hash> --json`, minus the live
+contracts and indexed ledger. After deployment and indexing, `sep47idx wasm <hash>`
+shows the same evidence for the stored code. See the [CLI reference](cli.md#inspect).
 
 ## Declaring is a claim, not proof
 

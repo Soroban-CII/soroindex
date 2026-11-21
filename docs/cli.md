@@ -1,6 +1,6 @@
 # CLI reference
 
-The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. Command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2). The help output and the `maintenance` captures come from a darwin/arm64 build on 20 November 2026 (Go 1.27.4).
+The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. Command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2). The `maintenance` captures come from a darwin/arm64 build on 20 November 2026 (Go 1.27.4). The help output and the `inspect` captures come from a darwin/arm64 build on 21 November 2026 (Go 1.27.4).
 
 Every flag also has an environment variable: `SEP47IDX_` plus the flag name in capitals, dashes as underscores (`--rpc-url` is `SEP47IDX_RPC_URL`). A flag on the command line overrides the variable. Exit codes: `0` ok, `1` error, `2` not found.
 
@@ -9,8 +9,10 @@ $ ./sep47idx help
 usage: sep47idx <command> [flags]
 
 commands:
+  check        compare a seeded sample of stored contracts with live RPC entries
   contract     show a contract's claims and optional full history
   gap          list contracts that match a SEP's interface but declare nothing (inferred)
+  inspect      analyze a local Wasm file offline, as the indexer would
   maintenance  check integrity, refresh query statistics and vacuum while no sync is writing
   phase0       measure SEP-47 adoption and write the adoption report
   query        query current contracts by SEP and trust tier
@@ -279,6 +281,61 @@ $ /workspace/scratch/stage-g/sep47idx contract CAEWTQQW3RGKV67IK2K64BNXRFUYTPNID
 }
 ```
 
+## inspect
+
+Runs the indexer's own analysis on a local Wasm file and prints the declaration,
+anomalies and inferred interface verdict, with the missing and mismatched
+functions. It opens no database and makes no RPC call, so it works offline,
+before a contract is deployed. The file is parsed, never executed.
+
+It calls the same code `sync` uses to analyze and store a Wasm, with the same
+limits (`sepmeta.DefaultLimits`: 1 MiB per module, 256 KiB per section, 10,000
+sections). A file over the 1 MiB module limit exits 1 before it is read in full.
+Malformed Wasm is not an error: it is analyzed and its `parse_status` and
+`parse_error` are printed, as the indexer would store them.
+
+The output reads like `sep47idx wasm` for the same code after indexing, minus
+the live contracts and the indexed ledger, which a local file does not have.
+`--json` prints the `wasm --json` fields that come from the code: `wasm_hash`,
+`meta`, `claims`, `anomalies`, `interface_matches`, `parse_status`,
+`parse_error` and `parser_version`. `TestInspectOutputMatchesIndexedWasm`
+indexes every golden fixture through the ledger path and requires both outputs
+to agree.
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--json` | off | JSON output. |
+| `--require-match` | none | Exit 1 unless the inferred status for this SEP is `match`. A SEP with no rule file is an error. |
+| `--partial-threshold` | `0.5` | `match.partial_threshold`, as for `sync`. |
+
+Exit codes: `0` analyzed, `1` error or a failed `--require-match`.
+
+Captured on 21 November 2026 from the committed fixtures in `testdata/wasm`:
+
+```text
+$ sep47idx inspect token_partial.wasm
+2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880: ok (parser 1), local file token_partial.wasm, not indexed
+Metadata: [{"key":"sep","value":"41"},{"key":"rsver","value":"1.98.1"},{"key":"rssdkver","value":"28.0.0#48d506712f964094d14176e2f0b02afcd1054567"},{"key":"rssdk_spec_shaking","value":"2"},{"key":"cliver","value":"28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"}]
+Declared SEP-41 (sep47-meta), token="41", anomaly=none
+Inferred SEP-41: partial (sep41-v0.5.2), 8 functions matched
+  Missing: burn, burn_from
+$ echo $?
+0
+$ sep47idx inspect token_partial.wasm --require-match 41
+...
+  Missing: burn, burn_from
+sep47idx inspect: required interface does not match: SEP-41 is partial
+$ echo $?
+1
+$ sep47idx inspect token_full_sep.wasm --require-match 41
+1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96: ok (parser 1), local file token_full_sep.wasm, not indexed
+Metadata: [{"key":"sep","value":"41"},{"key":"rsver","value":"1.98.1"},{"key":"rssdkver","value":"28.0.0#48d506712f964094d14176e2f0b02afcd1054567"},{"key":"rssdk_spec_shaking","value":"2"},{"key":"cliver","value":"28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"}]
+Declared SEP-41 (sep47-meta), token="41", anomaly=none
+Inferred SEP-41: match (sep41-v0.5.2), 10 functions matched
+$ echo $?
+0
+```
+
 ## wasm
 
 Shows parsed metadata, declaration tokens, anomalies and interface matches.
@@ -293,7 +350,8 @@ input that accepts several types, such as `transfer.to`, "expected" shows the
 first accepted type. `--json` carries the same evidence in `missing` and
 `mismatched`. `TestMatchEvidenceFromRealMatcher` checks this output against the
 real matcher on the `token_partial.wasm` fixture, which prints
-`Missing: burn, burn_from`.
+`Missing: burn, burn_from`. A declaration line prints `anomaly=none` or the
+anomaly code.
 
 ```text
 $ /workspace/scratch/stage-g/sep47idx wasm 7494c2bb5e9f6dd3f831b078400746b86f748a65cf14f593b1adb3572e2feea5 --db /workspace/scratch/stage-g/testnet.db --json
