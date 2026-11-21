@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // inTx runs f in a committed transaction.
@@ -178,5 +179,107 @@ func TestExecRefReplayNeverRegressesHash(t *testing.T) {
 	inTx(t, s, func(tx *Tx) error { return tx.UpsertExecRef(ctx, "C9", "v1", "aa", 10, true) })
 	if got := queryString(t, s, `SELECT wasm_hash || '/' || updated_ledger || '/' || archived FROM exec_refs`); got != "bb/20/0" {
 		t.Fatalf("older replay regressed reference: %s", got)
+	}
+}
+
+func TestWasmFetchQueueQueueing(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	inTx(t, s, func(tx *Tx) error {
+		return tx.QueueWasmFetch(ctx, "aa", "connection timeout", "2026-01-01T00:00:30Z")
+	})
+	count, err := s.CountWasmFetchQueue(ctx)
+	if err != nil || count != 1 {
+		t.Fatalf("count = %d, err = %v, want 1", count, err)
+	}
+	queued, err := s.ListWasmFetchQueue(ctx)
+	if err != nil || len(queued) != 1 {
+		t.Fatalf("queued = %v, err = %v", queued, err)
+	}
+	if queued[0].Hash != "aa" || queued[0].AttemptCount != 1 || queued[0].LastError != "connection timeout" || queued[0].NextRetryAt != "2026-01-01T00:00:30Z" {
+		t.Fatalf("queued entry = %+v", queued[0])
+	}
+	if queued[0].LastAttemptAt != nil {
+		t.Fatalf("LastAttemptAt should be nil on first queue, got %v", *queued[0].LastAttemptAt)
+	}
+	// Second queue call should increment attempt_count and update next_retry_at
+	inTx(t, s, func(tx *Tx) error {
+		return tx.QueueWasmFetch(ctx, "aa", "still failing", "2026-01-01T00:01:00Z")
+	})
+	count, err = s.CountWasmFetchQueue(ctx)
+	if err != nil || count != 1 {
+		t.Fatalf("count after second queue = %d, err = %v, want 1", count, err)
+	}
+	queued, err = s.ListWasmFetchQueue(ctx)
+	if err != nil || len(queued) != 1 || queued[0].AttemptCount != 2 {
+		t.Fatalf("queued after second = %v, err = %v", queued, err)
+	}
+	if queued[0].LastAttemptAt != nil {
+		t.Fatalf("LastAttemptAt should still be nil (QueueWasmFetch doesn't set it), got %v", *queued[0].LastAttemptAt)
+	}
+}
+
+func TestWasmFetchQueueRetrySuccess(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	inTx(t, s, func(tx *Tx) error {
+		return tx.QueueWasmFetch(ctx, "aa", "timeout", "2026-01-01T00:00:30Z")
+	})
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpdateWasmFetchAttempt(ctx, "aa", "success", "2026-01-01T00:01:00Z")
+	})
+	queued, err := s.ListWasmFetchQueue(ctx)
+	if err != nil || len(queued) != 1 {
+		t.Fatalf("queued after update = %v, err = %v", queued, err)
+	}
+	if queued[0].AttemptCount != 2 || queued[0].LastAttemptAt == nil || queued[0].LastError != "success" {
+		t.Fatalf("updated entry = %+v", queued[0])
+	}
+	// LastAttemptAt should be a valid RFC3339 timestamp (not the test's fixed time, but current time)
+	if _, err := time.Parse(time.RFC3339, *queued[0].LastAttemptAt); err != nil {
+		t.Fatalf("LastAttemptAt is not valid RFC3339: %v", *queued[0].LastAttemptAt)
+	}
+	// Remove on success
+	inTx(t, s, func(tx *Tx) error {
+		return tx.RemoveWasmFetch(ctx, "aa")
+	})
+	count, err := s.CountWasmFetchQueue(ctx)
+	if err != nil || count != 0 {
+		t.Fatalf("count after remove = %d, err = %v, want 0", count, err)
+	}
+}
+
+func TestWasmFetchQueuePermanentFailure(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	inTx(t, s, func(tx *Tx) error {
+		return tx.QueueWasmFetch(ctx, "aa", "not found", "2026-01-01T00:00:30Z")
+	})
+	// Simulate multiple retries
+	for i := 0; i < 5; i++ {
+		inTx(t, s, func(tx *Tx) error {
+			return tx.UpdateWasmFetchAttempt(ctx, "aa", "still not found", "2026-01-01T00:00:30Z")
+		})
+	}
+	queued, err := s.ListWasmFetchQueue(ctx)
+	if err != nil || len(queued) != 1 {
+		t.Fatalf("queued after retries = %v, err = %v", queued, err)
+	}
+	if queued[0].AttemptCount != 6 {
+		t.Fatalf("attempt count = %d, want 6", queued[0].AttemptCount)
+	}
+	if queued[0].LastAttemptAt == nil {
+		t.Fatalf("LastAttemptAt should be set")
+	}
+	if _, err := time.Parse(time.RFC3339, *queued[0].LastAttemptAt); err != nil {
+		t.Fatalf("LastAttemptAt is not valid RFC3339: %v", *queued[0].LastAttemptAt)
+	}
+	// Eventually remove after giving up
+	inTx(t, s, func(tx *Tx) error {
+		return tx.RemoveWasmFetch(ctx, "aa")
+	})
+	count, err := s.CountWasmFetchQueue(ctx)
+	if err != nil || count != 0 {
+		t.Fatalf("count after remove = %d, err = %v, want 0", count, err)
 	}
 }

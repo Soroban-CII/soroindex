@@ -29,5 +29,6 @@
   "ruleset_versions": {
     "41": "sep41-v0.5.2"
   },
-  "parser_version": "1"
+  "parser_version": "1",
+  "queued_wasm_fetches": 0
 }

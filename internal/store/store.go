@@ -241,3 +241,32 @@ func (s *Store) SetState(ctx context.Context, key, value string) error {
 
 // IsReadOnly lets HTTP servers reject handles capable of changing the index.
 func (s *Store) IsReadOnly() bool { return s.readOnly }
+
+// CountWasmFetchQueue returns the number of queued wasm fetches.
+func (s *Store) CountWasmFetchQueue(ctx context.Context) (int, error) {
+	var n int
+	err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM wasm_fetch_queue`).Scan(&n)
+	return n, err
+}
+
+// ListWasmFetchQueue returns all queued wasm fetches.
+func (s *Store) ListWasmFetchQueue(ctx context.Context) ([]WasmFetchQueueRow, error) {
+	rows, err := s.DB.QueryContext(ctx, `SELECT hash, first_failed_at, last_attempt_at, attempt_count, next_retry_at, last_error FROM wasm_fetch_queue ORDER BY next_retry_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []WasmFetchQueueRow
+	for rows.Next() {
+		var r WasmFetchQueueRow
+		var lastAttempt sql.NullString
+		if err := rows.Scan(&r.Hash, &r.FirstFailedAt, &lastAttempt, &r.AttemptCount, &r.NextRetryAt, &r.LastError); err != nil {
+			return nil, err
+		}
+		if lastAttempt.Valid {
+			r.LastAttemptAt = &lastAttempt.String
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

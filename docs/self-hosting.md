@@ -18,12 +18,12 @@ Every flag can come from an environment variable (see [CLI reference](cli.md)):
 
 | Variable | Use |
 | --- | --- |
-| `SEP47IDX_NETWORK` | `mainnet` or `testnet` |
+| `SEP47IDX_NETWORK` | `mainnet`, `testnet`, or `futurenet` |
 | `SEP47IDX_RPC_URL` | RPC endpoint; required for mainnet |
 | `SEP47IDX_DB` | Database path |
 | `SEP47IDX_RPC_TIMEOUT`, `SEP47IDX_RPC_CONCURRENCY` | RPC tuning |
 
-Stellar's docs list mainnet RPC providers. Several public endpoints answered a 200-key `getLedgerEntries` call correctly on 7 October 2026, among them `https://soroban-rpc.mainnet.stellar.gateway.fm`, which the mainnet census used.
+Stellar's docs list mainnet RPC providers. Several public endpoints answered a 200-key `getLedgerEntries` call correctly on 7 October 2026, among them `https://soroban-rpc.mainnet.stellar.gateway.fm`, which the mainnet census used. Futurenet has a public SDF RPC at `https://rpc-futurenet.stellar.org`.
 
 ## Seed
 
