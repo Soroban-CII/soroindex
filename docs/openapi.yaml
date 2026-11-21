@@ -1,0 +1,647 @@
+openapi: "3.1.0"
+info:
+  title: soroindex API
+  description: |
+    Read-only index of Soroban smart contracts: declared SEPs, inferred interface matches,
+    verified conformance results, and version history.
+    A *pass* verdict means the conformance suite's checks passed; it is not a security audit.
+  version: "0.1.0"
+  license:
+    name: Apache-2.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /v1/contracts:
+    get:
+      operationId: listContracts
+      summary: List contracts satisfying the given filters
+      description: |
+        Returns current (non-archived) contracts. The `tier` parameter selects the evidence
+        level. `implements` requires every listed SEP (AND); `implements_any` requires at
+        least one (OR). Both may be combined. `/contracts` is an alias for this endpoint.
+      parameters:
+        - $ref: "#/components/parameters/implements"
+        - $ref: "#/components/parameters/implements_any"
+        - $ref: "#/components/parameters/tier"
+        - $ref: "#/components/parameters/kind"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Page of matching contracts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /contracts:
+    get:
+      operationId: listContractsAlias
+      summary: Alias for /v1/contracts
+      parameters:
+        - $ref: "#/components/parameters/implements"
+        - $ref: "#/components/parameters/implements_any"
+        - $ref: "#/components/parameters/tier"
+        - $ref: "#/components/parameters/kind"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Page of matching contracts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/contracts/{id}:
+    get:
+      operationId: getContract
+      summary: Retrieve full detail for one contract
+      description: |
+        Returns the contract's current claims across all tiers, its full version history,
+        archival status, and executable reference when `kind` is `wasm_ref`.
+        Takes no query parameters.
+      parameters:
+        - $ref: "#/components/parameters/contractId"
+      responses:
+        "200":
+          description: Contract detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/contracts/{id}/history:
+    get:
+      operationId: getContractHistory
+      summary: Claims for every Wasm version of a contract
+      description: |
+        Returns each version range with the claims active at that time. Old verifications
+        appear with `stale: true`. Pagination is scoped to the contract.
+      parameters:
+        - $ref: "#/components/parameters/contractId"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Paged version history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/wasm/{hash}:
+    get:
+      operationId: getWasm
+      summary: Parsed meta, claims, anomalies, and interface matches for one Wasm hash
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          description: 64 lowercase hex characters
+          schema:
+            type: string
+            pattern: "^[0-9a-f]{64}$"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: Wasm evidence record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WasmDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/seps:
+    get:
+      operationId: listSeps
+      summary: Live contract counts per SEP number and trust tier
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: SEP count rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SepPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/stats:
+    get:
+      operationId: getStats
+      summary: Stored adoption numbers, anomalies, and sync state
+      description: Takes no query parameters.
+      responses:
+        "200":
+          description: Adoption statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stats"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+  /v1/health:
+    get:
+      operationId: getHealth
+      summary: Network, last indexed ledger, and sync lag
+      description: Takes no query parameters.
+      responses:
+        "200":
+          description: Health record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "500":
+          $ref: "#/components/responses/Internal"
+
+components:
+  parameters:
+    contractId:
+      name: id
+      in: path
+      required: true
+      description: Full C… strkey (56 characters)
+      schema:
+        type: string
+        pattern: "^C[A-Z2-7]{55}$"
+
+    implements:
+      name: implements
+      in: query
+      required: false
+      description: Comma-separated SEP numbers; contract must implement all of them (AND)
+      schema:
+        type: string
+        example: "41"
+
+    implements_any:
+      name: implements_any
+      in: query
+      required: false
+      description: Comma-separated SEP numbers; contract must implement at least one (OR)
+      schema:
+        type: string
+        example: "41,46"
+
+    tier:
+      name: tier
+      in: query
+      required: false
+      description: Trust tier to query. Default is `declared`.
+      schema:
+        type: string
+        enum: [declared, inferred, verified, protocol]
+        default: declared
+
+    kind:
+      name: kind
+      in: query
+      required: false
+      description: Filter by executable kind
+      schema:
+        type: string
+        enum: [wasm, wasm_ref, sac]
+
+    limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size, 1–500. Default 50.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 50
+
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque base64url continuation token from `next_cursor`
+      schema:
+        type: string
+
+  schemas:
+    ContractSummary:
+      type: object
+      required: [contract_id, kind, archived]
+      properties:
+        contract_id:
+          type: string
+          description: C… strkey
+        kind:
+          type: string
+          enum: [wasm, wasm_ref, sac]
+        wasm_hash:
+          type: ["string", "null"]
+          description: 64 lowercase hex characters; null for SAC or unresolved wasm_ref
+        exec_ref:
+          $ref: "#/components/schemas/ExecRef"
+        archived:
+          type: boolean
+
+    ExecRef:
+      type: ["object", "null"]
+      description: CAP-85 executable reference; null unless kind is wasm_ref
+      properties:
+        owner:
+          type: string
+        tag:
+          type: string
+      required: [owner, tag]
+
+    ContractPage:
+      type: object
+      required: [contracts, parser_version, tier]
+      properties:
+        contracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContractSummary"
+        next_cursor:
+          type: ["string", "null"]
+        parser_version:
+          type: string
+        tier:
+          type: string
+        ruleset_versions:
+          type: object
+          description: Present when tier is `inferred`; maps SEP number to ruleset version
+          additionalProperties:
+            type: string
+
+    InferredDetail:
+      type: object
+      required: [status, ruleset_version, missing, mismatched]
+      properties:
+        status:
+          type: string
+          enum: [match, partial, mismatch, no_spec]
+        ruleset_version:
+          type: string
+        missing:
+          type: array
+          items:
+            type: string
+        mismatched:
+          type: array
+          items:
+            type: object
+
+    VerificationDetail:
+      type: object
+      required: [verdict, tool, tool_version, run_at, stale]
+      properties:
+        verdict:
+          type: string
+          enum: [pass, fail, unverifiable]
+        tool:
+          type: string
+        tool_version:
+          type: string
+        run_at:
+          type: string
+          format: date-time
+        stale:
+          type: boolean
+
+    ClaimDetail:
+      type: object
+      required: [sep, declared, protocol, source]
+      properties:
+        sep:
+          type: integer
+        declared:
+          type: boolean
+        inferred:
+          oneOf:
+            - $ref: "#/components/schemas/InferredDetail"
+            - type: "null"
+        verified:
+          oneOf:
+            - $ref: "#/components/schemas/VerificationDetail"
+            - type: "null"
+          description: null when no verification has run; stale when the Wasm changed since
+        protocol:
+          type: boolean
+        source:
+          type: string
+        anomaly:
+          type: ["string", "null"]
+
+    VersionSummary:
+      type: object
+      required: [from_ledger]
+      properties:
+        wasm_hash:
+          type: ["string", "null"]
+        from_ledger:
+          type: integer
+          format: int64
+        to_ledger:
+          type: ["integer", "null"]
+          format: int64
+          description: null while this version is current
+        exec_ref:
+          $ref: "#/components/schemas/ExecRef"
+
+    ContractDetail:
+      type: object
+      required: [contract_id, network, kind, archived, claims, history, parser_version, as_of_ledger]
+      properties:
+        contract_id:
+          type: string
+        network:
+          type: string
+        kind:
+          type: string
+          enum: [wasm, wasm_ref, sac]
+        wasm_hash:
+          type: ["string", "null"]
+        exec_ref:
+          $ref: "#/components/schemas/ExecRef"
+        archived:
+          type: boolean
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClaimDetail"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/VersionSummary"
+        parser_version:
+          type: string
+        as_of_ledger:
+          type: integer
+          format: int64
+
+    HistoryVersion:
+      allOf:
+        - $ref: "#/components/schemas/VersionSummary"
+        - type: object
+          required: [claims]
+          properties:
+            claims:
+              type: array
+              items:
+                $ref: "#/components/schemas/ClaimDetail"
+
+    HistoryDetail:
+      type: object
+      required: [contract_id, network, history, parser_version, as_of_ledger]
+      properties:
+        contract_id:
+          type: string
+        network:
+          type: string
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/HistoryVersion"
+        parser_version:
+          type: string
+        as_of_ledger:
+          type: integer
+          format: int64
+        next_cursor:
+          type: ["string", "null"]
+
+    InterfaceMatch:
+      type: object
+      required: [sep, ruleset_version, status, ok_count, missing, mismatched, matched_variants]
+      properties:
+        sep:
+          type: integer
+        ruleset_version:
+          type: string
+        status:
+          type: string
+          enum: [match, partial, mismatch, no_spec]
+        ok_count:
+          type: integer
+        missing:
+          type: array
+          items:
+            type: string
+        mismatched:
+          type: array
+          items:
+            type: object
+        matched_variants:
+          type: object
+          additionalProperties:
+            type: string
+
+    MetaKV:
+      type: object
+      required: [key, value]
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+
+    WasmClaim:
+      type: object
+      required: [sep, source, raw_token]
+      properties:
+        sep:
+          type: integer
+        source:
+          type: string
+        raw_token:
+          type: string
+        anomaly:
+          type: ["string", "null"]
+
+    WasmDetail:
+      type: object
+      required: [wasm_hash, meta, claims, anomalies, interface_matches, contracts, parse_status, parser_version, as_of_ledger]
+      properties:
+        wasm_hash:
+          type: string
+        meta:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetaKV"
+        claims:
+          type: array
+          items:
+            $ref: "#/components/schemas/WasmClaim"
+        anomalies:
+          type: array
+          items:
+            type: object
+        interface_matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/InterfaceMatch"
+        contracts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContractSummary"
+        next_cursor:
+          type: ["string", "null"]
+        parse_status:
+          type: string
+          enum: [ok, partial, error, archived]
+        parse_error:
+          type: ["string", "null"]
+        parser_version:
+          type: string
+        as_of_ledger:
+          type: integer
+          format: int64
+
+    SepRow:
+      type: object
+      required: [sep, declared, inferred, verified, protocol]
+      properties:
+        sep:
+          type: integer
+        declared:
+          type: integer
+        inferred:
+          type: integer
+        verified:
+          type: integer
+        protocol:
+          type: integer
+
+    SepPage:
+      type: object
+      required: [seps, parser_version, as_of_ledger]
+      properties:
+        seps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SepRow"
+        next_cursor:
+          type: ["string", "null"]
+        ruleset_versions:
+          type: object
+          additionalProperties:
+            type: string
+        parser_version:
+          type: string
+        as_of_ledger:
+          type: integer
+          format: int64
+
+    Stats:
+      type: object
+      required: [network, adoption, anomalies, archived_contracts, total_contracts, last_ledger, parser_version]
+      properties:
+        network:
+          type: string
+        adoption:
+          type: object
+          description: Adoption counters (fields match the Go AdoptionStats struct)
+        anomalies:
+          type: object
+          description: Anomaly token counts keyed by anomaly code
+          additionalProperties:
+            type: integer
+        archived_contracts:
+          type: integer
+        total_contracts:
+          type: integer
+        last_ledger:
+          type: integer
+          format: int64
+        ruleset_versions:
+          type: object
+          additionalProperties:
+            type: string
+        parser_version:
+          type: string
+
+    Health:
+      type: object
+      required: [status, network, last_ledger, latest_ledger, lag]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        network:
+          type: string
+        last_ledger:
+          type: integer
+          format: int64
+        latest_ledger:
+          type: integer
+          format: int64
+        lag:
+          type: integer
+          format: int64
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [not_found, bad_request, rate_limited, internal]
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Invalid parameter or cursor
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Internal:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
