@@ -280,3 +280,71 @@ func TestLoadRules(t *testing.T) {
 		}
 	})
 }
+
+func sep40(t *testing.T) RuleFile {
+	t.Helper()
+	rules, err := LoadRules(os.DirFS("../../rules"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rules {
+		if r.SEP == 40 {
+			return r
+		}
+	}
+	t.Fatal("no sep-0040.json")
+	return RuleFile{}
+}
+
+// fullOracle returns a spec satisfying every SEP-40 rule.
+func fullOracle() []sepmeta.FnSig {
+	return []sepmeta.FnSig{
+		fn("base", nil, "udt:Asset"),
+		fn("assets", nil, "Vec<udt:Asset>"),
+		fn("decimals", nil, "u32"),
+		fn("resolution", nil, "u32"),
+		fn("price", []string{"udt:Asset", "u64"}, "Option<udt:PriceData>"),
+		fn("prices", []string{"udt:Asset", "u32"}, "Option<Vec<udt:PriceData>>"),
+		fn("lastprice", []string{"udt:Asset"}, "Option<udt:PriceData>"),
+	}
+}
+
+func TestSEP40Match(t *testing.T) {
+	r := sep40(t)
+	if r.RulesetVersion != "sep40-v0.1.0" || r.SEP != 40 {
+		t.Fatalf("unexpected rule: sep=%d version=%s", r.SEP, r.RulesetVersion)
+	}
+	t.Run("full oracle matches", func(t *testing.T) {
+		got := Match(fullOracle(), r)
+		if got.Status != StatusMatch || got.OKCount != 7 || got.RequiredCount != 7 {
+			t.Fatalf("status %s ok %d/%d, want match 7/7", got.Status, got.OKCount, got.RequiredCount)
+		}
+		if len(got.Missing) != 0 {
+			t.Errorf("unexpected missing: %v", got.Missing)
+		}
+	})
+	t.Run("non-oracle (sep-41 token) mismatches", func(t *testing.T) {
+		got := Match(fullToken(), r)
+		if got.Status != StatusMismatch {
+			t.Fatalf("status %s, want mismatch", got.Status)
+		}
+		if got.OKCount != 1 {
+			t.Fatalf("ok %d, want 1 (decimals)", got.OKCount)
+		}
+	})
+	t.Run("missing lastprice is partial", func(t *testing.T) {
+		got := Match(without(fullOracle(), "lastprice"), r)
+		if got.Status != StatusPartial {
+			t.Fatalf("status %s, want partial", got.Status)
+		}
+		if got.OKCount != 6 {
+			t.Fatalf("ok %d, want 6", got.OKCount)
+		}
+	})
+	t.Run("empty spec is mismatch", func(t *testing.T) {
+		got := Match(nil, r)
+		if got.Status != StatusMismatch || got.OKCount != 0 {
+			t.Fatalf("status %s ok %d, want mismatch 0", got.Status, got.OKCount)
+		}
+	})
+}
