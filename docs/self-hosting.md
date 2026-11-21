@@ -37,7 +37,20 @@ On 7 October 2026 a seed of all 156,173 mainnet contracts through a public endpo
 
 ## Backups
 
-The index is one SQLite file per network in WAL mode. Back it up with `sqlite3 data/mainnet.db ".backup backup.db"` while the indexer runs, or copy the `.db` file while it is stopped. A database records its network passphrase and refuses to open for another network.
+The index is one SQLite file per network in WAL mode. Use `sep47idx backup` to create a consistent snapshot that is safe to run while `sync` is writing.
+
+```sh
+sep47idx backup --network mainnet --out data/mainnet-backup.db
+# backup written to data/mainnet-backup.db (schema_version=N, last_ledger=M, elapsed=2.1s)
+```
+
+`backup` uses SQLite's `VACUUM INTO` statement, which opens an exclusive read transaction on the source and writes a defragmented copy. It does **not** block concurrent writes: WAL-mode writers continue normally during the snapshot. After the file is written, `backup` opens it read-only and validates the network passphrase, schema version and committed ledger. If validation fails the destination file is removed.
+
+The destination path must not already exist; SQLite refuses to overwrite an existing file. To rotate backups, choose a timestamped name or move the previous file first.
+
+**Restore** by replacing the live database file while sync is stopped, then restarting sync. A snapshot records its network passphrase and schema version and refuses to open for a different network.
+
+**Note:** `sep47idx maintenance` should be run before a backup you intend to keep long-term. Maintenance checkpoints the WAL, reclaims free pages and refreshes query statistics, leaving the database in the smallest and most consistent state.
 
 ## Maintenance
 
