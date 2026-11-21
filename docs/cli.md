@@ -444,6 +444,30 @@ serving testnet read-only on 127.0.0.1:8080
 The [API reference](api.md) contains actual requests and responses from this
 server. No public deployment is claimed.
 
+## check
+
+Compares a reproducible sample of stored contracts with live RPC entries. It
+opens the database read-only and never writes. Use it after a sync to catch
+index drift: a contract whose kind, Wasm hash, CAP-85 reference or SAC asset no
+longer matches the network.
+
+```sh
+sep47idx check --network testnet --db ./data/testnet.db --sample 100 --seed 1
+```
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--sample` | `100` | Contracts to compare, 1..100000. |
+| `--seed` | `1` | Sampling seed. The same database and seed always pick the same contracts. |
+| `--json` | off | Print the full result as JSON. |
+
+Entries whose `lastModifiedLedgerSeq` is after the index's `last_ledger` are
+counted as `changed_after_index` and skipped, because the index cannot know
+about a change it has not synced yet. Entries the index already records as
+archived are counted, not reported. Any other missing or differing field is a
+difference. Exit 0 means no differences; exit 1 means at least one difference
+or an error; exit 2 means the database has no `last_ledger`.
+
 ## maintenance
 
 Keeps a long-running index healthy without hand-written SQL. It takes the
