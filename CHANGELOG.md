@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Add `GET /v1/contracts?ids=...`, a bulk lookup of up to 100 contract IDs that
+  reports unknown IDs in `not_found` and charges the rate limit per 10 IDs (#114).
+- Add `sep47idx inspect <file.wasm>`, which runs the indexer's analysis on a local
+  file with no database or RPC, with `--json` and `--require-match` (#115).
+- Add `GET /v1/stats/toolchains`, the `rsver`, `rssdkver` and `cliver`
+  distribution with declaration and SEP-41 match rates by hash and by contract (#113).
+- Snapshot every API endpoint over a fixture index built from recorded ledgers
+  and the golden Wasm, and generate the docs/api.md fixture examples from them (#112).
+- Fix `sep47idx wasm` printing a memory address instead of the anomaly code on
+  declaration lines.
+
 - Build with Go 1.27.4 for GO-2026-6859 (net/http `MaxBytesReader` header race in
   the HTTP/1 server), reported by the security workflow on 16 November 2026.
 
