@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sort"
+	"sync"
 	"testing"
 
 	"github.com/Soroban-CII/soroindex/internal/rpc"
@@ -98,5 +101,110 @@ func TestServerRoutingAndMissingProgress(t *testing.T) {
 	s.ServeHTTP(w, httptest.NewRequest("OPTIONS", "/v1/health", nil))
 	if w.Code != 204 {
 		t.Fatal(w.Code)
+	}
+}
+
+// TestConcurrentWALReadersDuringSync verifies that multiple readers can query
+// the API without errors while a writer is concurrently updating sync_state,
+// which is the pattern that occurs during a live sync. SQLite WAL mode must
+// allow this without returning "database is locked" errors to any reader.
+//
+// Run with -race to confirm there are no data races in the store layer.
+func TestConcurrentWALReadersDuringSync(t *testing.T) {
+	const numReaders = 20
+	const numWrites = 50
+
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "wal_concurrent.db")
+
+	// Open a writable store (simulating the sync loop).
+	w, err := store.Open(ctx, path, store.Options{Passphrase: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Close() })
+
+	// Seed the initial last_ledger.
+	if err := w.SetState(ctx, store.KeyLastLedger, "1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Open a read-only store pointing to the same file (simulating the API process).
+	ro, err := store.Open(ctx, path, store.Options{Passphrase: "test", ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ro.Close() })
+
+	srv, err := New(Options{Store: ro, Network: "testnet", RPC: tip{sequence: 100}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Writer goroutine: updates last_ledger from 2..numWrites, simulating sync.
+	writeErrs := make(chan error, 1)
+	go func() {
+		for i := 2; i <= numWrites; i++ {
+			if err := w.SetState(ctx, store.KeyLastLedger, fmt.Sprint(i)); err != nil {
+				writeErrs <- err
+				return
+			}
+		}
+		close(writeErrs)
+	}()
+
+	// Reader goroutines: each issues a /v1/health request and records the
+	// last_ledger it observed.
+	type result struct {
+		code   int
+		ledger uint32
+	}
+	results := make([]result, numReaders)
+	var wg sync.WaitGroup
+	for i := 0; i < numReaders; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/health", nil))
+			results[i].code = rec.Code
+			if rec.Code == 200 {
+				var h healthResponse
+				if err := json.Unmarshal(rec.Body.Bytes(), &h); err == nil {
+					results[i].ledger = h.LastLedger
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Writer must have completed without error.
+	if err := <-writeErrs; err != nil {
+		t.Fatalf("writer error: %v", err)
+	}
+
+	// Every reader must have received a 200 (no "database is locked" errors).
+	var ledgers []uint32
+	for _, r := range results {
+		if r.code != 200 {
+			t.Errorf("reader got status %d", r.code)
+			continue
+		}
+		ledgers = append(ledgers, r.ledger)
+	}
+
+	// Every observed ledger must be a valid snapshot (between 1 and numWrites).
+	for _, l := range ledgers {
+		if l < 1 || l > numWrites {
+			t.Errorf("reader saw ledger %d outside expected range [1,%d]", l, numWrites)
+		}
+	}
+
+	// p95 of observed ledgers: a crude measure that readers saw recent data.
+	if len(ledgers) > 0 {
+		sort.Slice(ledgers, func(i, j int) bool { return ledgers[i] < ledgers[j] })
+		p95 := ledgers[int(float64(len(ledgers))*0.95)]
+		t.Logf("WAL concurrent read p95 last_ledger=%d (max=%d)", p95, numWrites)
 	}
 }

@@ -100,6 +100,19 @@ func printClaims(out io.Writer, claims []store.ClaimDetail) error {
 		if _, err := fmt.Fprintf(out, "SEP-%d: declared=%t, inferred=%s, verified=%s, protocol=%t\n", c.SEP, c.Declared, inferred, verified, c.Protocol); err != nil {
 			return err
 		}
+		if c.Inferred != nil {
+			switch c.Inferred.Status {
+			case "no_spec":
+				if _, err := fmt.Fprintln(out, "  (no spec section — interface cannot be compared)"); err != nil {
+					return err
+				}
+			default:
+				m := store.WasmMatch{SEP: c.SEP, Missing: c.Inferred.Missing, Mismatched: c.Inferred.Mismatched}
+				if err := writeMatchEvidence(out, m); err != nil {
+					return err
+				}
+			}
+		}
 		if c.Verified != nil {
 			if _, err := fmt.Fprintln(out, "A pass means the suite's checks passed; it is not a security audit."); err != nil {
 				return err
