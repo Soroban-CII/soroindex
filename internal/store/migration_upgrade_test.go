@@ -54,6 +54,8 @@ var sampleRows = map[string][]map[string]any{
 		{"owner_contract_id": "COWNER", "tag": "v1", "wasm_hash": hex64("a"), "updated_ledger": 11, "archived": 0},
 		{"owner_contract_id": "COWNER", "tag": "gone", "updated_ledger": 12, "archived": 1},
 	},
+	// Populated by init() with real checksums so verifyChecksums() accepts them.
+	"migration_checksums": {},
 	"wasm_claims": {
 		{"wasm_hash": hex64("a"), "sep": 41, "source": "sep47-meta", "raw_token": "41"},
 		{"wasm_hash": hex64("a"), "sep": 40, "source": "sep47-meta", "raw_token": "040", "anomaly": "leading_zero"},
@@ -192,8 +194,13 @@ func seed(t *testing.T, db *sql.DB, version int) {
 			// Table and column names come from sqlite_master and the fixed
 			// sampleRows literal above; every value is bound.
 			q := `INSERT INTO "` + table + `" ("` + strings.Join(names, `","`) + `") VALUES (` + strings.Join(marks, ",") + `)` // #nosec G202 -- test-only, names from schema
-			if table == "sync_state" {
+			switch table {
+			case "sync_state":
 				q += ` ON CONFLICT (key) DO UPDATE SET value = excluded.value`
+			case "migration_checksums":
+				// buildAtVersion populates this table via migrate(); use upsert
+				// so sampleRows can still exercise it without a unique conflict.
+				q += ` ON CONFLICT (version) DO UPDATE SET name=excluded.name, checksum=excluded.checksum`
 			}
 			if _, err := db.Exec(q, args...); err != nil {
 				t.Fatalf("schema %d: seed %s row %d: %v", version, table, i, err)
@@ -381,4 +388,18 @@ func TestMigration0002LeavesOldFunctionsNull(t *testing.T) {
 	if err := s.DB.QueryRow(`SELECT count(*) FROM wasm WHERE has_spec = 1 AND functions_json IS NULL`).Scan(&withSpec); err != nil || withSpec == 0 {
 		t.Fatalf("expected pre-0002 Wasm with a spec and no signatures (the --recompute re-fetch case); got %d, %v", withSpec, err)
 	}
+}
+
+func init() {
+	// Populate migration_checksums sampleRows with the real checksums so that
+	// verifyChecksums() does not reject a database seeded for upgrade tests.
+	ms, err := loadMigrations()
+	if err != nil {
+		panic("migration_upgrade_test init: " + err.Error())
+	}
+	rows := make([]map[string]any, 0, len(ms))
+	for _, m := range ms {
+		rows = append(rows, map[string]any{"version": m.version, "name": m.name, "checksum": m.checksum})
+	}
+	sampleRows["migration_checksums"] = rows
 }
