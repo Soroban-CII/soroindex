@@ -1,0 +1,14 @@
+{
+  "contracts": [
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN6IE",
+      "kind": "sac",
+      "wasm_hash": null,
+      "exec_ref": null,
+      "archived": false
+    }
+  ],
+  "next_cursor": null,
+  "parser_version": "1",
+  "tier": "protocol"
+}

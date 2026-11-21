@@ -1,0 +1,33 @@
+{
+  "network": "testnet",
+  "adoption": {
+    "LiveSAC": 1,
+    "LiveWasm": 5,
+    "LiveWasmRef": 1,
+    "WasmRefUnresolved": 0,
+    "MeasuredContracts": 6,
+    "UsedHashes": 5,
+    "DeclaringContracts": 5,
+    "DeclaringUsedHashes": 4,
+    "SEP41ByContract": {
+      "match": 3,
+      "mismatch": 2,
+      "partial": 1
+    },
+    "SEP41ByUsedHash": {
+      "match": 2,
+      "mismatch": 2,
+      "partial": 1
+    },
+    "GapContracts": 1,
+    "GapUsedHashes": 1
+  },
+  "anomalies": {},
+  "archived_contracts": 12,
+  "total_contracts": 19,
+  "last_ledger": 5062910,
+  "ruleset_versions": {
+    "41": "sep41-v0.5.2"
+  },
+  "parser_version": "1"
+}

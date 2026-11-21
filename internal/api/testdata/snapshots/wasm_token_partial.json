@@ -1,0 +1,64 @@
+{
+  "wasm_hash": "2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880",
+  "meta": [
+    {
+      "key": "sep",
+      "value": "41"
+    },
+    {
+      "key": "rsver",
+      "value": "1.98.1"
+    },
+    {
+      "key": "rssdkver",
+      "value": "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+    },
+    {
+      "key": "rssdk_spec_shaking",
+      "value": "2"
+    },
+    {
+      "key": "cliver",
+      "value": "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+    }
+  ],
+  "claims": [
+    {
+      "sep": 41,
+      "source": "sep47-meta",
+      "raw_token": "41",
+      "anomaly": null
+    }
+  ],
+  "anomalies": [],
+  "interface_matches": [
+    {
+      "sep": 41,
+      "ruleset_version": "sep41-v0.5.2",
+      "status": "partial",
+      "ok_count": 8,
+      "missing": [
+        "burn",
+        "burn_from"
+      ],
+      "mismatched": [],
+      "matched_variants": {
+        "transfer.inputs[1]": "MuxedAddress"
+      }
+    }
+  ],
+  "contracts": [
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALGRU",
+      "kind": "wasm",
+      "wasm_hash": "2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880",
+      "exec_ref": null,
+      "archived": false
+    }
+  ],
+  "next_cursor": null,
+  "parse_status": "ok",
+  "parse_error": null,
+  "parser_version": "1",
+  "as_of_ledger": 5062910
+}

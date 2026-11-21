@@ -1,0 +1,43 @@
+{
+  "wasm_hash": "92b458a551b0e426d6ad96fcf61f969ee91b7dc32f8c93d9286a5ba5239aa6dd",
+  "meta": [
+    {
+      "key": "rsver",
+      "value": "1.95.0"
+    },
+    {
+      "key": "rssdkver",
+      "value": "26.0.1#f52b6aad85f18c5e312ff3f60e57cb613274e6bb"
+    }
+  ],
+  "claims": [],
+  "anomalies": [],
+  "interface_matches": [
+    {
+      "sep": 41,
+      "ruleset_version": "sep41-v0.5.2",
+      "status": "mismatch",
+      "ok_count": 0,
+      "missing": [
+        "allowance",
+        "approve",
+        "balance",
+        "burn",
+        "burn_from",
+        "decimals",
+        "name",
+        "symbol",
+        "transfer",
+        "transfer_from"
+      ],
+      "mismatched": [],
+      "matched_variants": {}
+    }
+  ],
+  "contracts": [],
+  "next_cursor": null,
+  "parse_status": "ok",
+  "parse_error": null,
+  "parser_version": "1",
+  "as_of_ledger": 5062910
+}

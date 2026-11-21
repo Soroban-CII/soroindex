@@ -1,0 +1,25 @@
+{
+  "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQN7F",
+  "network": "testnet",
+  "kind": "wasm_ref",
+  "wasm_hash": null,
+  "exec_ref": {
+    "owner": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASFXV",
+    "tag": "never-defined"
+  },
+  "archived": true,
+  "claims": [],
+  "history": [
+    {
+      "wasm_hash": null,
+      "from_ledger": 5062909,
+      "to_ledger": null,
+      "exec_ref": {
+        "owner": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASFXV",
+        "tag": "never-defined"
+      }
+    }
+  ],
+  "parser_version": "1",
+  "as_of_ledger": 5062910
+}

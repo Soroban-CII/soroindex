@@ -1,0 +1,14 @@
+{
+  "contracts": [
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU",
+      "kind": "wasm",
+      "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+      "exec_ref": null,
+      "archived": false
+    }
+  ],
+  "next_cursor": null,
+  "parser_version": "1",
+  "tier": "verified"
+}

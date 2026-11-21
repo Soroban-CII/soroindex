@@ -1,0 +1,71 @@
+{
+  "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+  "meta": [
+    {
+      "key": "sep",
+      "value": "41"
+    },
+    {
+      "key": "rsver",
+      "value": "1.98.1"
+    },
+    {
+      "key": "rssdkver",
+      "value": "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+    },
+    {
+      "key": "rssdk_spec_shaking",
+      "value": "2"
+    },
+    {
+      "key": "cliver",
+      "value": "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+    }
+  ],
+  "claims": [
+    {
+      "sep": 41,
+      "source": "sep47-meta",
+      "raw_token": "41",
+      "anomaly": null
+    }
+  ],
+  "anomalies": [],
+  "interface_matches": [
+    {
+      "sep": 41,
+      "ruleset_version": "sep41-v0.5.2",
+      "status": "match",
+      "ok_count": 10,
+      "missing": [],
+      "mismatched": [],
+      "matched_variants": {
+        "transfer.inputs[1]": "MuxedAddress"
+      }
+    }
+  ],
+  "contracts": [
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU",
+      "kind": "wasm",
+      "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+      "exec_ref": null,
+      "archived": false
+    },
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPWAU",
+      "kind": "wasm_ref",
+      "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+      "exec_ref": {
+        "owner": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASFXV",
+        "tag": "token-v1"
+      },
+      "archived": false
+    }
+  ],
+  "next_cursor": null,
+  "parse_status": "ok",
+  "parse_error": null,
+  "parser_version": "1",
+  "as_of_ledger": 5062910
+}

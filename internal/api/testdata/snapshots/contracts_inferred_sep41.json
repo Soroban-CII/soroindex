@@ -1,0 +1,34 @@
+{
+  "contracts": [
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU",
+      "kind": "wasm",
+      "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+      "exec_ref": null,
+      "archived": false
+    },
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAE7KE",
+      "kind": "wasm",
+      "wasm_hash": "b9dee7a76d341dcbc318157673752274f908e290e41735ba8c1305a522e5bcc5",
+      "exec_ref": null,
+      "archived": false
+    },
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPWAU",
+      "kind": "wasm_ref",
+      "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+      "exec_ref": {
+        "owner": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASFXV",
+        "tag": "token-v1"
+      },
+      "archived": false
+    }
+  ],
+  "next_cursor": null,
+  "parser_version": "1",
+  "tier": "inferred",
+  "ruleset_versions": {
+    "41": "sep41-v0.5.2"
+  }
+}
