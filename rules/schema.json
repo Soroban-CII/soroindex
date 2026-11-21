@@ -33,6 +33,11 @@
       "description": "Functions an implementation may expose; if present they must have these types.",
       "type": "array",
       "items": { "$ref": "#/$defs/fn" }
+    },
+    "requires": {
+      "description": "Other SEP numbers that this SEP requires to match. A composite result is \"match\" only when the SEP and every required SEP match. Cycles are rejected at rule-file load time.",
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1, "maximum": 999999 }
     }
   },
   "$defs": {

@@ -181,6 +181,7 @@ type MatchRow struct {
 	Hash                string
 	SEP                 int
 	RulesetVersion      string
+	RuleFileSHA256      string // SHA-256 of the rule file used for this match
 	Status              string
 	OKCount             int
 	MissingJSON         string
@@ -192,15 +193,15 @@ type MatchRow struct {
 // UpsertMatch writes one match result.
 func (t *Tx) UpsertMatch(ctx context.Context, m MatchRow) error {
 	return t.exec(ctx, "upsert match "+m.Hash, `
-INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, rule_file_sha256, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (wasm_hash, sep, ruleset_version) DO UPDATE SET
   status = excluded.status, ok_count = excluded.ok_count, missing_json = excluded.missing_json,
   mismatched_json = excluded.mismatched_json, matched_variants_json = excluded.matched_variants_json,
   computed_at = CASE WHEN interface_matches.status = excluded.status AND interface_matches.ok_count = excluded.ok_count
                       AND interface_matches.missing_json = excluded.missing_json AND interface_matches.mismatched_json = excluded.mismatched_json
-                     THEN interface_matches.computed_at ELSE excluded.computed_at END`,
-		m.Hash, m.SEP, m.RulesetVersion, m.Status, m.OKCount, m.MissingJSON, m.MismatchedJSON, m.MatchedVariantsJSON, m.ComputedAt)
+                      THEN interface_matches.computed_at ELSE excluded.computed_at END`,
+		m.Hash, m.SEP, m.RulesetVersion, m.RuleFileSHA256, m.Status, m.OKCount, m.MissingJSON, m.MismatchedJSON, m.MatchedVariantsJSON, m.ComputedAt)
 }
 
 // ContractRow is the current state of a contract.

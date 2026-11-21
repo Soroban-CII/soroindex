@@ -54,19 +54,26 @@ type Matcher struct {
 	// PartialThreshold is the fraction of required functions that must be
 	// OK for "partial" rather than "mismatch". Zero means the default, 0.5.
 	PartialThreshold float64
+	// Rulesets maps SEP numbers to their RuleFiles, used when evaluating
+	// requires dependencies. May be nil when not available.
+	Rulesets map[int]RuleFile
 }
 
 // Match compares a spec's functions with a rule file using the default
 // threshold. See Matcher.Match.
 func Match(fns []sepmeta.FnSig, r RuleFile) Result {
-	return Matcher{}.Match(fns, r)
+	return Matcher{Rulesets: map[int]RuleFile{}}.Match(fns, r)
 }
 
 // NoSpec is the result for a Wasm that has no spec section at all.
 func NoSpec(r RuleFile) Result {
 	return Result{
-		SEP: r.SEP, RulesetVersion: r.RulesetVersion, Status: StatusNoSpec,
-		RequiredCount: len(r.Required), Missing: []string{}, Mismatched: []Mismatch{},
+		SEP:             r.SEP,
+		RulesetVersion:  r.RulesetVersion,
+		Status:          StatusNoSpec,
+		RequiredCount:   len(r.Required),
+		Missing:         []string{},
+		Mismatched:      []Mismatch{},
 		MatchedVariants: map[string]string{},
 	}
 }
@@ -80,6 +87,11 @@ func NoSpec(r RuleFile) Result {
 // counted as mismatched, since it is ambiguous which one is called. Extra
 // functions not in the rule file are ignored. Optional functions never
 // affect the status, but a present optional with wrong types is listed.
+//
+// If the Matcher has Rulesets set and the rule file has a non-empty Requires
+// list, each required SEP's required functions are also matched against the
+// Wasm spec, and the composite status reflects whether the SEP and all required
+// SEPs match.
 func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 	threshold := m.PartialThreshold
 	if threshold <= 0 {
@@ -89,11 +101,20 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 	for _, f := range fns {
 		byName[f.Name] = append(byName[f.Name], f)
 	}
+	// Total number of required functions: own required + required SEPs' required.
+	totalRequired := len(r.Required) + len(r.Requires)
 	res := Result{
-		SEP: r.SEP, RulesetVersion: r.RulesetVersion, RequiredCount: len(r.Required),
-		Missing: []string{}, Mismatched: []Mismatch{}, MatchedVariants: map[string]string{},
+		SEP:             r.SEP,
+		RulesetVersion:  r.RulesetVersion,
+		RequiredCount:   totalRequired,
+		Missing:         []string{},
+		Mismatched:      []Mismatch{},
+		MatchedVariants: map[string]string{},
 	}
-	check := func(rule FnRule, optional bool) (ok bool) {
+
+	// check reports whether a function of the given name matches the rule,
+	// recording missing/mismatched evidence as side effects.
+	check := func(rule FnRule, optional bool) bool {
 		got := byName[rule.Fn]
 		switch {
 		case len(got) == 0:
@@ -115,14 +136,36 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 		}
 		return true
 	}
+
+	// Match the SEP's own required functions (as before).
 	for _, rule := range r.Required {
 		if check(rule, false) {
 			res.OKCount++
 		}
 	}
+	// Match optional functions from the rule file (as before).
 	for _, rule := range r.Optional {
 		check(rule, true)
 	}
+
+	// Match required SEPs from the requires list, if Rulesets are available.
+	if len(r.Requires) > 0 && m.Rulesets != nil {
+		for _, requiredSep := range r.Requires {
+			reqRule, ok := m.Rulesets[requiredSep]
+			if !ok {
+				// Rule file for required SEP not found; record as missing.
+				res.Missing = append(res.Missing, fmt.Sprintf("sep-%d", requiredSep))
+				continue
+			}
+			// Check each required function of the required SEP against the Wasm spec.
+			for _, rule := range reqRule.Required {
+				if check(rule, false) {
+					res.OKCount++
+				}
+			}
+		}
+	}
+
 	sort.Strings(res.Missing)
 	sort.Slice(res.Mismatched, func(i, j int) bool { return res.Mismatched[i].Fn < res.Mismatched[j].Fn })
 
@@ -137,9 +180,6 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 	return res
 }
 
-// fits reports whether sig satisfies rule, and for each position that
-// accepts more than one type, which one it used ("transfer.inputs[1]" ->
-// "MuxedAddress").
 func fits(rule FnRule, sig sepmeta.FnSig) (map[string]string, bool) {
 	if len(sig.Inputs) != len(rule.Inputs) || !equal(sig.Outputs, rule.Output) {
 		return nil, false

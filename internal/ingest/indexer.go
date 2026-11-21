@@ -2,6 +2,8 @@ package ingest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -11,6 +13,7 @@ import (
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/store"
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
+	"github.com/Soroban-CII/soroindex/rules"
 )
 
 // Indexer turns network facts into rows. It fetches each Wasm once,
@@ -121,6 +124,8 @@ func (ix *Indexer) writeAnalysis(ctx context.Context, tx *store.Tx, hash string,
 
 func (ix *Indexer) writeMatches(ctx context.Context, tx *store.Tx, hash string, ms []match.Result) error {
 	now := ix.Now().UTC().Format(time.RFC3339)
+	// Compute SHA-256 of the rule file for each match.
+	// The rule files live in rules/sep-NNNN.json; look up by SEP number.
 	for _, m := range ms {
 		missing, err1 := json.Marshal(m.Missing)
 		mism, err2 := json.Marshal(m.Mismatched)
@@ -128,7 +133,19 @@ func (ix *Indexer) writeMatches(ctx context.Context, tx *store.Tx, hash string, 
 		if err1 != nil || err2 != nil || err3 != nil {
 			return fmt.Errorf("encode match for %s: %v %v %v", hash, err1, err2, err3)
 		}
-		if err := tx.UpsertMatch(ctx, store.MatchRow{Hash: hash, SEP: m.SEP, RulesetVersion: m.RulesetVersion, Status: string(m.Status),
+		// Find the rule file for this SEP number and compute its SHA-256.
+		var ruleFileSHA256 string
+		for _, rf := range ix.Rules {
+			if rf.SEP == m.SEP {
+				data, err := rules.FS.ReadFile(fmt.Sprintf("sep-%04d.json", m.SEP))
+				if err == nil {
+					h := sha256.Sum256(data)
+					ruleFileSHA256 = hex.EncodeToString(h[:])
+				}
+				break
+			}
+		}
+		if err := tx.UpsertMatch(ctx, store.MatchRow{Hash: hash, SEP: m.SEP, RulesetVersion: m.RulesetVersion, RuleFileSHA256: ruleFileSHA256, Status: string(m.Status),
 			OKCount: m.OKCount, MissingJSON: string(missing), MismatchedJSON: string(mism), MatchedVariantsJSON: string(variants), ComputedAt: now}); err != nil {
 			return err
 		}
