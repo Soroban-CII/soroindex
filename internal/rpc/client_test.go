@@ -380,3 +380,60 @@ func TestConcurrencyLimit(t *testing.T) {
 		t.Fatalf("peak in-flight = %d, want 2..3 with Concurrency 3", p)
 	}
 }
+
+func TestAuthHeaderIsSentOnEveryRequest(t *testing.T) {
+	const headerName = "X-API-Key"
+	const headerValue = "supersecret"
+	var received []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received = append(received, r.Header.Get(headerName))
+		q := readReq(t, r)
+		_, _ = w.Write(recorded(t, "getNetwork.json", q.ID))
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv, func(cfg *Config) {
+		cfg.AuthHeaderName = headerName
+		cfg.AuthHeaderValue = headerValue
+	})
+	if _, err := c.GetNetwork(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(received) != 1 || received[0] != headerValue {
+		t.Fatalf("header received = %v, want one %q", received, headerValue)
+	}
+}
+
+func TestAuthHeaderValueNeverAppearsInErrors(t *testing.T) {
+	const secret = "topsecretvalue"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	c := newTestClient(t, srv, func(cfg *Config) {
+		cfg.AuthHeaderName = "Authorization"
+		cfg.AuthHeaderValue = secret
+		cfg.MaxAttempts = 1
+	})
+	_, err := c.GetNetwork(context.Background())
+	if err == nil {
+		t.Fatal("expected error from 500 response")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("error message contains secret: %v", err)
+	}
+}
+
+func TestAuthHeaderBothOrNeither(t *testing.T) {
+	_, err := New(Config{URL: "http://x", AuthHeaderName: "X-Key"})
+	if err == nil {
+		t.Fatal("expected error when only name is set")
+	}
+	_, err = New(Config{URL: "http://x", AuthHeaderValue: "v"})
+	if err == nil {
+		t.Fatal("expected error when only value is set")
+	}
+	_, err = New(Config{URL: "http://x", AuthHeaderName: "X-Key", AuthHeaderValue: "v"})
+	if err != nil {
+		t.Fatalf("unexpected error when both set: %v", err)
+	}
+}

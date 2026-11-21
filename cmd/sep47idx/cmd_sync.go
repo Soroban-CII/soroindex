@@ -73,7 +73,7 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 			errorf(stderr, "sep47idx sync: %v\n", err)
 			return exitError
 		}
-		c, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, Logger: log})
+		c, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, Logger: log, AuthHeaderName: cfg.RPCHeaderName, AuthHeaderValue: cfg.RPCHeaderValue})
 		if err != nil {
 			errorf(stderr, "sep47idx sync: %v\n", err)
 			return exitError

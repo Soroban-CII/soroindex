@@ -26,7 +26,7 @@ func rpcTip(ctx context.Context, cfg config.Common) (uint32, error) {
 	if err := cfg.RequireRPC(); err != nil {
 		return 0, err
 	}
-	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency})
+	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, AuthHeaderName: cfg.RPCHeaderName, AuthHeaderValue: cfg.RPCHeaderValue})
 	if err != nil {
 		return 0, err
 	}
