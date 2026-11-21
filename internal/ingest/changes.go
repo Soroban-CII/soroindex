@@ -1,6 +1,7 @@
 package ingest
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -174,6 +175,10 @@ type ContractFacts struct {
 	ExecRefs []ExecRef
 	// Evicted lists keys archived at this ledger.
 	Evicted []xdr.LedgerKey
+	// TTLs maps the SHA-256 hash of a persistent ledger key to the entry's
+	// new live_until_ledger value. It is populated from TTL entry changes in
+	// the ledger meta, so apply can record TTL updates without extra RPC calls.
+	TTLs map[[32]byte]uint32
 	// Skipped counts contract data entries in an instance or reference slot
 	// that failed to decode. They are reported, never silently dropped.
 	Skipped []error
@@ -238,7 +243,24 @@ func ExtractContractFacts(m xdr.LedgerCloseMeta) (ContractFacts, error) {
 				}
 				f.ExecRefs = append(f.ExecRefs, ref)
 			}
+		case xdr.LedgerEntryTypeTtl:
+			if d.Ttl != nil {
+				if f.TTLs == nil {
+					f.TTLs = make(map[[32]byte]uint32)
+				}
+				f.TTLs[d.Ttl.KeyHash] = uint32(d.Ttl.LiveUntilLedgerSeq)
+			}
 		}
 	}
 	return f, nil
+}
+
+// ledgerKeyHash returns the SHA-256 of the XDR-encoded LedgerKey, which is
+// how TtlEntry.KeyHash identifies the entry a TTL belongs to.
+func ledgerKeyHash(key xdr.LedgerKey) ([32]byte, error) {
+	raw, err := key.MarshalBinary()
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("marshal ledger key: %w", err)
+	}
+	return sha256.Sum256(raw), nil
 }

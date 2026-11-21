@@ -1,0 +1,11 @@
+-- 0004_live_until_ledger: record the ledger sequence after which a contract's
+-- instance entry will be archived by the protocol's expiration mechanism.
+-- NULL means the TTL has not yet been observed for this contract.
+--
+-- live_until_ledger is updated from two sources:
+--   1. getLedgerEntries responses during seed (liveUntilLedgerSeq field).
+--   2. TTL entry changes in LedgerCloseMeta during incremental sync.
+-- UpsertContract keeps the highest observed value; archival clears it to NULL.
+--
+-- Operator-approved: 2026-11-21.
+ALTER TABLE contracts ADD COLUMN live_until_ledger INTEGER;

@@ -66,7 +66,8 @@ func (s *LedgerSource) Window(ctx context.Context) (Window, error) {
 type Batch struct {
 	From, To uint32 // inclusive; To < From when the batch is empty
 	Facts    []ContractFacts
-	Latest   uint32 // the node's latest ledger when this batch was read
+	Hashes   []string // parallel to Facts: Hashes[i] is the hash of ledger From+i
+	Latest   uint32   // the node's latest ledger when this batch was read
 }
 
 // Fetch returns the facts of ledgers from..from+n-1 (n at most the limit),
@@ -98,6 +99,7 @@ func (s *LedgerSource) Fetch(ctx context.Context, from uint32) (Batch, error) {
 			return Batch{}, fmt.Errorf("ledger %d: %w", l.Sequence, err)
 		}
 		b.Facts = append(b.Facts, f)
+		b.Hashes = append(b.Hashes, l.Hash)
 		b.To = l.Sequence
 	}
 	return b, nil

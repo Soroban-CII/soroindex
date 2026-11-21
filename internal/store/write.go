@@ -212,18 +212,24 @@ type ContractRow struct {
 	ExecRefOwner    string
 	ExecRefTag      string
 	SACAsset        string
-	CreatedLedger   uint32 // 0 for unknown
+	CreatedLedger   uint32  // 0 for unknown
 	UpdatedLedger   uint32
+	LiveUntilLedger *uint32 // NULL if not yet observed
 	Archived        bool
 }
 
 // UpsertContract writes a contract's current state. created_ledger keeps
 // the first known value; updated_ledger never moves backwards, so replaying
-// an older batch cannot regress it.
+// an older batch cannot regress it. live_until_ledger keeps the highest value
+// seen (a TTL extension never shrinks it; archival clears it to NULL).
 func (t *Tx) UpsertContract(ctx context.Context, c ContractRow) error {
+	var liveUntil any
+	if c.LiveUntilLedger != nil {
+		liveUntil = *c.LiveUntilLedger
+	}
 	return t.exec(ctx, "upsert contract "+c.ID, `
-INSERT INTO contracts (contract_id, kind, current_wasm_hash, exec_ref_owner, exec_ref_tag, sac_asset, created_ledger, updated_ledger, archived)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO contracts (contract_id, kind, current_wasm_hash, exec_ref_owner, exec_ref_tag, sac_asset, created_ledger, updated_ledger, live_until_ledger, archived)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (contract_id) DO UPDATE SET
   kind = excluded.kind, current_wasm_hash = excluded.current_wasm_hash,
   exec_ref_owner = excluded.exec_ref_owner, exec_ref_tag = excluded.exec_ref_tag,
@@ -232,10 +238,13 @@ ON CONFLICT (contract_id) DO UPDATE SET
   updated_ledger = CASE WHEN excluded.updated_ledger IS NULL THEN contracts.updated_ledger
                         WHEN contracts.updated_ledger IS NULL THEN excluded.updated_ledger
                         ELSE max(contracts.updated_ledger, excluded.updated_ledger) END,
+  live_until_ledger = CASE WHEN excluded.live_until_ledger IS NULL THEN contracts.live_until_ledger
+                           WHEN contracts.live_until_ledger IS NULL THEN excluded.live_until_ledger
+                           ELSE max(contracts.live_until_ledger, excluded.live_until_ledger) END,
   archived = excluded.archived
 WHERE contracts.updated_ledger IS NULL OR excluded.updated_ledger IS NULL OR excluded.updated_ledger >= contracts.updated_ledger`,
 		c.ID, c.Kind, nullStr(c.CurrentWasmHash), nullStr(c.ExecRefOwner), nullStr(c.ExecRefTag), nullStr(c.SACAsset),
-		nullLedger(c.CreatedLedger), nullLedger(c.UpdatedLedger), c.Archived)
+		nullLedger(c.CreatedLedger), nullLedger(c.UpdatedLedger), liveUntil, c.Archived)
 }
 
 // SetContractArchived marks a contract archived or live without touching

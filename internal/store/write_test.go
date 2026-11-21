@@ -180,3 +180,91 @@ func TestExecRefReplayNeverRegressesHash(t *testing.T) {
 		t.Fatalf("older replay regressed reference: %s", got)
 	}
 }
+
+// --- Issue #93: live_until_ledger ---
+
+func ptr32(v uint32) *uint32 { return &v }
+
+func TestLiveUntilLedgerStoredAndKeptHighest(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	// First write: TTL = 500.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(500)})
+	})
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "500" {
+		t.Fatalf("live_until_ledger = %s, want 500", got)
+	}
+	// Extension: TTL raised to 1000.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 20, LiveUntilLedger: ptr32(1000)})
+	})
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "1000" {
+		t.Fatalf("after extension = %s, want 1000", got)
+	}
+	// Replay with lower value must not shrink it.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 15, LiveUntilLedger: ptr32(600)})
+	})
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "1000" {
+		t.Fatalf("replay regressed live_until_ledger to %s, want 1000", got)
+	}
+}
+
+func TestLiveUntilLedgerNilDoesNotClearExisting(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(500)})
+	})
+	// Second write has nil LiveUntilLedger — should preserve 500.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 20})
+	})
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "500" {
+		t.Fatalf("nil update cleared live_until_ledger: got %s, want 500", got)
+	}
+}
+
+func TestExpiringBeforeFilter(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	// C1: expires at ledger 100.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(100)})
+	})
+	// C2: expires at ledger 200.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXCU", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(200)})
+	})
+	// C3: no TTL.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALXKU", Kind: "wasm", UpdatedLedger: 10})
+	})
+	// Add declared claims so the default "declared" tier filter sees them.
+	for _, h := range []string{"aa", "bb", "cc"} {
+		inTx(t, s, func(tx *Tx) error {
+			return tx.UpsertWasm(ctx, WasmRow{Hash: h, ParseStatus: "ok", ParserVersion: "1"})
+		})
+		inTx(t, s, func(tx *Tx) error {
+			return tx.ReplaceClaims(ctx, h, "sep47-meta", []ClaimRow{{SEP: 41, RawToken: "41"}})
+		})
+	}
+	hashes := []string{"aa", "bb", "cc"}
+	ids := []string{"CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU", "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXCU", "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALXKU"}
+	for i, id := range ids {
+		inTx(t, s, func(tx *Tx) error {
+			return tx.UpsertContract(ctx, ContractRow{ID: id, Kind: "wasm", CurrentWasmHash: hashes[i], UpdatedLedger: 10})
+		})
+	}
+
+	threshold := uint32(150)
+	page, err := s.Contracts(ctx, Filter{ExpiringBefore: &threshold, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only C1 (expires 100) is before 150; C2 (200) and C3 (nil) are excluded.
+	if len(page.Contracts) != 1 || page.Contracts[0].ID != ids[0] {
+		t.Fatalf("expiring_before=150: got %v, want [%s]", page.Contracts, ids[0])
+	}
+}

@@ -24,6 +24,9 @@ type Filter struct {
 	Cursor        string
 	// Rulesets pins inferred results to the loaded rules, not obsolete versions.
 	Rulesets map[int]string
+	// ExpiringBefore, when non-nil, restricts results to contracts whose
+	// live_until_ledger is less than this value (i.e. archived before that ledger).
+	ExpiringBefore *uint32
 }
 
 // ContractSummary is the current executable of one contract.
@@ -137,6 +140,10 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 	if f.Kind != "" {
 		where = append(where, "c.kind = ?")
 		args = append(args, f.Kind)
+	}
+	if f.ExpiringBefore != nil {
+		where = append(where, "c.live_until_ledger IS NOT NULL AND c.live_until_ledger < ?")
+		args = append(args, *f.ExpiringBefore)
 	}
 	predicate := func(sep int) (string, []any, error) {
 		if sep < 0 || sep > 999999 {
