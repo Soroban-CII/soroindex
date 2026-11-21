@@ -26,7 +26,8 @@ func (s *Server) contract(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "bad_request", "contract detail takes no query parameters")
 		return
 	}
-	d, err := s.options.Store.Contract(r.Context(), r.PathValue("id"), s.options.Network, s.options.Rulesets)
+	b := backendFrom(r.Context())
+	d, err := b.Store.Contract(r.Context(), r.PathValue("id"), b.Network, s.options.Rulesets)
 	if detailError(w, err) {
 		return
 	}
@@ -37,7 +38,8 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 	if detailError(w, err) {
 		return
 	}
-	d, err := s.options.Store.HistoryPage(r.Context(), r.PathValue("id"), s.options.Network, s.options.Rulesets, limit, cursor)
+	b := backendFrom(r.Context())
+	d, err := b.Store.HistoryPage(r.Context(), r.PathValue("id"), b.Network, s.options.Rulesets, limit, cursor)
 	if detailError(w, err) {
 		return
 	}

@@ -7,7 +7,8 @@ func (s *Server) seps(w http.ResponseWriter, r *http.Request) {
 	if detailError(w, err) {
 		return
 	}
-	d, err := s.options.Store.SEPs(r.Context(), limit, cursor, s.options.Rulesets)
+	b := backendFrom(r.Context())
+	d, err := b.Store.SEPs(r.Context(), limit, cursor, s.options.Rulesets)
 	if detailError(w, err) {
 		return
 	}

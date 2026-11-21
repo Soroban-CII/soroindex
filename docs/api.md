@@ -10,17 +10,24 @@ characters. Invalid input returns 400; absent resources return 404. Unknown
 paths return 404. Collections return 200 with an empty array when nothing matches.
 Errors use `{"error":{"code":"not_found|bad_request|rate_limited|internal","message":"..."}}`.
 
+A server started with one `--db` serves that network. If it is started with
+`--db mainnet=<path>,testnet=<path>`, every endpoint requires
+`network=mainnet` or `network=testnet`; omitting it, repeating it or naming an
+unknown network returns 400. A single-network server also accepts `network`
+with its own name. The parameter is validated before the endpoint runs and is
+not passed to handlers that otherwise reject query parameters.
+
 ## Queries and pagination
 
 | Endpoint | Parameters and result |
 | --- | --- |
 | `/v1/contracts` | `implements` is a comma list with AND; `implements_any` is OR. Both together require the AND list and at least one OR entry. `tier` is declared (default), inferred, verified or protocol; `kind` is wasm, wasm_ref or sac. `/contracts` is an alias. |
-| `/v1/contracts/{id}` | Fixed contract detail, all version ranges, claims, archival and executable reference. Takes no parameters. |
+| `/v1/contracts/{id}` | Fixed contract detail, all version ranges, claims, archival and executable reference. Takes only `network`. |
 | `/v1/contracts/{id}/history` | Claims for each version. Accepts `limit` and `cursor`. |
 | `/v1/wasm/{hash}` | Metadata, declarations, anomalies and matches; current live users accept `limit` and `cursor`. |
 | `/v1/seps` | Distinct live contract counts per SEP and tier; accepts `limit` and `cursor`. |
-| `/v1/stats` | Stored adoption, undeclared gap, anomaly token counts, archival and last indexed ledger. Takes no parameters. |
-| `/v1/health` | Network, stored last ledger, fresh RPC tip and lag. Takes no parameters. |
+| `/v1/stats` | Stored adoption, undeclared gap, anomaly token counts, archival and last indexed ledger. Takes only `network`. |
+| `/v1/health` | Network, stored last ledger, fresh RPC tip and lag. Takes only `network`. |
 
 Pages default to 50 rows, at most 500. Pass `next_cursor` back unchanged with the
 same filters; null means the end. Cursors are opaque base64url values. History

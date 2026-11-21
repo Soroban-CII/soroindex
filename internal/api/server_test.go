@@ -72,7 +72,7 @@ func TestHealthReportsFreshTipAndReadOnlyStore(t *testing.T) {
 	if err := ro.SetState(context.Background(), "forbidden", "write"); err == nil {
 		t.Fatal("API store can write")
 	}
-	s.options.RPC = tip{err: errors.New("sensitive provider detail")}
+	s.backends["testnet"] = Backend{Store: ro, Network: "testnet", RPC: tip{err: errors.New("sensitive provider detail")}}
 	w = serve(t, s, "/v1/health")
 	if w.Code != 503 || w.Body.String() != "{\"error\":{\"code\":\"internal\",\"message\":\"latest ledger unavailable\"}}\n" {
 		t.Fatalf("unsafe error: %d %s", w.Code, w.Body.String())

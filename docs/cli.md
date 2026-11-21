@@ -441,6 +441,18 @@ $ /workspace/scratch/stage-g/sep47idx serve --network testnet --db /workspace/sc
 serving testnet read-only on 127.0.0.1:8080
 ```
 
+To serve both networks from one process, pass comma-separated
+`network=value` maps for `--db` and `--rpc-url`:
+
+- `--db mainnet=./data/mainnet.db,testnet=./data/testnet.db`
+- `--rpc-url mainnet=<mainnet-url>,testnet=<testnet-url>`
+
+The maps must name the same networks, contain at least two entries, and values
+must not contain commas. Each database is opened read-only and each RPC URL is
+checked against its network passphrase at startup. Do not combine this form
+with `--network`. API requests then require `network=mainnet|testnet`; see the
+[API reference](api.md).
+
 The [API reference](api.md) contains actual requests and responses from this
 server. No public deployment is claimed.
 
