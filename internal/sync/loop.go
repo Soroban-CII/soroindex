@@ -23,12 +23,13 @@ type Source interface {
 
 // Loop commits facts and the resume point atomically, then follows the tip if requested.
 type Loop struct {
-	Store       *store.Store
-	Source      Source
-	Apply       func(context.Context, *store.Tx, ingest.ContractFacts) error
-	StartLedger uint32
-	Follow      bool
-	Interval    time.Duration
+	Store            *store.Store
+	Source           Source
+	Apply            func(context.Context, *store.Tx, ingest.ContractFacts) error
+	RetryWasmFetches func(context.Context, *store.Tx) (int, int, error)
+	StartLedger      uint32
+	Follow           bool
+	Interval         time.Duration
 	// Progress runs after a batch commits or a fresh tip confirms caught_up.
 	Progress func(last, latest uint32, caughtUp bool)
 }
@@ -99,6 +100,20 @@ func (l *Loop) Run(ctx context.Context) error {
 		last = b.To
 		if l.Progress != nil {
 			l.Progress(last, b.Latest, false)
+		}
+		// Retry queued Wasm fetches after each batch in a separate transaction.
+		if l.RetryWasmFetches != nil {
+			tx, err := l.Store.Begin(ctx)
+			if err != nil {
+				return fmt.Errorf("begin retry transaction: %w", err)
+			}
+			if _, _, err := l.RetryWasmFetches(ctx, tx); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("retry wasm fetches: %w", err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("commit retry transaction: %w", err)
+			}
 		}
 		// Window calls getLatestLedger again before any caught_up report.
 	}

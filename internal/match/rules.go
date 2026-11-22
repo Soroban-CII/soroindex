@@ -214,8 +214,6 @@ func checkRequiresCycles(rules []RuleFile) error {
 				}
 			}
 		}
-		// Backtrack path (DFS cleanup; value not used after return).
-		_ = path[:len(path)-1]
 		state[sep] = 2
 		return nil
 	}
