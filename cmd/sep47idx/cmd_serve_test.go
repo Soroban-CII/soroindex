@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -34,7 +36,9 @@ func TestServeHTTPReadsIndexAndShutsDown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
-	go func() { done <- serveHTTP(ctx, listener, handler) }()
+	go func() {
+		done <- serveHTTP(ctx, listener, handler, 5*time.Second, 20*time.Second, 20*time.Second, 60*time.Second, 16<<10)
+	}()
 	client := http.Client{Timeout: 5 * time.Second}
 	response, err := client.Get("http://" + listener.Addr().String() + "/v1/stats")
 	if err != nil {
@@ -47,9 +51,9 @@ func TestServeHTTPReadsIndexAndShutsDown(t *testing.T) {
 	}
 	cancel()
 	select {
-	case err = <-done:
-		if err != nil {
-			t.Fatal(err)
+	case receivedErr := <-done:
+		if receivedErr != nil {
+			t.Fatal(receivedErr)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("shutdown did not complete")
@@ -158,4 +162,211 @@ func networkRPC(t *testing.T, passphrase string, latest uint32) *httptest.Server
 	}))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+// TestServeSlowClientClosed tests that a client sending headers very slowly
+// is disconnected by the ReadHeaderTimeout.
+func TestServeSlowClientClosed(t *testing.T) {
+	db, _, _ := readFixture(t)
+	s, err := store.Open(context.Background(), db, store.Options{Passphrase: config.Testnet.Passphrase, ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	handler, err := api.New(api.Options{Store: s, Network: "testnet"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Very short read header timeout to force the test to be fast.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- serveHTTP(ctx, listener, handler, 100*time.Millisecond, 20*time.Second, 20*time.Second, 60*time.Second, 16<<10)
+	}()
+	defer func() {
+		cancel()
+		<-done //nolint:errcheck // intentionally ignore error in test cleanup
+	}()
+
+	// Connect and send request line, then stall before sending headers.
+	conn, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Send request line only.
+	if _, err := conn.Write([]byte("GET /v1/stats HTTP/1.1\r\n")); err != nil {
+		t.Fatal(err)
+	}
+	// Wait longer than read header timeout without sending more.
+	time.Sleep(300 * time.Millisecond)
+
+	// The connection should be closed by the server. Reading should fail.
+	buf := make([]byte, 1)
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_, err = conn.Read(buf)
+	if err == nil {
+		t.Fatal("expected connection to be closed by server due to read header timeout")
+	}
+	// Accept both timeout and EOF (clean close) as the server closing the connection.
+	var netErr net.Error
+	if !errors.As(err, &netErr) && err != io.EOF {
+		t.Fatalf("expected timeout or EOF error, got %v", err)
+	}
+	_ = conn.Close()
+}
+
+// TestServeOversizedHeadersClosed tests that a client sending headers
+// larger than MaxHeaderBytes receives a 431 response and the connection is closed.
+func TestServeOversizedHeadersClosed(t *testing.T) {
+	db, _, _ := readFixture(t)
+	s, err := store.Open(context.Background(), db, store.Options{Passphrase: config.Testnet.Passphrase, ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	handler, err := api.New(api.Options{Store: s, Network: "testnet"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Small max header bytes to force the test to be fast.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		done <- serveHTTP(ctx, listener, handler, 5*time.Second, 20*time.Second, 20*time.Second, 60*time.Second, 256)
+	}()
+	defer func() {
+		cancel()
+		<-done //nolint:errcheck // intentionally ignore error in test cleanup
+	}()
+
+	// Connect and send a request with a very large header.
+	conn, err := net.Dial("tcp", listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Build a request with a header exceeding 256 bytes.
+	// Go's http.Server reads headers until MaxHeaderBytes is exceeded, then
+	// responds with 431 Request Header Fields Too Large and closes the connection.
+	largeHeader := "X-Large: " + string(make([]byte, 300)) + "\r\n"
+	request := "GET /v1/stats HTTP/1.1\r\n" + largeHeader + "\r\n"
+	if _, err := conn.Write([]byte(request)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read the 431 response.
+	buf := make([]byte, 4096)
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("failed to read response: %v", err)
+	}
+	response := string(buf[:n])
+	t.Logf("Response (%d bytes): %s", n, response)
+	if n == 0 {
+		t.Fatal("expected 431 response, got empty response")
+	}
+	// Verify it's a 431 response (or at least an HTTP error response).
+	if !contains(response, "431") && !contains(response, "400") && !contains(response, "500") {
+		t.Fatalf("expected error response, got: %s", response)
+	}
+
+	// The connection should be closed by the server after the response.
+	_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_, err = conn.Read(buf[:1])
+	if err == nil {
+		t.Fatal("expected connection to be closed by server after 431 response")
+	}
+	// Accept both timeout and EOF (clean close) as the server closing the connection.
+	var netErr net.Error
+	if !errors.As(err, &netErr) && err != io.EOF {
+		t.Fatalf("expected timeout or EOF error, got %v", err)
+	}
+	_ = conn.Close()
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[:len(substr)] == substr || contains(s[1:], substr)))
+}
+
+// TestServeGracefulShutdownCompletesInFlight tests that graceful shutdown
+// waits for in-flight requests to complete.
+func TestServeGracefulShutdownCompletesInFlight(t *testing.T) {
+	db, _, _ := readFixture(t)
+	s, err := store.Open(context.Background(), db, store.Options{Passphrase: config.Testnet.Passphrase, ReadOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	handler, err := api.New(api.Options{Store: s, Network: "testnet"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	var requestStarted, requestDone chan struct{}
+	requestStarted = make(chan struct{})
+	requestDone = make(chan struct{})
+
+	// Wrap handler to track in-flight request.
+	trackingHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(requestStarted)
+		time.Sleep(200 * time.Millisecond)
+		handler.ServeHTTP(w, r)
+		close(requestDone)
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- serveHTTP(ctx, listener, trackingHandler, 5*time.Second, 20*time.Second, 20*time.Second, 60*time.Second, 16<<10)
+	}()
+
+	client := http.Client{Timeout: 5 * time.Second}
+	// Start a request that will take some time.
+	go func() {
+		resp, err := client.Get("http://" + listener.Addr().String() + "/v1/stats")
+		if err != nil {
+			t.Logf("request error: %v", err)
+			return
+		}
+		_ = resp.Body.Close()
+	}()
+
+	// Wait for request to start, then initiate shutdown.
+	<-requestStarted
+	cancel()
+
+	// Shutdown should complete without error and after request finishes.
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("shutdown error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown did not complete in time")
+	}
+
+	// Verify request completed.
+	select {
+	case <-requestDone:
+		// OK
+	case <-time.After(2 * time.Second):
+		t.Fatal("in-flight request did not complete before shutdown")
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // Tx is one write transaction. The indexer writes each batch (a seed chunk
@@ -372,6 +373,82 @@ func nullInt(n int, valid bool) any {
 		return nil
 	}
 	return n
+}
+
+// WasmFetchQueueRow is one row of the wasm_fetch_queue table.
+type WasmFetchQueueRow struct {
+	Hash          string  // hex
+	FirstFailedAt string  // RFC3339
+	LastAttemptAt *string // RFC3339, NULL if never retried
+	AttemptCount  int
+	NextRetryAt   string // RFC3339
+	LastError     string
+}
+
+// QueueWasmFetch adds a hash to the retry queue, or updates an existing
+// entry's error and next_retry_at. Called when FetchCode fails for a hash
+// after RPC retries are exhausted.
+func (t *Tx) QueueWasmFetch(ctx context.Context, hash, errorMsg, nextRetryAt string) error {
+	return t.exec(ctx, "queue wasm fetch "+hash, `
+INSERT INTO wasm_fetch_queue (hash, first_failed_at, last_attempt_at, attempt_count, next_retry_at, last_error)
+VALUES (?, ?, NULL, 1, ?, ?)
+ON CONFLICT (hash) DO UPDATE SET
+  last_error = excluded.last_error,
+  next_retry_at = excluded.next_retry_at,
+  attempt_count = wasm_fetch_queue.attempt_count + 1`,
+		hash, timeNowRFC3339(), nextRetryAt, errorMsg)
+}
+
+// UpdateWasmFetchAttempt records a retry attempt for a queued hash.
+func (t *Tx) UpdateWasmFetchAttempt(ctx context.Context, hash, errorMsg, nextRetryAt string) error {
+	return t.exec(ctx, "update wasm fetch attempt "+hash, `
+UPDATE wasm_fetch_queue SET
+  last_attempt_at = ?,
+  attempt_count = attempt_count + 1,
+  next_retry_at = ?,
+  last_error = ?
+WHERE hash = ?`,
+		timeNowRFC3339(), nextRetryAt, errorMsg, hash)
+}
+
+// RemoveWasmFetch removes a hash from the queue (success or permanent failure).
+func (t *Tx) RemoveWasmFetch(ctx context.Context, hash string) error {
+	return t.exec(ctx, "remove wasm fetch "+hash, `DELETE FROM wasm_fetch_queue WHERE hash = ?`, hash)
+}
+
+// ListWasmFetchQueue returns all queued hashes with their metadata.
+func (t *Tx) ListWasmFetchQueue(ctx context.Context) ([]WasmFetchQueueRow, error) {
+	rows, err := t.tx.QueryContext(ctx, `SELECT hash, first_failed_at, last_attempt_at, attempt_count, next_retry_at, last_error FROM wasm_fetch_queue ORDER BY next_retry_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []WasmFetchQueueRow
+	for rows.Next() {
+		var r WasmFetchQueueRow
+		var lastAttempt sql.NullString
+		if err := rows.Scan(&r.Hash, &r.FirstFailedAt, &lastAttempt, &r.AttemptCount, &r.NextRetryAt, &r.LastError); err != nil {
+			return nil, err
+		}
+		if lastAttempt.Valid {
+			r.LastAttemptAt = &lastAttempt.String
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// CountWasmFetchQueue returns the number of queued hashes.
+func (t *Tx) CountWasmFetchQueue(ctx context.Context) (int, error) {
+	var n int
+	err := t.tx.QueryRowContext(ctx, `SELECT count(*) FROM wasm_fetch_queue`).Scan(&n)
+	return n, err
+}
+
+// timeNowRFC3339 returns the current time in RFC3339 format.
+// It is a variable so tests can override it.
+var timeNowRFC3339 = func() string {
+	return time.Now().UTC().Format(time.RFC3339)
 }
 
 // toLedger converts a stored INTEGER to a ledger number at the store

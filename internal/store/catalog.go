@@ -20,6 +20,8 @@ type Filter struct {
 	ImplementsAny []int
 	Tier          string
 	Kind          string
+	Archived      *bool  // nil = only live (archived=0), true = only archived, false = only live
+	ExecRefOwner  string // filter by CAP-85 executable reference owner contract ID
 	Limit         int
 	Cursor        string
 	// Rulesets pins inferred results to the loaded rules, not obsolete versions.
@@ -114,6 +116,11 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 	if f.Kind != "" && f.Kind != "wasm" && f.Kind != "wasm_ref" && f.Kind != "sac" {
 		return page, ErrBadQuery
 	}
+	if f.ExecRefOwner != "" {
+		if err := ValidateContractID(f.ExecRefOwner); err != nil {
+			return page, ErrBadQuery
+		}
+	}
 	after := ""
 	if f.Cursor != "" {
 		if len(f.Cursor) > 256 {
@@ -132,11 +139,21 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 		}
 		after = cursor.ID
 	}
-	where := []string{"c.archived = 0", "c.contract_id > ?"}
+	where := []string{"c.contract_id > ?"}
 	args := []any{after}
+	// Handle archived filter: nil/false = live only (archived=0), true = archived only (archived=1)
+	if f.Archived == nil || !*f.Archived {
+		where = append(where, "c.archived = 0")
+	} else {
+		where = append(where, "c.archived = 1")
+	}
 	if f.Kind != "" {
 		where = append(where, "c.kind = ?")
 		args = append(args, f.Kind)
+	}
+	if f.ExecRefOwner != "" {
+		where = append(where, "c.exec_ref_owner = ?")
+		args = append(args, f.ExecRefOwner)
 	}
 	predicate := func(sep int) (string, []any, error) {
 		if sep < 0 || sep > 999999 {
@@ -347,4 +364,80 @@ func (s *Store) LookupContracts(ctx context.Context, ids []string) (Lookup, erro
 		}
 	}
 	return l, tx.Commit()
+}
+
+// VersionChange represents a contract version upgrade event for SSE streaming.
+type VersionChange struct {
+	ContractID   string     `json:"contract_id"`
+	PreviousHash *string    `json:"previous_wasm_hash"`
+	NewHash      *string    `json:"new_wasm_hash"`
+	Ledger       uint32     `json:"ledger"`
+	Kind         string     `json:"kind"`
+	ExecRef      *Reference `json:"exec_ref"`
+}
+
+// VersionChanges returns all contract version changes (upgrades) with
+// from_ledger > after, ordered by ledger. This is used for SSE streaming.
+// A bounded window is enforced to limit replay size.
+func (s *Store) VersionChanges(ctx context.Context, after uint32, limit int) ([]VersionChange, error) {
+	if limit == 0 {
+		limit = 1000
+	}
+	if limit < 1 || limit > 10000 {
+		return nil, ErrBadQuery
+	}
+	rows, err := s.DB.QueryContext(ctx, `
+		SELECT cv.contract_id, cv.wasm_hash, cv.from_ledger, cv.to_ledger, cv.exec_ref_owner, cv.exec_ref_tag, c.kind
+		FROM contract_versions cv
+		JOIN contracts c ON c.contract_id = cv.contract_id
+		WHERE cv.from_ledger > ?
+		ORDER BY cv.from_ledger, cv.contract_id
+		LIMIT ?`, after, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var changes []VersionChange
+	var prevHashMap = map[string]*string{} // track previous hash per contract
+
+	for rows.Next() {
+		var v VersionChange
+		var hash sql.NullString
+		var from, to sql.NullInt64
+		var owner, tag, kind sql.NullString
+		if err := rows.Scan(&v.ContractID, &hash, &from, &to, &owner, &tag, &kind); err != nil {
+			return nil, err
+		}
+		if hash.Valid {
+			v.NewHash = &hash.String
+		}
+		if from.Valid {
+			v.Ledger, err = toLedger(from.Int64)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if kind.Valid {
+			v.Kind = kind.String
+		}
+		if owner.Valid && tag.Valid {
+			v.ExecRef = &Reference{owner.String, tag.String}
+		}
+
+		// Determine previous hash: if this contract had a prior version in this
+		// result set, use its new hash; otherwise look up the current version
+		// before the window. For simplicity, we use the to_ledger of the
+		// previous version row if present, but since we're ordered by from_ledger,
+		// we can track the last seen new hash for this contract.
+		if prev, ok := prevHashMap[v.ContractID]; ok {
+			v.PreviousHash = prev
+		}
+		if v.NewHash != nil {
+			prevHashMap[v.ContractID] = v.NewHash
+		}
+
+		changes = append(changes, v)
+	}
+	return changes, rows.Err()
 }

@@ -18,6 +18,7 @@ type Statistics struct {
 	LastLedger        uint32         `json:"last_ledger"`
 	RulesetVersions   map[int]string `json:"ruleset_versions"`
 	ParserVersion     string         `json:"parser_version"`
+	QueuedWasmFetches int            `json:"queued_wasm_fetches"`
 }
 
 // Stats reads adoption, anomalies, archival and last sync without RPC or writes.
@@ -37,6 +38,9 @@ func (s *Store) Stats(ctx context.Context, network string, rulesets map[int]stri
 		return d, err
 	}
 	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(sum(archived),0),count(*) FROM contracts`).Scan(&d.ArchivedContracts, &d.TotalContracts); err != nil {
+		return d, err
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM wasm_fetch_queue`).Scan(&d.QueuedWasmFetches); err != nil {
 		return d, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT anomaly,count(*) FROM (SELECT anomaly FROM parse_anomalies UNION ALL SELECT anomaly FROM wasm_claims WHERE anomaly IS NOT NULL) GROUP BY anomaly ORDER BY anomaly`)
