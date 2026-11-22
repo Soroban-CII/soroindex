@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "soroindex"
+version: v0.1.0
+license: Apache-2.0
+repository-code: "https://github.com/Soroban-CII/soroindex"
+url: "https://soroban-cii.github.io/soroindex"
+date-released: "2026-10-07"
+authors:
+  - family-names: "Ikezogwo"
+    given-names: "Esther"
+  - family-names: "Ikezogwo"
+    given-names: "Cynthia"
+  - family-names: "Walter"
+    given-names: "Shania"
+  - name: "cisco_91"
+keywords:
+  - Soroban
+  - Stellar
+  - smart contracts
+  - index
+abstract: >-
+  A public index of Soroban smart contracts by the SEPs they declare,
+  the interfaces they match, and how both change on upgrade.
