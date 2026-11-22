@@ -21,6 +21,15 @@ A contract instance names its executable in one of three ways:
 
 For an external reference, the index resolves the hash through the owner's entry. When that entry changes, every contract that references it is upgraded at once, though none of their own entries changed. The index tracks that.
 
+## Verifying fetched code
+
+When the indexer fetches contract code via `getLedgerEntries`, it verifies that the SHA-256 of the returned Wasm bytes matches the hash stored in the `ContractCode` key. This check prevents a compromised or misbehaving RPC provider from attaching another contract's metadata to a given hash.
+
+- If the hashes match, the code is stored normally and analysis proceeds.
+- If the hashes do not match, the code is stored with `parse_status='error'` and produces no claims or interface matches. The error message records the key hash versus the computed hash.
+
+This verification happens in `internal/ingest/fetch.go` (`FetchCode`) before any parsing or storage occurs. The `Code` struct records `HashMismatch` and `HashMismatchMsg`; `EnsureWasm` stores `parse_status='error'` for mismatched entries.
+
 ## Building an index
 
 Today an index is built by **seeding** from a list of contract IDs (`sync --seed`): the Hubble export, a Phase 0 sample, or any list. For each contract the index reads the current instance, fetches each Wasm once, and stores claims, anomalies and interface matches in SQLite. Every write is idempotent: seeding twice leaves every table byte-identical.
