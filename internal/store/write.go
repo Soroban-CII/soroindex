@@ -14,7 +14,9 @@ import (
 // or none of it. Every write is idempotent: replaying a batch changes
 // nothing.
 type Tx struct {
-	tx *sql.Tx
+	tx      *sql.Tx
+	failAt  int // test-only: fail at the N-th exec call (1-based)
+	callNum int // test-only: counter for exec calls
 }
 
 // Begin starts a write transaction.
@@ -27,6 +29,19 @@ func (s *Store) Begin(ctx context.Context) (*Tx, error) {
 		return nil, fmt.Errorf("begin: %w", err)
 	}
 	return &Tx{tx: tx}, nil
+}
+
+// BeginWithFailAt starts a write transaction that will fail at the N-th
+// exec call. For test use only.
+func (s *Store) BeginWithFailAt(ctx context.Context, failAt int) (*Tx, error) {
+	if s.readOnly {
+		return nil, errors.New("store: read-only")
+	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin: %w", err)
+	}
+	return &Tx{tx: tx, failAt: failAt}, nil
 }
 
 // Commit commits the transaction.
@@ -42,6 +57,10 @@ func (t *Tx) Rollback() error {
 }
 
 func (t *Tx) exec(ctx context.Context, what, q string, args ...any) error {
+	t.callNum++
+	if t.failAt > 0 && t.callNum == t.failAt {
+		return fmt.Errorf("injected failure at exec #%d (%s)", t.failAt, what)
+	}
 	if _, err := t.tx.ExecContext(ctx, q, args...); err != nil {
 		return fmt.Errorf("%s: %w", what, err)
 	}
