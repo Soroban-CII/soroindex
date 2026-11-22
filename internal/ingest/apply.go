@@ -79,6 +79,9 @@ func (ix *Indexer) ApplyLedger(ctx context.Context, tx *store.Tx, f ContractFact
 				if c.Kind == Created {
 					row.CreatedLedger = f.Ledger
 				}
+				// Carry provenance for the new version row (creation or upgrade).
+				row.CreatedTxHash = c.TxHash
+				row.CreatedSourceAccount = c.SourceAccount
 				if in.Kind == KindWasmRef {
 					hash, archived, err := ix.resolveReference(ctx, tx, in.RefOwner, in.RefTag, f.Ledger)
 					if err != nil {

@@ -29,8 +29,27 @@ Every flag can come from an environment variable (see [CLI reference](cli.md)):
 | `SEP47IDX_WRITE_TIMEOUT` | Maximum time to write response (default 20s) |
 | `SEP47IDX_IDLE_TIMEOUT` | Maximum time to wait for next request on keep-alive (default 60s) |
 | `SEP47IDX_MAX_HEADER_BYTES` | Maximum size of request headers in bytes (default 16384) |
+| `SEP47IDX_RPC_HEADER_NAME` | Header name for authenticated RPC providers (e.g. `Authorization`) |
+| `SEP47IDX_RPC_HEADER_VALUE` | Secret value for the header; never logged or stored |
 
 Stellar's docs list mainnet RPC providers. Several public endpoints answered a 200-key `getLedgerEntries` call correctly on 7 October 2026, among them `https://soroban-rpc.mainnet.stellar.gateway.fm`, which the mainnet census used. Futurenet has a public SDF RPC at `https://rpc-futurenet.stellar.org`.
+
+## Authenticated RPC providers
+
+Paid and rate-limited RPC providers often require an API key sent as an HTTP
+header. Set `SEP47IDX_RPC_HEADER_NAME` to the header name and
+`SEP47IDX_RPC_HEADER_VALUE` to the secret. Both must be set together.
+
+```sh
+export SEP47IDX_RPC_HEADER_NAME=Authorization
+export SEP47IDX_RPC_HEADER_VALUE="Bearer <token>"
+sep47idx sync --network mainnet --rpc-url https://rpc.example.com
+```
+
+The value is **never** written to `sync_state`, never included in log
+messages, and never included in error strings. URLs with embedded credentials
+(the `user:password@host` form) are rejected at startup; use the header
+variables instead.
 
 ### HTTP server hardening
 

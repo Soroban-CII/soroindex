@@ -216,6 +216,10 @@ type ContractRow struct {
 	CreatedLedger   uint32 // 0 for unknown
 	UpdatedLedger   uint32
 	Archived        bool
+	// CreatedTxHash and CreatedSourceAccount carry provenance from the ingest
+	// layer to SetVersion. They are not persisted to the contracts table.
+	CreatedTxHash        string
+	CreatedSourceAccount string
 }
 
 // UpsertContract writes a contract's current state. created_ledger keeps
@@ -247,12 +251,14 @@ func (t *Tx) SetContractArchived(ctx context.Context, id string, archived bool) 
 
 // Version is one contract_versions row.
 type Version struct {
-	ContractID   string
-	WasmHash     string // "" for NULL
-	ExecRefOwner string
-	ExecRefTag   string
-	FromLedger   uint32
-	ToLedger     uint32 // 0 while current
+	ContractID           string
+	WasmHash             string // "" for NULL
+	ExecRefOwner         string
+	ExecRefTag           string
+	FromLedger           uint32
+	ToLedger             uint32 // 0 while current
+	CreatedTxHash        string // "" for NULL; lowercase hex of the tx that opened this version
+	CreatedSourceAccount string // "" for NULL; G-address of that tx's source account
 }
 
 // CurrentVersion returns a contract's open version row.
@@ -305,10 +311,12 @@ func (t *Tx) SetVersion(ctx context.Context, v Version) (changed bool, err error
 		}
 	}
 	return true, t.exec(ctx, "open version "+v.ContractID, `INSERT INTO contract_versions
-		(contract_id, wasm_hash, exec_ref_owner, exec_ref_tag, from_ledger, to_ledger) VALUES (?, ?, ?, ?, ?, NULL)
+		(contract_id, wasm_hash, exec_ref_owner, exec_ref_tag, from_ledger, to_ledger, created_tx_hash, created_source_account)
+		VALUES (?, ?, ?, ?, ?, NULL, ?, ?)
 		ON CONFLICT (contract_id, from_ledger) DO UPDATE SET wasm_hash = excluded.wasm_hash,
 		  exec_ref_owner = excluded.exec_ref_owner, exec_ref_tag = excluded.exec_ref_tag, to_ledger = NULL`,
-		v.ContractID, nullStr(v.WasmHash), nullStr(v.ExecRefOwner), nullStr(v.ExecRefTag), v.FromLedger)
+		v.ContractID, nullStr(v.WasmHash), nullStr(v.ExecRefOwner), nullStr(v.ExecRefTag), v.FromLedger,
+		nullStr(v.CreatedTxHash), nullStr(v.CreatedSourceAccount))
 }
 
 // UpsertExecRef records a CAP-85 reference entry's current hash.

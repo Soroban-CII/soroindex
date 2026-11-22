@@ -92,7 +92,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	}
 
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
-	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, Logger: log})
+	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, Logger: log, AuthHeaderName: cfg.RPCHeaderName, AuthHeaderValue: cfg.RPCHeaderValue})
 	if err != nil {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
 		return exitError

@@ -89,7 +89,7 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (htt
 		return nil, nil, err
 	}
 	cleanup := func() { _ = s.Close() }
-	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency})
+	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, AuthHeaderName: cfg.RPCHeaderName, AuthHeaderValue: cfg.RPCHeaderValue})
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -157,7 +157,7 @@ func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http
 			return nil, nil, fmt.Errorf("%s: %w", name, err)
 		}
 		opened = append(opened, s)
-		client, err := rpc.New(rpc.Config{URL: url, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency})
+		client, err := rpc.New(rpc.Config{URL: url, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, AuthHeaderName: cfg.RPCHeaderName, AuthHeaderValue: cfg.RPCHeaderValue})
 		if err != nil {
 			cleanup()
 			return nil, nil, fmt.Errorf("%s: %w", name, err)

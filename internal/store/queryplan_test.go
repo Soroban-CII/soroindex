@@ -178,7 +178,7 @@ const measured = `\(SELECT c\.contract_id, c\.current_wasm_hash AS h FROM contra
 // detailQueries are the per-version claim lookups contract detail and
 // history share.
 var detailQueries = []planQuery{
-	{match: `^SELECT wasm_hash,from_ledger,to_ledger,exec_ref_owner,exec_ref_tag FROM contract_versions WHERE contract_id = \?`, indexes: []string{idxVersionsPK}},
+	{match: `^SELECT wasm_hash,from_ledger,to_ledger,exec_ref_owner,exec_ref_tag,created_tx_hash,created_source_account FROM contract_versions WHERE contract_id = \?`, indexes: []string{idxVersionsPK}},
 	{match: `^SELECT sep,source,anomaly FROM wasm_claims WHERE wasm_hash = \?`, indexes: []string{idxClaimsPK}},
 	{match: `^SELECT sep,status,ruleset_version,missing_json,mismatched_json FROM interface_matches WHERE wasm_hash = \?`, indexes: []string{idxMatchesPK}},
 	{match: `^SELECT sep,verdict,tool,tool_version,run_at FROM verifications WHERE contract_id = \?`, indexes: []string{idxVerifPK}},

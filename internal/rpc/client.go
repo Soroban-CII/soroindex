@@ -63,6 +63,11 @@ type Config struct {
 	MaxResponseBytes int64         // default 256 MiB
 	HTTPClient       *http.Client  // default: a client with no overall timeout (Timeout applies per attempt)
 	Logger           *slog.Logger  // default: slog.Default()
+	// AuthHeaderName and AuthHeaderValue add an authenticated header to every
+	// request. AuthHeaderValue is never logged, returned in errors, or stored.
+	// Both must be set or both must be empty.
+	AuthHeaderName  string
+	AuthHeaderValue string
 }
 
 // Client is safe for concurrent use.
@@ -78,6 +83,9 @@ type Client struct {
 func New(cfg Config) (*Client, error) {
 	if cfg.URL == "" {
 		return nil, errors.New("rpc: URL is required")
+	}
+	if (cfg.AuthHeaderName == "") != (cfg.AuthHeaderValue == "") {
+		return nil, errors.New("rpc: AuthHeaderName and AuthHeaderValue must both be set or both be empty")
 	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
@@ -195,6 +203,9 @@ func (c *Client) attempt(ctx context.Context, method string, id uint64, body []b
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	if c.cfg.AuthHeaderName != "" {
+		req.Header.Set(c.cfg.AuthHeaderName, c.cfg.AuthHeaderValue)
+	}
 
 	resp, err := c.cfg.HTTPClient.Do(req)
 	if err != nil {

@@ -1,0 +1,15 @@
+{
+  "sep": 40,
+  "ruleset_version": "sep40-v0.1.0",
+  "source": "stellar/stellar-protocol ecosystem/sep-0040.md, Draft v0.1.0; diffed against live text on 2026-11-21",
+  "required": [
+    {"fn": "base",      "inputs": [],                                        "output": ["udt:Asset"]},
+    {"fn": "assets",    "inputs": [],                                        "output": ["Vec<udt:Asset>"]},
+    {"fn": "decimals",  "inputs": [],                                        "output": ["u32"]},
+    {"fn": "resolution","inputs": [],                                        "output": ["u32"]},
+    {"fn": "price",     "inputs": [["udt:Asset"],["u64"]],                   "output": ["Option<udt:PriceData>"]},
+    {"fn": "prices",    "inputs": [["udt:Asset"],["u32"]],                   "output": ["Option<Vec<udt:PriceData>>"]},
+    {"fn": "lastprice", "inputs": [["udt:Asset"]],                           "output": ["Option<udt:PriceData>"]}
+  ],
+  "optional": []
+}

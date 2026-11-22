@@ -24,10 +24,17 @@ const (
 // Change is one ledger entry change, in the order the network applied it.
 // Entry is the post-change entry for Created, Updated and Restored; Key is
 // set for Removed and Evicted.
+//
+// TxHash and SourceAccount are non-empty when the change originated in a
+// transaction (as opposed to a ledger upgrade or eviction). TxHash is the
+// lowercase hex transaction hash. SourceAccount is the G-address of the
+// transaction source account, populated where the metadata exposes it.
 type Change struct {
-	Kind  ChangeKind
-	Entry *xdr.LedgerEntry
-	Key   *xdr.LedgerKey
+	Kind          ChangeKind
+	Entry         *xdr.LedgerEntry
+	Key           *xdr.LedgerKey
+	TxHash        string
+	SourceAccount string
 }
 
 // ErrUnsupportedMeta means a LedgerCloseMeta or TransactionMeta version this
@@ -35,33 +42,86 @@ type Change struct {
 // would leave the index wrong without saying so.
 var ErrUnsupportedMeta = errors.New("unsupported meta version")
 
+// txProvenance holds the transaction hash and source account for one
+// transaction in processing order.
+type txProvenance struct {
+	Hash   string // lowercase hex
+	Source string // G-address; empty when unavailable
+}
+
+// provenance returns per-transaction provenance for m in processing order.
+// TxHash is always populated. SourceAccount is populated for V0 (where the
+// transaction set is ordered to match TxProcessing) and left empty for V1/V2
+// (where the phase layout does not expose a stable per-index mapping).
+func provenance(m xdr.LedgerCloseMeta) []txProvenance {
+	n := m.CountTransactions()
+	out := make([]txProvenance, n)
+	for i := range out {
+		h := m.TransactionHash(i)
+		out[i].Hash = hex.EncodeToString(h[:])
+	}
+	// V0: TxSet.Txs is in the same order as TxProcessing.
+	if m.V == 0 && m.V0 != nil {
+		for i, env := range m.V0.TxSet.Txs {
+			if i < n {
+				out[i].Source = env.SourceAccount().ToAccountId().Address()
+			}
+		}
+	}
+	return out
+}
+
 // Changes returns every ledger entry change in a ledger, in apply order:
 // for each transaction its fee processing, then its changes before, during
 // and after its operations, then any post-apply fee changes; then upgrade
 // changes; then evictions.
+//
+// Changes from transactions carry TxHash (lowercase hex). SourceAccount is
+// populated where the metadata exposes it (V0 ledgers); it is empty for V1
+// and V2 ledgers. Upgrade and eviction changes leave both fields empty.
 func Changes(m xdr.LedgerCloseMeta) ([]Change, error) {
+	// Validate version and body before calling provenance: CountTransactions
+	// panics for unknown versions or a known version with a nil body.
+	switch m.V {
+	case 0:
+		if m.V0 == nil {
+			return nil, fmt.Errorf("%w: v0 body missing", ErrUnsupportedMeta)
+		}
+	case 1:
+		if m.V1 == nil {
+			return nil, fmt.Errorf("%w: v1 body missing", ErrUnsupportedMeta)
+		}
+	case 2:
+		if m.V2 == nil {
+			return nil, fmt.Errorf("%w: v2 body missing", ErrUnsupportedMeta)
+		}
+	default:
+		return nil, fmt.Errorf("%w: LedgerCloseMeta v%d", ErrUnsupportedMeta, m.V)
+	}
+	provs := provenance(m)
 	var out []Change
-	add := func(cs xdr.LedgerEntryChanges) {
+	addWith := func(cs xdr.LedgerEntryChanges, p txProvenance) {
 		for i := range cs {
 			c := &cs[i]
 			switch c.Type {
 			case xdr.LedgerEntryChangeTypeLedgerEntryCreated:
-				out = append(out, Change{Kind: Created, Entry: c.Created})
+				out = append(out, Change{Kind: Created, Entry: c.Created, TxHash: p.Hash, SourceAccount: p.Source})
 			case xdr.LedgerEntryChangeTypeLedgerEntryUpdated:
-				out = append(out, Change{Kind: Updated, Entry: c.Updated})
+				out = append(out, Change{Kind: Updated, Entry: c.Updated, TxHash: p.Hash, SourceAccount: p.Source})
 			case xdr.LedgerEntryChangeTypeLedgerEntryRemoved:
-				out = append(out, Change{Kind: Removed, Key: c.Removed})
+				out = append(out, Change{Kind: Removed, Key: c.Removed, TxHash: p.Hash, SourceAccount: p.Source})
 			case xdr.LedgerEntryChangeTypeLedgerEntryRestored:
-				out = append(out, Change{Kind: Restored, Entry: c.Restored})
+				out = append(out, Change{Kind: Restored, Entry: c.Restored, TxHash: p.Hash, SourceAccount: p.Source})
 			}
 		}
 	}
-	addTx := func(fee xdr.LedgerEntryChanges, tm xdr.TransactionMeta, postFee xdr.LedgerEntryChanges) error {
-		add(fee)
-		if err := addTxMeta(tm, add); err != nil {
+	add := func(cs xdr.LedgerEntryChanges) { addWith(cs, txProvenance{}) }
+	addTx := func(fee xdr.LedgerEntryChanges, tm xdr.TransactionMeta, postFee xdr.LedgerEntryChanges, p txProvenance) error {
+		addWith(fee, p)
+		if err := addTxMeta(tm, func(cs xdr.LedgerEntryChanges) { addWith(cs, p) }); err != nil {
 			return err
 		}
-		add(postFee)
+		addWith(postFee, p)
 		return nil
 	}
 	var upgrades []xdr.UpgradeEntryMeta
@@ -71,8 +131,9 @@ func Changes(m xdr.LedgerCloseMeta) ([]Change, error) {
 		if m.V0 == nil {
 			return nil, fmt.Errorf("%w: v0 body missing", ErrUnsupportedMeta)
 		}
-		for _, tx := range m.V0.TxProcessing {
-			if err := addTx(tx.FeeProcessing, tx.TxApplyProcessing, nil); err != nil {
+		for i, tx := range m.V0.TxProcessing {
+			p := provs[i]
+			if err := addTx(tx.FeeProcessing, tx.TxApplyProcessing, nil, p); err != nil {
 				return nil, err
 			}
 		}
@@ -81,8 +142,8 @@ func Changes(m xdr.LedgerCloseMeta) ([]Change, error) {
 		if m.V1 == nil {
 			return nil, fmt.Errorf("%w: v1 body missing", ErrUnsupportedMeta)
 		}
-		for _, tx := range m.V1.TxProcessing {
-			if err := addTx(tx.FeeProcessing, tx.TxApplyProcessing, nil); err != nil {
+		for i, tx := range m.V1.TxProcessing {
+			if err := addTx(tx.FeeProcessing, tx.TxApplyProcessing, nil, provs[i]); err != nil {
 				return nil, err
 			}
 		}
@@ -91,8 +152,8 @@ func Changes(m xdr.LedgerCloseMeta) ([]Change, error) {
 		if m.V2 == nil {
 			return nil, fmt.Errorf("%w: v2 body missing", ErrUnsupportedMeta)
 		}
-		for _, tx := range m.V2.TxProcessing {
-			if err := addTx(tx.FeeProcessing, tx.TxApplyProcessing, tx.PostTxApplyFeeProcessing); err != nil {
+		for i, tx := range m.V2.TxProcessing {
+			if err := addTx(tx.FeeProcessing, tx.TxApplyProcessing, tx.PostTxApplyFeeProcessing, provs[i]); err != nil {
 				return nil, err
 			}
 		}
