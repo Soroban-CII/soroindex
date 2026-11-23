@@ -41,6 +41,7 @@ func TestDecodeMetaFixtures(t *testing.T) {
 		{"not_token.wasm", append([]MetaEntry{{"sep", "41"}}, toolchainMeta...)},
 		{"multi_sep.wasm", append([]MetaEntry{{"sep", "41"}, {"sep", "40"}}, toolchainMeta...)},
 		{"token_full_legacy.wasm", toolchainMeta},
+		{"oracle_sep40.wasm", append([]MetaEntry{{"sep", "40"}}, toolchainMeta...)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.fixture+" decodes every entry in order", func(t *testing.T) {

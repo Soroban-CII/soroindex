@@ -173,7 +173,10 @@ func TestTypeName(t *testing.T) {
 // A cut on an entry boundary decodes cleanly; any other cut is ErrTruncated
 // and returns exactly the entries that ended before the cut.
 func TestDecodeSpecEveryPrefix(t *testing.T) {
-	for _, name := range []string{"token_full_sep.wasm", "token_full_legacy.wasm", "token_partial.wasm", "not_token.wasm", "multi_sep.wasm", "no_meta.wasm"} {
+	for _, name := range []string{
+		"token_full_sep.wasm", "token_full_legacy.wasm", "token_partial.wasm", "not_token.wasm", "multi_sep.wasm", "no_meta.wasm",
+		"oracle_sep40.wasm",
+	} {
 		t.Run(name, func(t *testing.T) {
 			section := fixtureSection(t, name, SectionSpec)
 			full, err := DecodeSpec(section, DefaultLimits())

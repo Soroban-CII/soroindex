@@ -6,7 +6,9 @@ Go builds and CI never need Rust.
 
 ## Versions used
 
-Recorded on 2026-10-07, when the committed `.wasm` files were built:
+Recorded on 2026-10-07, when the first committed `.wasm` files were built.
+Fixtures added since (2026-11-23) were built with the same versions, and
+rebuilding left every earlier hash in `../wasm/SHA256SUMS` unchanged.
 
 | Tool | Version | Pinned in |
 | --- | --- | --- |
@@ -34,8 +36,9 @@ lists the expected hashes.
 | `multi_sep.wasm` | `multi_sep/` | `contractmeta!` in two modules: `sep=41` and `sep=40`, as two meta entries. |
 | `no_meta.wasm` | `no_meta/` | Source declares `sep=41`; the script then removes the whole `contractmetav0` section. Spec intact (`ping`). |
 | `truncated.wasm` | derived | `token_full_sep.wasm` cut halfway through its `contractmetav0` payload. |
+| `oracle_sep40.wasm` | `oracle_sep40/` | The 7 SEP-40 `PriceFeedTrait` functions with its `PriceData` struct and `Asset` union; `sep=40`. The only fixture whose SEP functions use user-defined types (`udt:Asset`, `Option<udt:PriceData>`, `Option<Vec<udt:PriceData>>`). |
 
-`common/` holds the token logic the three token fixtures share. It has no
+`common/` holds the token logic the SEP-41 fixtures share. It has no
 `contractmeta!`, so every `sep` entry comes from the fixture's own source.
 
 The three token fixtures also export `__constructor(admin, decimals, name,
@@ -45,3 +48,18 @@ they exist so the tokens can be deployed, funded and upgraded on testnet
 
 Besides `sep`, every fixture carries the meta that the toolchain adds itself:
 `rsver`, `rssdkver`, `rssdk_spec_shaking` and `cliver`.
+
+## SEP sources
+
+Each fixture copies its functions and types from the SEP text in
+stellar/stellar-protocol at commit `7a502f4a4ebdc9b6a8c2abf2509e74f8a385b77d`
+(read 2026-11-23). The fixture's source comment cites it too.
+
+| Fixture | SEP text |
+| --- | --- |
+| `oracle_sep40` | `ecosystem/sep-0040.md`, Version 0.1.0, Updated 2023-05-13 |
+
+**SEP-40.** The SEP writes `PriceData` and `Asset` without `pub` or derives.
+The fixture adds both so the contract compiles; neither changes the spec
+entries. Price reporting is out of scope for SEP-40, so `__constructor` and
+an admin-gated `set_price` are extra.

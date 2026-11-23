@@ -10,6 +10,7 @@ members = [
     "not_token",
     "multi_sep",
     "no_meta",
+    "oracle_sep40",
 ]
 
 [workspace.package]
