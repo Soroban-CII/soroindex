@@ -41,6 +41,12 @@ const (
 	KeySchemaVersion     = "schema_version"
 	KeyRPCURL            = "rpc_url"
 	KeyRulesetVersions   = "ruleset_versions"
+	// KeyLastProtocol is the protocol version (ledger header ledgerVersion)
+	// of last_ledger. It is written in the same transaction as last_ledger.
+	KeyLastProtocol = "last_protocol"
+	// KeyLedgerCheckpoint is "<ledger>:<hash hex>" for last_ledger, so a
+	// testnet reset is detected by hash, not by ledger numbers alone.
+	KeyLedgerCheckpoint = "ledger_checkpoint"
 )
 
 // Store wraps the database handle.

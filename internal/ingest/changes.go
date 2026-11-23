@@ -161,6 +161,11 @@ func addTxMeta(tm xdr.TransactionMeta, add func(xdr.LedgerEntryChanges)) error {
 // ContractFacts are the contract-level facts in one ledger, in apply order.
 type ContractFacts struct {
 	Ledger uint32
+	// Protocol is the header's ledgerVersion: the protocol the ledger closed
+	// under. Hash is the ledger hash in hex. Sync stores both with the last
+	// ledger (protocol reporting, reset detection).
+	Protocol uint32
+	Hash     string
 	// Changes preserves apply order across instances, references, code and
 	// removals. Incremental sync must not apply the grouped summaries below.
 	Changes []Change
@@ -192,7 +197,8 @@ func ExtractContractFacts(m xdr.LedgerCloseMeta) (ContractFacts, error) {
 	if err != nil {
 		return ContractFacts{}, err
 	}
-	f := ContractFacts{Ledger: m.LedgerSequence()}
+	h := m.LedgerHash()
+	f := ContractFacts{Ledger: m.LedgerSequence(), Protocol: m.ProtocolVersion(), Hash: hex.EncodeToString(h[:])}
 	for _, c := range changes {
 		// Keep only relevant changes, including removals and restorations.
 		if c.Key != nil {

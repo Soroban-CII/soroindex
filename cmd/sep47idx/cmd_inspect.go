@@ -57,8 +57,12 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	if *require > 0 && !hasRule(ruleFiles, *require) {
 		return readExit("inspect", fmt.Errorf("--require-match %d: no rule file for SEP-%d", *require, *require), stderr)
 	}
+	versions, err := match.LoadVersions(rules.FS, ruleFiles)
+	if err != nil {
+		return readExit("inspect", err, stderr)
+	}
 	ix := &ingest.Indexer{Rules: ruleFiles, Matcher: match.Matcher{PartialThreshold: *threshold}, Limits: lim,
-		Claims: claims.Default(lim), Log: slog.New(slog.NewJSONHandler(stderr, nil)), Now: time.Now}
+		Claims: claims.Default(lim), Log: slog.New(slog.NewJSONHandler(stderr, nil)), Now: time.Now, Versions: versions.Highest}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	e, err := ix.Inspect(ctx, code)

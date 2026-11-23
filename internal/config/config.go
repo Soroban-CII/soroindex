@@ -32,7 +32,7 @@ type Network struct {
 var (
 	Mainnet   = Network{Name: "mainnet", Passphrase: "Public Global Stellar Network ; September 2015"}
 	Testnet   = Network{Name: "testnet", Passphrase: "Test SDF Network ; September 2015", DefaultRPCURL: "https://soroban-testnet.stellar.org"}
-	Futurenet = Network{Name: "futurenet", Passphrase: "Test SDF Future Network ; October 2022", DefaultRPCURL: "https://rpc-futurenet.stellar.org"}
+	Futurenet = Network{Name: "futurenet", Passphrase: "Test SDF Future Network ; October 2022", DefaultRPCURL: "https://rpc-futurenet.stellar.org"} // #nosec G101 -- a network passphrase is public, not a credential
 )
 
 // ErrUnknownNetwork means --network named no known network.

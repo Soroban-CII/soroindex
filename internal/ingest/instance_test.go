@@ -40,7 +40,7 @@ func TestDecodeRecordedNativeSAC(t *testing.T) {
 	}
 }
 
-func contractAddr(t *testing.T, id string) xdr.ScAddress {
+func contractAddr(t testing.TB, id string) xdr.ScAddress {
 	t.Helper()
 	a, err := contractAddress(id)
 	if err != nil {
@@ -49,7 +49,7 @@ func contractAddr(t *testing.T, id string) xdr.ScAddress {
 	return a
 }
 
-func instanceEntry(t *testing.T, ex xdr.ContractExecutable, storage *xdr.ScMap) xdr.ContractDataEntry {
+func instanceEntry(t testing.TB, ex xdr.ContractExecutable, storage *xdr.ScMap) xdr.ContractDataEntry {
 	return xdr.ContractDataEntry{
 		Contract: contractAddr(t, nativeSAC), Durability: xdr.ContractDataDurabilityPersistent,
 		Key: xdr.ScVal{Type: xdr.ScValTypeScvLedgerKeyContractInstance},

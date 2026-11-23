@@ -26,15 +26,29 @@ not passed to handlers that otherwise reject query parameters.
 | `/v1/contracts/{id}/history` | Claims for each version. Accepts `limit` and `cursor`. |
 | `/v1/wasm/{hash}` | Metadata, declarations, anomalies and matches; current live users accept `limit` and `cursor`. |
 | `/v1/seps` | Distinct live contract counts per SEP and tier; accepts `limit` and `cursor`. |
-| `/v1/stats` | Stored adoption, undeclared gap, anomaly token counts, archival and last indexed ledger. Takes only `network`. |
+| `/v1/stats` | Stored adoption, undeclared gap, anomaly token counts, archival, last indexed ledger and its protocol (`last_protocol`). Takes only `network`. |
 | `/v1/stats/toolchains` | Rust, soroban-sdk and Stellar CLI versions from stored meta, with declaration and SEP-41 match rates per version. Takes only `network`. |
-| `/v1/health` | Network, stored last ledger, fresh RPC tip and lag. Takes only `network`. |
+| `/v1/health` | Network, stored last ledger, fresh RPC tip, lag, and `last_protocol`. Takes only `network`. |
 | `/v1/events/upgrades` | Server-Sent Events stream of contract version upgrades. Query: `since` (ledger number, optional) to replay from that ledger. `Last-Event-ID` header also supported for resume. Events have `id=<ledger>` and `data=<VersionChange JSON>`. Connection limits and idle timeouts follow server settings. Takes only `network`. |
 
 Pages default to 50 rows, at most 500. Pass `next_cursor` back unchanged with the
 same filters; null means the end. Cursors are opaque base64url values. History
 cursors are scoped to the contract. Pagination observes current data on each
 request; it does not hold a snapshot across separate requests.
+
+`last_protocol` (in `/v1/health` and `/v1/stats`) is the protocol version the
+last indexed ledger closed under. It is `null` until a sync batch records one, so
+a seed-only index reports `null`. The other health fields keep their meaning.
+
+Each inferred result (`claims[].inferred` in contract detail, and each entry of
+`interface_matches` in `/v1/wasm/{hash}`) carries `matched_version`: the newest
+SEP version, as a `ruleset_version`, whose interface the Wasm implements. Each
+version is checked against its own types only. It is `null` when no shipped
+version matches, when the status is `no_spec`, or when the Wasm was analyzed
+before migration 0002 stored its functions. It never changes `status`. For
+example, a token with `transfer.to: Address` has `status: match` against
+`sep41-v0.5.2` and `matched_version: sep41-v0.3.0`. See
+[Writing a rule file](rule-files.md#historical-versions-and-matched_version).
 
 Inferred results use loaded rule versions. SACs belong to the protocol tier and
 never satisfy declared or inferred filters. Verified filtering requires a current
@@ -396,6 +410,9 @@ curl --fail --silent --show-error 'http://127.0.0.1:8080/v1/stats'
 
 ### Live health
 
+This capture predates `last_protocol` (issue #80). A current build adds that
+field after `lag`.
+
 ```sh
 curl --fail --silent --show-error 'http://127.0.0.1:8080/v1/health'
 ```
@@ -632,7 +649,8 @@ GET /v1/contracts/CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU
         "status": "match",
         "ruleset_version": "sep41-v0.5.2",
         "missing": [],
-        "mismatched": []
+        "mismatched": [],
+        "matched_version": "sep41-v0.5.2"
       },
       "verified": {
         "verdict": "pass",
@@ -684,7 +702,8 @@ GET /v1/contracts/CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPWAU
         "status": "match",
         "ruleset_version": "sep41-v0.5.2",
         "missing": [],
-        "mismatched": []
+        "mismatched": [],
+        "matched_version": "sep41-v0.5.2"
       },
       "verified": null,
       "protocol": false,
@@ -732,7 +751,8 @@ GET /v1/contracts/CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALGRU/histo
             "status": "match",
             "ruleset_version": "sep41-v0.5.2",
             "missing": [],
-            "mismatched": []
+            "mismatched": [],
+            "matched_version": null
           },
           "verified": {
             "verdict": "pass",
@@ -763,7 +783,8 @@ GET /v1/contracts/CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALGRU/histo
               "burn",
               "burn_from"
             ],
-            "mismatched": []
+            "mismatched": [],
+            "matched_version": null
           },
           "verified": null,
           "protocol": false,
@@ -832,7 +853,8 @@ GET /v1/wasm/2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880
       "mismatched": [],
       "matched_variants": {
         "transfer.inputs[1]": "MuxedAddress"
-      }
+      },
+      "matched_version": null
     }
   ],
   "contracts": [

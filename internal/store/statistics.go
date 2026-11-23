@@ -16,6 +16,9 @@ type Statistics struct {
 	ArchivedContracts int            `json:"archived_contracts"`
 	TotalContracts    int            `json:"total_contracts"`
 	LastLedger        uint32         `json:"last_ledger"`
+	// LastProtocol is the protocol last_ledger closed under; null until a
+	// sync batch has recorded one (a seed-only index has none).
+	LastProtocol      *uint32        `json:"last_protocol"`
 	RulesetVersions   map[int]string `json:"ruleset_versions"`
 	ParserVersion     string         `json:"parser_version"`
 	QueuedWasmFetches int            `json:"queued_wasm_fetches"`
@@ -32,6 +35,11 @@ func (s *Store) Stats(ctx context.Context, network string, rulesets map[int]stri
 	d.LastLedger, err = readLedger(ctx, tx)
 	if err != nil {
 		return d, err
+	}
+	if p, ok, perr := readProtocol(ctx, tx); perr != nil {
+		return d, perr
+	} else if ok {
+		d.LastProtocol = &p
 	}
 	d.Adoption, err = totals(ctx, tx, rulesets[41], false)
 	if err != nil {

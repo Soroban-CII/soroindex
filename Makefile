@@ -62,10 +62,10 @@ fixtures:
 docs:
 	mkdocs build --strict
 
-## rules-check: validate every rules/sep-*.json against rules/schema.json
+## rules-check: validate every rules/sep-*.json and rules/history/*.json against rules/schema.json
 CHECK_JSONSCHEMA_VERSION ?= 0.38.2
 rules-check:
-	pipx run --spec check-jsonschema==$(CHECK_JSONSCHEMA_VERSION) check-jsonschema --schemafile rules/schema.json rules/sep-*.json
+	pipx run --spec check-jsonschema==$(CHECK_JSONSCHEMA_VERSION) check-jsonschema --schemafile rules/schema.json rules/sep-*.json rules/history/*.json
 
 ## tidy-check: fail if go.mod/go.sum are not tidy
 tidy-check:

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -14,6 +15,26 @@ import (
 
 // ErrRetentionGap means the resume point is older than the RPC's retained history.
 var ErrRetentionGap = errors.New("resume point is outside RPC retention; seed or backfill the index")
+
+// ErrNetworkReset means the RPC serves a different ledger history than the
+// one this index was built from, under the same network passphrase: testnet
+// (or futurenet) was reset. The index describes contracts that no longer
+// exist, and continuing would mix two histories in one database, so sync
+// refuses before writing anything. Start a new index in a new --db file.
+var ErrNetworkReset = errors.New("network was reset: the RPC's ledger history no longer matches this index; start a new index with a new --db file")
+
+// DefaultResetThreshold is how far, in ledgers, the stored last_ledger may
+// be ahead of the RPC's latest ledger before sync calls it a reset. A
+// lagging or failed-over node is a few ledgers behind; 17280 ledgers is
+// about a day at 5 seconds per ledger, which no usable node is behind.
+const DefaultResetThreshold = 17280
+
+// LedgerHasher is implemented by sources that can return the hash of one
+// retained ledger. The loop uses it to compare the stored checkpoint with
+// the node's history before writing; ingest.LedgerSource implements it.
+type LedgerHasher interface {
+	LedgerHash(ctx context.Context, seq uint32) (string, error)
+}
 
 // Source supplies consecutive ledger batches and fresh retention/tip observations.
 type Source interface {
@@ -32,6 +53,14 @@ type Loop struct {
 	Interval         time.Duration
 	// Progress runs after a batch commits or a fresh tip confirms caught_up.
 	Progress func(last, latest uint32, caughtUp bool)
+	// Prefetch, when set, runs after a batch is fetched and before its
+	// transaction opens (Wasm fetch and analysis on a bounded pool). It
+	// writes nothing; a cancelled prefetch leaves last_ledger unchanged.
+	Prefetch func(context.Context, ingest.Batch) error
+	// ResetThreshold overrides DefaultResetThreshold (ledgers).
+	ResetThreshold uint32
+	// Log receives protocol-change records; nil discards them.
+	Log *slog.Logger
 }
 
 // Run resumes stored progress; StartLedger is required only for an unseeded index.
@@ -51,6 +80,11 @@ func (l *Loop) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	checked := false // the hash checkpoint is compared once, before the first write
+	protocol, haveProtocol, err := l.Store.LastProtocol(ctx)
+	if err != nil {
+		return err
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -66,7 +100,16 @@ func (l *Loop) Run(ctx context.Context) error {
 			return fmt.Errorf("%w: last %d, oldest %d", ErrRetentionGap, last, w.Oldest)
 		}
 		if last > w.Latest {
+			if last-w.Latest > l.resetThreshold() {
+				return fmt.Errorf("%w (stored last_ledger %d is %d ledgers ahead of the RPC's latest %d)", ErrNetworkReset, last, last-w.Latest, w.Latest)
+			}
 			return fmt.Errorf("sync: stored ledger %d exceeds RPC latest %d", last, w.Latest)
+		}
+		if !checked {
+			if err := l.checkCheckpoint(ctx, w); err != nil {
+				return err
+			}
+			checked = true
 		}
 		if last == w.Latest {
 			if l.Progress != nil {
@@ -94,8 +137,22 @@ func (l *Loop) Run(ctx context.Context) error {
 		if b.To > b.Latest {
 			return fmt.Errorf("sync: batch %d exceeds latest %d", b.To, b.Latest)
 		}
+		if l.Prefetch != nil {
+			if err := l.Prefetch(ctx, b); err != nil {
+				return fmt.Errorf("prefetch ledgers %d..%d: %w", b.From, b.To, err)
+			}
+		}
 		if err := l.commit(ctx, b); err != nil {
 			return err
+		}
+		for _, f := range b.Facts {
+			if f.Protocol == 0 {
+				continue
+			}
+			if haveProtocol && f.Protocol != protocol && l.Log != nil {
+				l.Log.InfoContext(ctx, "protocol change", "ledger", f.Ledger, "from_protocol", protocol, "to_protocol", f.Protocol)
+			}
+			protocol, haveProtocol = f.Protocol, true
 		}
 		last = b.To
 		if l.Progress != nil {
@@ -117,6 +174,43 @@ func (l *Loop) Run(ctx context.Context) error {
 		}
 		// Window calls getLatestLedger again before any caught_up report.
 	}
+}
+
+func (l *Loop) resetThreshold() uint32 {
+	if l.ResetThreshold > 0 {
+		return l.ResetThreshold
+	}
+	return DefaultResetThreshold
+}
+
+// checkCheckpoint compares the stored ledger hash with the node's hash for
+// the same ledger. A mismatch is ErrNetworkReset. It is skipped when no
+// checkpoint exists yet (fresh or seed-only index), when the source cannot
+// return hashes, or when the checkpoint ledger is outside the node's
+// retention (the retention-gap check already guards that case).
+func (l *Loop) checkCheckpoint(ctx context.Context, w ingest.Window) error {
+	h, ok := l.Source.(LedgerHasher)
+	if !ok {
+		return nil
+	}
+	cp, err := l.Store.Checkpoint(ctx)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if cp.Ledger < w.Oldest || cp.Ledger > w.Latest {
+		return nil
+	}
+	got, err := h.LedgerHash(ctx, cp.Ledger)
+	if err != nil {
+		return fmt.Errorf("checkpoint ledger %d: %w", cp.Ledger, err)
+	}
+	if got != cp.Hash {
+		return fmt.Errorf("%w (ledger %d: index has hash %s, RPC has %s)", ErrNetworkReset, cp.Ledger, cp.Hash, got)
+	}
+	return nil
 }
 
 func (l *Loop) lastLedger(ctx context.Context) (uint32, error) {
@@ -153,6 +247,19 @@ func (l *Loop) commit(ctx context.Context, b ingest.Batch) error {
 	}
 	if err := tx.SetLastLedger(ctx, b.To); err != nil {
 		return err
+	}
+	if len(b.Facts) > 0 {
+		lastFact := b.Facts[len(b.Facts)-1]
+		if lastFact.Protocol != 0 {
+			if err := tx.SetLastProtocol(ctx, lastFact.Protocol); err != nil {
+				return err
+			}
+		}
+		if lastFact.Hash != "" {
+			if err := tx.SetCheckpoint(ctx, store.Checkpoint{Ledger: lastFact.Ledger, Hash: lastFact.Hash}); err != nil {
+				return err
+			}
+		}
 	}
 	return tx.Commit()
 }

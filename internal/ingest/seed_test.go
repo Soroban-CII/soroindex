@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,13 +35,14 @@ func seedCID(n byte) string {
 
 // entryRPC serves ledger entries from maps keyed by base64 LedgerKey.
 type entryRPC struct {
-	t       *testing.T
+	t       testing.TB
 	latest  uint32
 	code    map[string][]byte
 	data    map[string]xdr.ContractDataEntry
 	lastMod map[string]uint32
 	expired map[string]bool
 	calls   int
+	mu      sync.Mutex // the seed pool calls the RPC from several workers
 }
 
 func (f *entryRPC) GetNetwork(context.Context) (rpc.Network, error) { return rpc.Network{}, nil }
@@ -51,6 +53,8 @@ func (f *entryRPC) GetLedgers(context.Context, rpc.LedgersRequest) (rpc.LedgersP
 	return rpc.LedgersPage{}, nil
 }
 func (f *entryRPC) GetLedgerEntries(_ context.Context, keys []string) (rpc.LedgerEntries, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls++
 	res := rpc.LedgerEntries{LatestLedger: f.latest}
 	for _, k := range keys {
@@ -86,7 +90,7 @@ func (f *entryRPC) GetLedgerEntries(_ context.Context, keys []string) (rpc.Ledge
 	return res, nil
 }
 
-func newIndexer(t *testing.T, r RPC) (*Indexer, *store.Store) {
+func newIndexer(t testing.TB, r RPC) (*Indexer, *store.Store) {
 	t.Helper()
 	s, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "i.db"), store.Options{Passphrase: "Test SDF Network ; September 2015"})
 	if err != nil {
@@ -101,7 +105,7 @@ func newIndexer(t *testing.T, r RPC) (*Indexer, *store.Store) {
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Now: func() time.Time { return time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC) }}, s
 }
 
-func wasmFixture(t *testing.T, name string) ([]byte, string) {
+func wasmFixture(t testing.TB, name string) ([]byte, string) {
 	b, err := fs.ReadFile(os.DirFS("../../testdata/wasm"), name)
 	if err != nil {
 		t.Fatal(err)

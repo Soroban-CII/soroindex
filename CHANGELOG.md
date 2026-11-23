@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Report which SEP-41 version a Wasm's interface implements. `rules/history/` adds
+  SEP-41 v0.1.0 and v0.3.0, each citing its stellar-protocol commit. Matches carry
+  `matched_version` in the API and in the `wasm`, `contract` and `inspect` output.
+  Stored statuses are unchanged (#78).
+- Refuse to sync after a testnet reset with `ErrNetworkReset`, before writing
+  anything. Each batch stores a `ledger_checkpoint` hash, and sync compares it
+  with the RPC. A stored ledger more than 17,280 ledgers ahead of the RPC tip
+  also counts as a reset (#79).
+- Store the protocol version of the last indexed ledger (`last_protocol`), log
+  protocol changes, and report the protocol in `stats`, `/v1/stats` and
+  `/v1/health`. Metadata the pinned SDK cannot decode now stops sync with
+  `ErrUnknownXDR`, naming the ledger, the protocol and the SDK version (#80).
+- Fetch and parse Wasm on a bounded pool sized by `--rpc-concurrency`, and prepare
+  seed batches in parallel. Commits stay in order, one transaction per batch.
+  Seeding 2,000 contracts through a fake RPC with 100 ms per call went from
+  1.55 s to 0.46 s (#81).
+
 - Add `GET /v1/contracts?ids=...`, a bulk lookup of up to 100 contract IDs that
   reports unknown IDs in `not_found` and charges the rate limit per 10 IDs (#114).
 - Add `sep47idx inspect <file.wasm>`, which runs the indexer's analysis on a local

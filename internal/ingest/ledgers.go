@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -62,6 +63,32 @@ func (s *LedgerSource) Window(ctx context.Context) (Window, error) {
 	return w, nil
 }
 
+// LedgerHash returns the hash (hex) of one ledger the node still retains,
+// for the reset checkpoint in internal/sync. It uses the getLedgers hash
+// field and decodes metadata only when a node leaves that field empty.
+func (s *LedgerSource) LedgerHash(ctx context.Context, seq uint32) (string, error) {
+	page, err := s.RPC.GetLedgers(ctx, rpc.LedgersRequest{StartLedger: seq, Limit: 1})
+	if err != nil {
+		return "", fmt.Errorf("getLedgers %d: %w", seq, err)
+	}
+	if len(page.Ledgers) == 0 || page.Ledgers[0].Sequence != seq {
+		return "", fmt.Errorf("%w: ledger %d not returned", ErrLedgerGap, seq)
+	}
+	l := page.Ledgers[0]
+	if l.Hash != "" {
+		return l.Hash, nil
+	}
+	var m xdr.LedgerCloseMeta
+	if err := UnmarshalBase64(l.MetadataXDR, &m, s.metaLimits()); err != nil {
+		if errors.Is(err, ErrTooLarge) {
+			return "", fmt.Errorf("ledger %d meta: %w", seq, err)
+		}
+		return "", unknownXDR(ledgerXDR{seq: seq, header: l.HeaderXDR, meta: l.MetadataXDR}, err)
+	}
+	h := m.LedgerHash()
+	return hex.EncodeToString(h[:]), nil
+}
+
 // Batch is the facts of a consecutive run of ledgers.
 type Batch struct {
 	From, To uint32 // inclusive; To < From when the batch is empty
@@ -88,7 +115,10 @@ func (s *LedgerSource) Fetch(ctx context.Context, from uint32) (Batch, error) {
 		}
 		var m xdr.LedgerCloseMeta
 		if err := UnmarshalBase64(l.MetadataXDR, &m, s.metaLimits()); err != nil {
-			return Batch{}, fmt.Errorf("ledger %d meta: %w", l.Sequence, err)
+			if errors.Is(err, ErrTooLarge) {
+				return Batch{}, fmt.Errorf("ledger %d meta: %w", l.Sequence, err)
+			}
+			return Batch{}, unknownXDR(ledgerXDR{seq: l.Sequence, header: l.HeaderXDR, meta: l.MetadataXDR}, err)
 		}
 		if seq := m.LedgerSequence(); seq != l.Sequence {
 			return Batch{}, fmt.Errorf("ledger %d: metadata is for ledger %d", l.Sequence, seq)
@@ -96,6 +126,9 @@ func (s *LedgerSource) Fetch(ctx context.Context, from uint32) (Batch, error) {
 		f, err := ExtractContractFacts(m)
 		if err != nil {
 			return Batch{}, fmt.Errorf("ledger %d: %w", l.Sequence, err)
+		}
+		if l.Hash != "" && l.Hash != f.Hash {
+			return Batch{}, fmt.Errorf("ledger %d: RPC hash %s differs from metadata hash %s", l.Sequence, l.Hash, f.Hash)
 		}
 		b.Facts = append(b.Facts, f)
 		b.To = l.Sequence

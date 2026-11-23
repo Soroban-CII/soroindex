@@ -16,7 +16,8 @@
           "burn",
           "burn_from"
         ],
-        "mismatched": []
+        "mismatched": [],
+        "matched_version": null
       },
       "verified": null,
       "protocol": false,

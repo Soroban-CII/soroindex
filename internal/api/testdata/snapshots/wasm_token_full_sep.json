@@ -41,7 +41,8 @@
       "mismatched": [],
       "matched_variants": {
         "transfer.inputs[1]": "MuxedAddress"
-      }
+      },
+      "matched_version": "sep41-v0.5.2"
     }
   ],
   "contracts": [

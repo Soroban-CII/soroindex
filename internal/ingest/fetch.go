@@ -30,11 +30,24 @@ type Code struct {
 // 2 MiB of base64 leaves ample room while rejecting anything absurd.
 var codeLimits = XDRLimits{MaxBase64Len: 2 << 20}
 
+// DefaultConcurrency is how many getLedgerEntries calls, and how many Wasm
+// analyses, run at once when the caller does not say. It matches the RPC
+// client's default --rpc-concurrency.
+const DefaultConcurrency = 4
+
 // FetchCode fetches every hash's code with getLedgerEntries, 200 keys per
-// call, with calls in parallel up to the client's concurrency limit. A
-// hash the node does not return, or whose liveUntilLedgerSeq is below the
-// latest ledger, is Archived.
+// call, with up to DefaultConcurrency calls in flight. See FetchCodeWith.
 func FetchCode(ctx context.Context, c RPC, hashes []string) (map[string]Code, error) {
+	return FetchCodeWith(ctx, c, hashes, DefaultConcurrency)
+}
+
+// FetchCodeWith fetches every hash's code with getLedgerEntries, 200 keys
+// per call, using exactly min(workers, calls) goroutines, so the number of
+// goroutines never grows with the input. A hash the node does not return,
+// or whose liveUntilLedgerSeq is below the latest ledger, is Archived. The
+// first error cancels the calls still waiting and is returned. The RPC
+// client already retries with backoff, so this adds no retry layer.
+func FetchCodeWith(ctx context.Context, c RPC, hashes []string, workers int) (map[string]Code, error) {
 	keys := make([]string, 0, len(hashes))
 	keyToHash := map[string]string{}
 	for _, h := range hashes {
@@ -49,50 +62,106 @@ func FetchCode(ctx context.Context, c RPC, hashes []string) (map[string]Code, er
 	for _, h := range hashes {
 		out[h] = Code{Archived: true} // until the node returns it live
 	}
-	var mu sync.Mutex
-	var firstErr error
-	var wg sync.WaitGroup
+	var batches [][]string
 	for start := 0; start < len(keys); start += rpc.MaxLedgerEntryKeys {
-		batch := keys[start:min(start+rpc.MaxLedgerEntryKeys, len(keys))]
+		batches = append(batches, keys[start:min(start+rpc.MaxLedgerEntryKeys, len(keys))])
+	}
+	var mu sync.Mutex
+	err := forEach(ctx, len(batches), workers, func(ctx context.Context, i int) error {
+		res, err := c.GetLedgerEntries(ctx, batches[i])
+		if err != nil {
+			return fmt.Errorf("fetch code batch at %d: %w", i*rpc.MaxLedgerEntryKeys, err)
+		}
+		got := map[string]Code{}
+		for _, e := range res.Entries {
+			data, err := DecodeLedgerEntryDataBase64(e.XDR, codeLimits)
+			if err != nil || data.Type != xdr.LedgerEntryTypeContractCode || data.ContractCode == nil {
+				return fmt.Errorf("code entry for key %s: unexpected or undecodable (%v)", e.Key, err)
+			}
+			h := hex.EncodeToString(data.ContractCode.Hash[:])
+			if keyToHash[e.Key] != h {
+				return fmt.Errorf("node returned code %s for key %s", h, e.Key)
+			}
+			if e.LiveUntilLedgerSeq != nil && *e.LiveUntilLedgerSeq < res.LatestLedger {
+				continue // archived: TTL passed, stays Archived
+			}
+			got[h] = Code{Bytes: data.ContractCode.Code}
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		for h, c := range got {
+			out[h] = c
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// forEach runs fn(ctx, i) for i in [0, n) on min(workers, n) goroutines
+// (DefaultConcurrency when workers <= 0). The first error cancels the
+// context passed to the remaining calls, stops handing out work, and is
+// returned after every started call has returned. It never leaves a
+// goroutine running after it returns.
+func forEach(ctx context.Context, n, workers int, fn func(context.Context, int) error) error {
+	if n == 0 {
+		return ctx.Err()
+	}
+	if workers <= 0 {
+		workers = DefaultConcurrency
+	}
+	workers = min(workers, n)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var (
+		mu       sync.Mutex
+		firstErr error
+		next     int
+		wg       sync.WaitGroup
+	)
+	take := func() (int, bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		if firstErr != nil || next >= n {
+			return 0, false
+		}
+		i := next
+		next++
+		return i, true
+	}
+	for range workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			res, err := c.GetLedgerEntries(ctx, batch)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				if firstErr == nil {
-					firstErr = fmt.Errorf("fetch code batch at %d: %w", start, err)
+			for {
+				i, ok := take()
+				if !ok {
+					return
 				}
-				return
-			}
-			for _, e := range res.Entries {
-				data, err := DecodeLedgerEntryDataBase64(e.XDR, codeLimits)
-				if err != nil || data.Type != xdr.LedgerEntryTypeContractCode || data.ContractCode == nil {
+				if err := ctx.Err(); err != nil {
+					mu.Lock()
 					if firstErr == nil {
-						firstErr = fmt.Errorf("code entry for key %s: unexpected or undecodable (%v)", e.Key, err)
+						firstErr = err
 					}
-					continue
+					mu.Unlock()
+					return
 				}
-				h := hex.EncodeToString(data.ContractCode.Hash[:])
-				if keyToHash[e.Key] != h {
+				if err := fn(ctx, i); err != nil {
+					mu.Lock()
 					if firstErr == nil {
-						firstErr = fmt.Errorf("node returned code %s for key %s", h, e.Key)
+						firstErr = err
 					}
-					continue
+					mu.Unlock()
+					cancel()
+					return
 				}
-				if e.LiveUntilLedgerSeq != nil && *e.LiveUntilLedgerSeq < res.LatestLedger {
-					continue // archived: TTL passed, stays Archived
-				}
-				out[h] = Code{Bytes: data.ContractCode.Code}
 			}
 		}()
 	}
 	wg.Wait()
-	if firstErr != nil {
-		return nil, firstErr
-	}
-	return out, nil
+	return firstErr
 }
 
 // SortedKeys returns a map's keys in order, for deterministic output.

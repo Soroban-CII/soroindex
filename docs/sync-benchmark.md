@@ -91,3 +91,26 @@ go test -bench=BenchmarkSyncThroughput ./internal/ingest/ -benchtime=10s -mempro
 go tool pprof -text cpu.prof
 go tool pprof -text -sample_index=alloc_space mem.prof
 ```
+## Seeding with RPC latency (issue #81)
+
+`BenchmarkSeedRPCLatency` (`internal/ingest/prefetch_test.go`) seeds 2,000
+contracts over 200 distinct Wasm hashes. It uses a fake RPC that adds a fixed
+delay to every `getLedgerEntries` call. Every run makes the same 12 calls: 10
+instance batches of 200 and 2 code fetches. Only overlap changes.
+
+Measured on 23 November 2026 on an Apple M4 (10 cores), macOS, Go 1.27.4, with
+`-benchtime 3x`. "main" is commit `314cd65` before this change. Its seed has no
+pool, so it ran with the same helpers and no `Concurrency` setting.
+
+| Fake RPC latency | main (`314cd65`) | `--rpc-concurrency 1` | 4 (default) | 8 |
+| --- | --- | --- | --- | --- |
+| 25 ms per call | 494 ms | 354 ms | 230 ms | 236 ms |
+| 100 ms per call | 1,548 ms | 1,292 ms | 458 ms | 391 ms |
+
+Even concurrency 1 beats main: the next batch is prepared while the previous
+one commits. At 25 ms, the serial SQLite commit of each batch, not the RPC,
+limits the speed-up. At 100 ms, the default pool is 3.4 times faster than main.
+
+```sh
+go test -run '^$' -bench BenchmarkSeedRPCLatency -benchtime 3x ./internal/ingest/
+```
