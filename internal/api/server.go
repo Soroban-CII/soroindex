@@ -177,6 +177,10 @@ type healthResponse struct {
 	LastLedger   uint32 `json:"last_ledger"`
 	LatestLedger uint32 `json:"latest_ledger"`
 	Lag          uint32 `json:"lag"`
+	// LastProtocol is the protocol version last_ledger closed under, or
+	// null before the first sync batch records one. Added for issue #80;
+	// the fields above keep their meaning.
+	LastProtocol *uint32 `json:"last_protocol"`
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +219,16 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if last == 0 {
 		status = "initializing"
 	}
-	writeJSON(w, 200, healthResponse{Status: status, Network: b.Network, LastLedger: uint32(last), LatestLedger: latest.Sequence, Lag: latest.Sequence - uint32(last)}) // #nosec G115 -- parsed with 32-bit bound
+	resp := healthResponse{Status: status, Network: b.Network, LastLedger: uint32(last), LatestLedger: latest.Sequence, Lag: latest.Sequence - uint32(last)} // #nosec G115 -- parsed with 32-bit bound
+	proto, ok, err := b.Store.LastProtocol(r.Context())
+	if err != nil {
+		writeError(w, 500, "internal", "cannot read sync progress")
+		return
+	}
+	if ok {
+		resp.LastProtocol = &proto
+	}
+	writeJSON(w, 200, resp)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

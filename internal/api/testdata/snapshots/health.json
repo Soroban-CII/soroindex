@@ -3,5 +3,6 @@
   "network": "testnet",
   "last_ledger": 5062910,
   "latest_ledger": 5062915,
-  "lag": 5
+  "lag": 5,
+  "last_protocol": null
 }
