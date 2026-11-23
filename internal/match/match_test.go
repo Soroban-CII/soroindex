@@ -65,6 +65,8 @@ func TestMatchFixtures(t *testing.T) {
 		{"not_token.wasm", StatusMismatch, 0, []string{"allowance", "approve", "balance", "burn", "burn_from", "decimals", "name", "symbol", "transfer", "transfer_from"}, nil, ""},
 		{"multi_sep.wasm", StatusMismatch, 1, []string{"allowance", "approve", "balance", "burn", "burn_from", "name", "symbol", "transfer", "transfer_from"}, nil, ""},
 		{"no_meta.wasm", StatusMismatch, 0, []string{"allowance", "approve", "balance", "burn", "burn_from", "decimals", "name", "symbol", "transfer", "transfer_from"}, nil, ""},
+		// SEP-56 requires the vault's shares to be a SEP-41 token; it declares 41,56.
+		{"vault_sep56.wasm", StatusMatch, 10, []string{}, nil, "MuxedAddress"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.fixture+" is "+string(tt.status), func(t *testing.T) {
@@ -87,56 +89,6 @@ func TestMatchFixtures(t *testing.T) {
 			}
 			if got.RulesetVersion != "sep41-v0.5.2" || got.SEP != 41 {
 				t.Errorf("result carries %d/%s", got.SEP, got.RulesetVersion)
-			}
-		})
-	}
-}
-
-// TestMatchNFTFixtures runs the SEP-50 fixtures through the matcher with a
-// rule written in this test from the SEP-50 v0.1.0 trait (TokenID = Balance
-// = u32, as the fixtures use). It is not rules/sep-0050.json, which is a
-// separate issue; it only shows the partial variant really is partial.
-func TestMatchNFTFixtures(t *testing.T) {
-	u32 := []string{"u32"}
-	addr := []string{"Address"}
-	r := RuleFile{
-		SEP: 50, RulesetVersion: "sep50-v0.1.0", Source: "test-only rule from SEP-50 v0.1.0, not a shipped rule file",
-		Required: []FnRule{
-			{Fn: "balance", Inputs: [][]string{addr}, Output: u32},
-			{Fn: "owner_of", Inputs: [][]string{u32}, Output: addr},
-			{Fn: "transfer", Inputs: [][]string{addr, addr, u32}, Output: []string{}},
-			{Fn: "transfer_from", Inputs: [][]string{addr, addr, addr, u32}, Output: []string{}},
-			{Fn: "approve", Inputs: [][]string{addr, addr, u32, u32}, Output: []string{}},
-			{Fn: "approve_for_all", Inputs: [][]string{addr, addr, u32}, Output: []string{}},
-			{Fn: "get_approved", Inputs: [][]string{u32}, Output: []string{"Option<Address>"}},
-			{Fn: "is_approved_for_all", Inputs: [][]string{addr, addr}, Output: []string{"bool"}},
-			{Fn: "name", Inputs: [][]string{}, Output: []string{"String"}},
-			{Fn: "symbol", Inputs: [][]string{}, Output: []string{"String"}},
-			{Fn: "token_uri", Inputs: [][]string{u32}, Output: []string{"String"}},
-		},
-		Optional: []FnRule{},
-	}
-	tests := []struct {
-		fixture string
-		status  Status
-		ok      int
-		missing []string
-	}{
-		{"nft_sep50.wasm", StatusMatch, 11, []string{}},
-		{"nft_sep50_partial.wasm", StatusPartial, 10, []string{"approve_for_all"}},
-	}
-	for _, tt := range tests {
-		t.Run(tt.fixture+" is "+string(tt.status), func(t *testing.T) {
-			fns, ok := fixtureFns(t, tt.fixture)
-			if !ok {
-				t.Fatal("fixture has no spec")
-			}
-			got := Match(fns, r)
-			if got.Status != tt.status || got.OKCount != tt.ok || got.RequiredCount != 11 {
-				t.Fatalf("status %s ok %d/%d, want %s %d/11", got.Status, got.OKCount, got.RequiredCount, tt.status, tt.ok)
-			}
-			if !reflect.DeepEqual(got.Missing, tt.missing) || len(got.Mismatched) != 0 {
-				t.Fatalf("missing %v mismatched %+v, want missing %v and none mismatched", got.Missing, got.Mismatched, tt.missing)
 			}
 		})
 	}

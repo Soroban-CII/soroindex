@@ -39,6 +39,7 @@ lists the expected hashes.
 | `oracle_sep40.wasm` | `oracle_sep40/` | The 7 SEP-40 `PriceFeedTrait` functions with its `PriceData` struct and `Asset` union; `sep=40`. The only fixture whose SEP functions use user-defined types (`udt:Asset`, `Option<udt:PriceData>`, `Option<Vec<udt:PriceData>>`). |
 | `nft_sep50.wasm` | `nft_sep50/` | All 11 SEP-50 `NonFungibleToken` functions, `TokenID` and `Balance` as `u32`; `sep=50`. |
 | `nft_sep50_partial.wasm` | `nft_sep50_partial/` | `nft_sep50` without `approve_for_all` (10 of 11); `sep=50`. For partial-match tests. |
+| `vault_sep56.wasm` | `vault_sep56/` | The 17 SEP-56 `TokenizedVault` functions plus all 10 SEP-41 functions for the share token; `sep=41,56`. |
 
 `common/` holds the token logic the SEP-41 fixtures share. It has no
 `contractmeta!`, so every `sep` entry comes from the fixture's own source.
@@ -61,6 +62,7 @@ stellar/stellar-protocol at commit `7a502f4a4ebdc9b6a8c2abf2509e74f8a385b77d`
 | --- | --- |
 | `oracle_sep40` | `ecosystem/sep-0040.md`, Version 0.1.0, Updated 2023-05-13 |
 | `nft_sep50`, `nft_sep50_partial` | `ecosystem/sep-0050.md`, Version 0.1.0, Updated 2025-03-10 |
+| `vault_sep56` | `ecosystem/sep-0056.md`, Version 0.1.2, Updated 2026-11-16 (Final Comment Period) |
 
 **SEP-40.** The SEP writes `PriceData` and `Asset` without `pub` or derives.
 The fixture adds both so the contract compiles; neither changes the spec
@@ -77,3 +79,17 @@ optional. The trait doc for `approve` and the SEP's Events section give
 different event layouts; the fixture follows the Events section. Events do
 not appear in `Functions` output or affect the matcher. `__constructor` and
 `mint` are extra.
+
+**SEP-56 and SEP-41.** SEP-56 declares `trait TokenizedVault: TokenInterface`
+and says the vault "must also comply with SEP-41". The vault's shares are
+therefore a SEP-41 token issued by the vault contract itself: `balance`,
+`transfer`, `approve` and the rest operate on shares, and `query_asset`
+names the separate SEP-41 contract that holds the underlying asset. That is
+why the fixture declares `41,56` and why the SEP-41 matcher reports it as a
+`match`. The share-token functions come from `common/`. Two differences from
+the token fixtures follow from the SEP:
+
+- SEP-56 defines `mint(shares, receiver, from, operator) -> i128`, so the
+  vault has no admin `mint`; shares come only from `deposit` and `mint`.
+- `burn` and `burn_from` also lower `total_supply`, which SEP-41 does not
+  define but SEP-56 does.

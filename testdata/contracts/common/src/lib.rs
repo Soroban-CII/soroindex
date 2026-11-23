@@ -107,12 +107,15 @@ fn write_balance(env: &Env, id: &Address, amount: i128) {
     env.storage().persistent().extend_ttl(&key, THRESHOLD, BUMP);
 }
 
-fn receive(env: &Env, id: &Address, amount: i128) {
+/// Credits `amount` to `id`. Public so a fixture that mints by its own rules
+/// (the SEP-56 vault) can reuse the balance storage.
+pub fn receive(env: &Env, id: &Address, amount: i128) {
     let b = balance(env, id);
     write_balance(env, id, b + amount);
 }
 
-fn spend(env: &Env, id: &Address, amount: i128) {
+/// Debits `amount` from `id`, failing if the balance is short.
+pub fn spend(env: &Env, id: &Address, amount: i128) {
     let b = balance(env, id);
     if b < amount {
         panic_with_error!(env, TokenError::InsufficientBalance);
@@ -146,7 +149,8 @@ pub fn approve(env: &Env, from: Address, spender: Address, amount: i128, live_un
     Approve { from, spender, amount, live_until_ledger }.publish(env);
 }
 
-fn spend_allowance(env: &Env, from: &Address, spender: &Address, amount: i128) {
+/// Consumes `amount` of `spender`'s allowance over `from`.
+pub fn spend_allowance(env: &Env, from: &Address, spender: &Address, amount: i128) {
     let current = allowance(env, from.clone(), spender.clone());
     if current < amount {
         panic_with_error!(env, TokenError::InsufficientAllowance);
