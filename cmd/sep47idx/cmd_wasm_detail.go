@@ -85,7 +85,11 @@ func writeEvidence(w io.Writer, meta json.RawMessage, parseError *string, claims
 		}
 	}
 	for _, m := range matches {
-		if _, err := fmt.Fprintf(w, "Inferred SEP-%d: %s (%s), %d functions matched\n", m.SEP, m.Status, m.RulesetVersion, m.OKCount); err != nil {
+		implements := ""
+		if m.MatchedVersion != nil {
+			implements = ", implements " + *m.MatchedVersion
+		}
+		if _, err := fmt.Fprintf(w, "Inferred SEP-%d: %s (%s), %d functions matched%s\n", m.SEP, m.Status, m.RulesetVersion, m.OKCount, implements); err != nil {
 			return err
 		}
 		if err := writeMatchEvidence(w, m); err != nil {
@@ -122,6 +126,13 @@ func runWasm(args []string, stdout, stderr io.Writer) int {
 	err = readIndex(cfg, func(ctx context.Context, s *store.Store, rulesets map[int]string) error {
 		d, err := s.Wasm(ctx, hash, *limit, *cursor, rulesets)
 		if err != nil {
+			return err
+		}
+		versions, err := ruleVersions()
+		if err != nil {
+			return err
+		}
+		if err := s.AnnotateWasm(ctx, &d, versions.Highest); err != nil {
 			return err
 		}
 		if cfg.JSON {

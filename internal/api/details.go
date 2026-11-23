@@ -31,6 +31,9 @@ func (s *Server) contract(w http.ResponseWriter, r *http.Request) {
 	if detailError(w, err) {
 		return
 	}
+	if detailError(w, b.Store.AnnotateContract(r.Context(), &d, s.versions.Highest)) {
+		return
+	}
 	writeJSON(w, 200, d)
 }
 func (s *Server) history(w http.ResponseWriter, r *http.Request) {

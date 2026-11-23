@@ -52,5 +52,8 @@ func (s *Server) wasm(w http.ResponseWriter, r *http.Request) {
 	if detailError(w, err) {
 		return
 	}
+	if detailError(w, b.Store.AnnotateWasm(r.Context(), &d, s.versions.Highest)) {
+		return
+	}
 	writeJSON(w, 200, d)
 }

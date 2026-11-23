@@ -43,6 +43,8 @@ type WasmMatch struct {
 	Missing         json.RawMessage `json:"missing"`
 	Mismatched      json.RawMessage `json:"mismatched"`
 	MatchedVariants json.RawMessage `json:"matched_variants"`
+	// MatchedVersion: see InferredDetail.MatchedVersion.
+	MatchedVersion *string `json:"matched_version"`
 }
 
 // WasmDetail exposes stored parsing evidence and current users of the code.

@@ -16,7 +16,8 @@
         "status": "match",
         "ruleset_version": "sep41-v0.5.2",
         "missing": [],
-        "mismatched": []
+        "mismatched": [],
+        "matched_version": "sep41-v0.5.2"
       },
       "verified": null,
       "protocol": false,

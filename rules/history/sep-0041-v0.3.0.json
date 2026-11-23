@@ -1,0 +1,18 @@
+{
+  "sep": 41,
+  "ruleset_version": "sep41-v0.3.0",
+  "source": "stellar/stellar-protocol ecosystem/sep-0041.md, Version 0.3.0, Updated 2025-03-13, commit 1e09d9f6363516a4d717cb8780b580c05bd59407 (last version before MuxedAddress, which 15335f1e6d7cdb1498741aa6038c8f04c08dc2b6 added in v0.4.0); the function list is unchanged since Version 0.2.0, commit 306bd66735abf0401ee075578f7567832578e4bb (removed spendable_balance); read on 2026-11-23",
+  "required": [
+    {"fn": "allowance",     "inputs": [["Address"],["Address"]],                      "output": ["i128"]},
+    {"fn": "approve",       "inputs": [["Address"],["Address"],["i128"],["u32"]],     "output": []},
+    {"fn": "balance",       "inputs": [["Address"]],                                  "output": ["i128"]},
+    {"fn": "transfer",      "inputs": [["Address"],["Address"],["i128"]],             "output": []},
+    {"fn": "transfer_from", "inputs": [["Address"],["Address"],["Address"],["i128"]], "output": []},
+    {"fn": "burn",          "inputs": [["Address"],["i128"]],                         "output": []},
+    {"fn": "burn_from",     "inputs": [["Address"],["Address"],["i128"]],             "output": []},
+    {"fn": "decimals",      "inputs": [],                                             "output": ["u32"]},
+    {"fn": "name",          "inputs": [],                                             "output": ["String"]},
+    {"fn": "symbol",        "inputs": [],                                             "output": ["String"]}
+  ],
+  "optional": []
+}

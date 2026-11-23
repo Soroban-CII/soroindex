@@ -64,6 +64,13 @@ func runContract(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return err
 		}
+		versions, err := ruleVersions()
+		if err != nil {
+			return err
+		}
+		if err := s.AnnotateContract(ctx, &d, versions.Highest); err != nil {
+			return err
+		}
 		if cfg.JSON {
 			return jsonOutput(stdout, d)
 		}
@@ -93,6 +100,9 @@ func printClaims(out io.Writer, claims []store.ClaimDetail) error {
 		inferred, verified := "not run", "not run"
 		if c.Inferred != nil {
 			inferred = c.Inferred.Status + " (" + c.Inferred.RulesetVersion + ")"
+			if c.Inferred.MatchedVersion != nil {
+				inferred += ", implements " + *c.Inferred.MatchedVersion
+			}
 		}
 		if c.Verified != nil {
 			verified = fmt.Sprintf("%s (%s %s; stale=%t)", c.Verified.Verdict, c.Verified.Tool, c.Verified.ToolVersion, c.Verified.Stale)

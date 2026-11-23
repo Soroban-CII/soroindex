@@ -185,3 +185,29 @@ func TestInspectNeedsNoDatabase(t *testing.T) {
 		}
 	}
 }
+
+func TestInspectReportsMatchedVersion(t *testing.T) {
+	for _, tt := range []struct{ fixture, want string }{
+		{"token_full_sep.wasm", "sep41-v0.5.2"},
+		{"token_full_legacy.wasm", "sep41-v0.3.0"},
+		{"token_partial.wasm", ""},
+	} {
+		t.Run(tt.fixture, func(t *testing.T) {
+			var out, errb bytes.Buffer
+			if c := run([]string{"inspect", filepath.Join("..", "..", "testdata", "wasm", tt.fixture), "--json"}, &out, &errb); c != 0 {
+				t.Fatal(c, errb.String())
+			}
+			var e ingest.Evidence
+			if err := json.Unmarshal(out.Bytes(), &e); err != nil {
+				t.Fatal(err)
+			}
+			got := ""
+			if len(e.Matches) == 1 && e.Matches[0].MatchedVersion != nil {
+				got = *e.Matches[0].MatchedVersion
+			}
+			if got != tt.want || e.Matches[0].RulesetVersion != "sep41-v0.5.2" {
+				t.Fatalf("matched_version = %q (ruleset %s), want %q against the unchanged current ruleset", got, e.Matches[0].RulesetVersion, tt.want)
+			}
+		})
+	}
+}

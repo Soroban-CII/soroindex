@@ -44,6 +44,7 @@ type Options struct {
 // Server is an HTTP handler with bounded request contexts.
 type Server struct {
 	options  Options
+	versions match.Versions // current and historical rule files, for matched_version
 	mux      *http.ServeMux
 	limiter  ipLimiter
 	backends map[string]Backend
@@ -79,7 +80,15 @@ func New(o Options) (*Server, error) {
 			o.Rulesets[rule.SEP] = rule.RulesetVersion
 		}
 	}
-	s := &Server{options: o, mux: http.NewServeMux(), backends: o.Networks}
+	current, err := match.LoadRules(rules.FS)
+	if err != nil {
+		return nil, err
+	}
+	versions, err := match.LoadVersions(rules.FS, current)
+	if err != nil {
+		return nil, err
+	}
+	s := &Server{options: o, versions: versions, mux: http.NewServeMux(), backends: o.Networks}
 	s.mux.HandleFunc("GET /v1/health", s.health)
 	s.mux.HandleFunc("GET /v1/contracts", s.contracts)
 	s.mux.HandleFunc("GET /contracts", s.contracts)

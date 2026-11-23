@@ -5,7 +5,10 @@ package rules
 
 import "embed"
 
-// FS holds rules/sep-*.json and rules/schema.json.
+// FS holds rules/sep-*.json, rules/schema.json, and the historical
+// versions in rules/history/sep-NNNN-vX.Y.Z.json. Only the top-level files
+// are matched and stored; history is used to report which version of a
+// SEP a Wasm's interface implements (match.LoadVersions).
 //
-//go:embed sep-*.json schema.json
+//go:embed sep-*.json schema.json history/*.json
 var FS embed.FS

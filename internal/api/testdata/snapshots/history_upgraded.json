@@ -15,7 +15,8 @@
             "status": "match",
             "ruleset_version": "sep41-v0.5.2",
             "missing": [],
-            "mismatched": []
+            "mismatched": [],
+            "matched_version": null
           },
           "verified": {
             "verdict": "pass",
@@ -46,7 +47,8 @@
               "burn",
               "burn_from"
             ],
-            "mismatched": []
+            "mismatched": [],
+            "matched_version": null
           },
           "verified": null,
           "protocol": false,

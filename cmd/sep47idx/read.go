@@ -27,6 +27,16 @@ func loadedRulesets() (map[int]string, error) {
 	return versions, nil
 }
 
+// ruleVersions loads the current and historical rule files, so detail
+// commands report matched_version exactly as the API does.
+func ruleVersions() (match.Versions, error) {
+	files, err := match.LoadRules(rules.FS)
+	if err != nil {
+		return match.Versions{}, err
+	}
+	return match.LoadVersions(rules.FS, files)
+}
+
 func readIndex(cfg config.Common, action func(context.Context, *store.Store, map[int]string) error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.RPCTimeout)
 	defer cancel()

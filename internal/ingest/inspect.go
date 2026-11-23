@@ -9,6 +9,7 @@ import (
 	"sort"
 
 	"github.com/Soroban-CII/soroindex/internal/store"
+	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
 
 // Evidence is what `sep47idx wasm` shows about one Wasm's code, built from a
@@ -90,9 +91,17 @@ func (ix *Indexer) Inspect(ctx context.Context, code []byte) (Evidence, error) {
 	}
 	sort.Slice(e.Anomalies, func(i, j int) bool { return e.Anomalies[i].RawToken < e.Anomalies[j].RawToken })
 
+	var fns []sepmeta.FnSig
+	haveFns := ix.Versions != nil && a.wasm.FunctionsJSON != "" && json.Unmarshal([]byte(a.wasm.FunctionsJSON), &fns) == nil
 	for _, m := range a.matches {
-		e.Matches = append(e.Matches, store.WasmMatch{SEP: m.SEP, RulesetVersion: m.RulesetVersion, Status: m.Status, OKCount: m.OKCount,
-			Missing: json.RawMessage(m.MissingJSON), Mismatched: json.RawMessage(m.MismatchedJSON), MatchedVariants: json.RawMessage(m.MatchedVariantsJSON)})
+		wm := store.WasmMatch{SEP: m.SEP, RulesetVersion: m.RulesetVersion, Status: m.Status, OKCount: m.OKCount,
+			Missing: json.RawMessage(m.MissingJSON), Mismatched: json.RawMessage(m.MismatchedJSON), MatchedVariants: json.RawMessage(m.MatchedVariantsJSON)}
+		if haveFns && m.Status != "no_spec" {
+			if v := ix.Versions(m.SEP, fns); v != "" {
+				wm.MatchedVersion = &v
+			}
+		}
+		e.Matches = append(e.Matches, wm)
 	}
 	sort.SliceStable(e.Matches, func(i, j int) bool { return e.Matches[i].SEP < e.Matches[j].SEP })
 	return e, nil

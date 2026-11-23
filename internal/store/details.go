@@ -18,6 +18,10 @@ type InferredDetail struct {
 	RulesetVersion string          `json:"ruleset_version"`
 	Missing        json.RawMessage `json:"missing"`
 	Mismatched     json.RawMessage `json:"mismatched"`
+	// MatchedVersion is the newest SEP version (a ruleset_version) whose
+	// interface the Wasm implements, checked strictly against each
+	// version's own types; null when none does or functions are unknown.
+	MatchedVersion *string `json:"matched_version"`
 }
 
 // VerificationDetail records a suite result and whether it belongs to old code.

@@ -33,6 +33,9 @@ type Indexer struct {
 	// (and, when seeding, prepares contract batches). The sync command
 	// sets it from --rpc-concurrency; zero means DefaultConcurrency.
 	Concurrency int
+	// Versions, when set, lets Inspect report matched_version exactly as
+	// the API and the wasm command do (match.Versions.Highest).
+	Versions store.VersionResolver
 
 	cacheMu sync.Mutex
 	cache   map[string]*prefetched // see prefetch.go

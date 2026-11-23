@@ -1,0 +1,19 @@
+{
+  "sep": 41,
+  "ruleset_version": "sep41-v0.1.0",
+  "source": "stellar/stellar-protocol ecosystem/sep-0041.md, Version 0.1.0 (Draft), commit 03a1aed540a231ecaddb12c7171e820e0758e061 (2023-10-12, 'SEP-41: Add a token contract interface proposal'); 11 trait functions including spendable_balance; read on 2026-11-23",
+  "required": [
+    {"fn": "allowance",         "inputs": [["Address"],["Address"]],                      "output": ["i128"]},
+    {"fn": "approve",           "inputs": [["Address"],["Address"],["i128"],["u32"]],     "output": []},
+    {"fn": "balance",           "inputs": [["Address"]],                                  "output": ["i128"]},
+    {"fn": "spendable_balance", "inputs": [["Address"]],                                  "output": ["i128"]},
+    {"fn": "transfer",          "inputs": [["Address"],["Address"],["i128"]],             "output": []},
+    {"fn": "transfer_from",     "inputs": [["Address"],["Address"],["Address"],["i128"]], "output": []},
+    {"fn": "burn",              "inputs": [["Address"],["i128"]],                         "output": []},
+    {"fn": "burn_from",         "inputs": [["Address"],["Address"],["i128"]],             "output": []},
+    {"fn": "decimals",          "inputs": [],                                             "output": ["u32"]},
+    {"fn": "name",              "inputs": [],                                             "output": ["String"]},
+    {"fn": "symbol",            "inputs": [],                                             "output": ["String"]}
+  ],
+  "optional": []
+}

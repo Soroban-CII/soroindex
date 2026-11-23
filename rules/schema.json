@@ -58,7 +58,7 @@
           "pattern": "^[A-Za-z0-9_]{1,32}$"
         },
         "inputs": {
-          "description": "One element per parameter, in order. Each element lists the types accepted at that position.",
+          "description": "One element per parameter, in order. Each element lists the types accepted at that position; the first is the type the SEP text names, and later ones are accepted for compatibility with earlier SEP versions. A historical file (rules/history) lists exactly one.",
           "type": "array",
           "items": {
             "type": "array",

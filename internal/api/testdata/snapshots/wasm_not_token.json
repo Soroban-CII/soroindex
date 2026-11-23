@@ -50,7 +50,8 @@
         "transfer_from"
       ],
       "mismatched": [],
-      "matched_variants": {}
+      "matched_variants": {},
+      "matched_version": null
     }
   ],
   "contracts": [
