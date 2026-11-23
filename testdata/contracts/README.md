@@ -37,6 +37,8 @@ lists the expected hashes.
 | `no_meta.wasm` | `no_meta/` | Source declares `sep=41`; the script then removes the whole `contractmetav0` section. Spec intact (`ping`). |
 | `truncated.wasm` | derived | `token_full_sep.wasm` cut halfway through its `contractmetav0` payload. |
 | `oracle_sep40.wasm` | `oracle_sep40/` | The 7 SEP-40 `PriceFeedTrait` functions with its `PriceData` struct and `Asset` union; `sep=40`. The only fixture whose SEP functions use user-defined types (`udt:Asset`, `Option<udt:PriceData>`, `Option<Vec<udt:PriceData>>`). |
+| `nft_sep50.wasm` | `nft_sep50/` | All 11 SEP-50 `NonFungibleToken` functions, `TokenID` and `Balance` as `u32`; `sep=50`. |
+| `nft_sep50_partial.wasm` | `nft_sep50_partial/` | `nft_sep50` without `approve_for_all` (10 of 11); `sep=50`. For partial-match tests. |
 
 `common/` holds the token logic the SEP-41 fixtures share. It has no
 `contractmeta!`, so every `sep` entry comes from the fixture's own source.
@@ -58,8 +60,20 @@ stellar/stellar-protocol at commit `7a502f4a4ebdc9b6a8c2abf2509e74f8a385b77d`
 | Fixture | SEP text |
 | --- | --- |
 | `oracle_sep40` | `ecosystem/sep-0040.md`, Version 0.1.0, Updated 2023-05-13 |
+| `nft_sep50`, `nft_sep50_partial` | `ecosystem/sep-0050.md`, Version 0.1.0, Updated 2025-03-10 |
 
 **SEP-40.** The SEP writes `PriceData` and `Asset` without `pub` or derives.
 The fixture adds both so the contract compiles; neither changes the spec
 entries. Price reporting is out of scope for SEP-40, so `__constructor` and
 an admin-gated `set_price` are extra.
+
+**SEP-50.** `TokenID` and `Balance` are left generic ("should be an unsigned
+integer"); the fixture uses `u32`, as OpenZeppelin's Stellar NFT library
+does. The contract signatures spell out `u32` because the SDK spec generator
+turns a Rust type alias into a reference to an undefined user type (the
+build warns "type 'TokenID' ... is not defined in the spec"), and
+`TestNFTFixtureHasNoUndefinedTypes` guards this. SEP-50 marks no function
+optional. The trait doc for `approve` and the SEP's Events section give
+different event layouts; the fixture follows the Events section. Events do
+not appear in `Functions` output or affect the matcher. `__constructor` and
+`mint` are extra.

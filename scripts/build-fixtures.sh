@@ -26,7 +26,7 @@ trap 'rm -rf "$out"' EXIT
 (cd testdata/contracts && stellar contract build --locked --out-dir "$out")
 
 for f in token_full_sep token_full_legacy token_partial not_token multi_sep \
-  oracle_sep40; do
+  oracle_sep40 nft_sep50 nft_sep50_partial; do
   cp "$out/$f.wasm" "testdata/wasm/$f.wasm"
 done
 

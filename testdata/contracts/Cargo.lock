@@ -1076,6 +1076,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "nft_common"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+]
+
+[[package]]
+name = "nft_sep50"
+version = "0.1.0"
+dependencies = [
+ "nft_common",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "nft_sep50_partial"
+version = "0.1.0"
+dependencies = [
+ "nft_common",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "no_meta"
 version = "0.1.0"
 dependencies = [
