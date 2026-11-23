@@ -85,6 +85,9 @@ func runStats(args []string, stdout, stderr io.Writer) int {
 		}
 		t := d.Adoption
 		_, err = fmt.Fprintf(stdout, "%s: last indexed ledger %d; %d stored contracts, %d archived\nLive: %d Wasm, %d Wasm references (%d unresolved), %d SAC (protocol)\nDeclared: %d/%d measured contracts, %d/%d used hashes\nUndeclared SEP-41 gap (inferred, %s): %d contracts, %d hashes\nAnomalies: %v\n", d.Network, d.LastLedger, d.TotalContracts, d.ArchivedContracts, t.LiveWasm, t.LiveWasmRef, t.WasmRefUnresolved, t.LiveSAC, t.DeclaringContracts, t.MeasuredContracts, t.DeclaringUsedHashes, t.UsedHashes, rulesets[41], t.GapContracts, t.GapUsedHashes, d.Anomalies)
+		if err == nil && d.LastProtocol != nil {
+			_, err = fmt.Fprintf(stdout, "Protocol: last indexed ledger closed under protocol %d\n", *d.LastProtocol)
+		}
 		if err == nil && out.Lag != nil {
 			_, err = fmt.Fprintf(stdout, "Sync: RPC latest ledger %d, lag %d ledgers\n", *out.LatestLedger, *out.Lag)
 		}

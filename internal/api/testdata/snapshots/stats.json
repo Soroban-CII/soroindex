@@ -26,6 +26,7 @@
   "archived_contracts": 12,
   "total_contracts": 19,
   "last_ledger": 5062910,
+  "last_protocol": null,
   "ruleset_versions": {
     "41": "sep41-v0.5.2"
   },
