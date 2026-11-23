@@ -1,5 +1,7 @@
 # HTTP API
 
+> Machine-readable spec: [docs/openapi.yaml](openapi.yaml) (OpenAPI 3.1.0)
+
 The server implements all `/v1` endpoints and opens the index read-only. Start it
 with `sep47idx serve`. It serves JSON and enables GET CORS. POST and other write
 methods return a JSON error. `--rate-limit` sets requests per minute per peer IP;
