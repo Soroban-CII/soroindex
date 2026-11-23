@@ -65,6 +65,97 @@ func TestRecordedTestnetLedgers(t *testing.T) {
 	}
 }
 
+// TestRecordedLedger5062907 asserts the exact facts extracted from the first
+// recorded ledger (5062907), which contains instance creates and updates.
+func TestRecordedLedger5062907(t *testing.T) {
+	ledgers := recordedLedgers(t)
+	if len(ledgers) < 1 {
+		t.Fatal("need at least 1 recorded ledger")
+	}
+	m := ledgers[0]
+	if m.LedgerSequence() != 5062907 {
+		t.Fatalf("expected ledger 5062907, got %d", m.LedgerSequence())
+	}
+
+	f, err := ExtractContractFacts(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ledger 5062907: 11 instance changes, no code created, no exec refs,
+	// no archival, no restoration.
+	if len(f.CodeCreated) != 0 {
+		t.Fatalf("CodeCreated = %v, want empty", f.CodeCreated)
+	}
+	if len(f.ExecRefs) != 0 {
+		t.Fatalf("ExecRefs = %v, want empty", f.ExecRefs)
+	}
+	if len(f.Evicted) != 0 {
+		t.Fatalf("Evicted = %v, want empty", f.Evicted)
+	}
+	if len(f.Skipped) != 0 {
+		t.Fatalf("Skipped = %v, want empty", f.Skipped)
+	}
+	if len(f.Instances) != 11 {
+		t.Fatalf("Instances = %d, want 11", len(f.Instances))
+	}
+
+	// Verify instance contract IDs are valid and kinds are Wasm (no SACs in this ledger)
+	for _, in := range f.Instances {
+		if in.ContractID == "" || in.Kind != KindWasm || len(in.WasmHash) != 64 {
+			t.Fatalf("bad instance: %+v", in)
+		}
+	}
+}
+
+// TestRecordedLedger5062908 asserts the exact facts extracted from the second
+// recorded ledger (5062908), which contains a Wasm deploy and instance changes.
+func TestRecordedLedger5062908(t *testing.T) {
+	ledgers := recordedLedgers(t)
+	if len(ledgers) < 2 {
+		t.Fatal("need at least 2 recorded ledgers")
+	}
+	m := ledgers[1]
+	if m.LedgerSequence() != 5062908 {
+		t.Fatalf("expected ledger 5062908, got %d", m.LedgerSequence())
+	}
+
+	f, err := ExtractContractFacts(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Ledger 5062908: 1 Wasm deploy, 6 instance changes, no exec refs,
+	// no archival, no restoration.
+	if len(f.CodeCreated) != 1 {
+		t.Fatalf("CodeCreated = %v, want 1 hash", f.CodeCreated)
+	}
+	if len(f.ExecRefs) != 0 {
+		t.Fatalf("ExecRefs = %v, want empty", f.ExecRefs)
+	}
+	if len(f.Evicted) != 0 {
+		t.Fatalf("Evicted = %v, want empty", f.Evicted)
+	}
+	if len(f.Skipped) != 0 {
+		t.Fatalf("Skipped = %v, want empty", f.Skipped)
+	}
+	if len(f.Instances) != 6 {
+		t.Fatalf("Instances = %d, want 6", len(f.Instances))
+	}
+
+	// Verify the Wasm hash is a valid 64-char hex string
+	if len(f.CodeCreated[0]) != 64 {
+		t.Fatalf("CodeCreated[0] = %q, want 64 hex chars", f.CodeCreated[0])
+	}
+
+	// Verify instance contract IDs are valid
+	for _, in := range f.Instances {
+		if in.ContractID == "" || in.Kind != KindWasm || len(in.WasmHash) != 64 {
+			t.Fatalf("bad instance: %+v", in)
+		}
+	}
+}
+
 func entryChange(kind xdr.LedgerEntryChangeType, e xdr.LedgerEntry) xdr.LedgerEntryChange {
 	c := xdr.LedgerEntryChange{Type: kind}
 	switch kind {

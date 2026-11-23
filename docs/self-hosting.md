@@ -18,12 +18,33 @@ Every flag can come from an environment variable (see [CLI reference](cli.md)):
 
 | Variable | Use |
 | --- | --- |
-| `SEP47IDX_NETWORK` | `mainnet` or `testnet` |
+| `SEP47IDX_NETWORK` | `mainnet`, `testnet`, or `futurenet` |
 | `SEP47IDX_RPC_URL` | RPC endpoint; required for mainnet |
 | `SEP47IDX_DB` | Database path |
 | `SEP47IDX_RPC_TIMEOUT`, `SEP47IDX_RPC_CONCURRENCY` | RPC tuning |
+| `SEP47IDX_ADDR` | HTTP listen address (default `:8080`) |
+| `SEP47IDX_RATE_LIMIT` | Requests per minute per peer IP; 0 disables |
+| `SEP47IDX_READ_HEADER_TIMEOUT` | Maximum time to read request headers (default 5s) |
+| `SEP47IDX_READ_TIMEOUT` | Maximum time to read request body (default 20s) |
+| `SEP47IDX_WRITE_TIMEOUT` | Maximum time to write response (default 20s) |
+| `SEP47IDX_IDLE_TIMEOUT` | Maximum time to wait for next request on keep-alive (default 60s) |
+| `SEP47IDX_MAX_HEADER_BYTES` | Maximum size of request headers in bytes (default 16384) |
 
-Stellar's docs list mainnet RPC providers. Several public endpoints answered a 200-key `getLedgerEntries` call correctly on 7 October 2026, among them `https://soroban-rpc.mainnet.stellar.gateway.fm`, which the mainnet census used.
+Stellar's docs list mainnet RPC providers. Several public endpoints answered a 200-key `getLedgerEntries` call correctly on 7 October 2026, among them `https://soroban-rpc.mainnet.stellar.gateway.fm`, which the mainnet census used. Futurenet has a public SDF RPC at `https://rpc-futurenet.stellar.org`.
+
+### HTTP server hardening
+
+The server enforces timeouts and header limits to protect against slowloris and resource exhaustion attacks. The defaults are conservative for a public API; adjust them if clients need longer request or response times.
+
+| Flag | Env var | Default | Purpose |
+| --- | --- | --- | --- |
+| `--read-header-timeout` | `SEP47IDX_READ_HEADER_TIMEOUT` | 5s | Limits how long a client can take to send headers. A slow header sender is disconnected. |
+| `--read-timeout` | `SEP47IDX_READ_TIMEOUT` | 20s | Limits total time to read the request body. |
+| `--write-timeout` | `SEP47IDX_WRITE_TIMEOUT` | 20s | Limits time to write the response. A slow reader is disconnected. |
+| `--idle-timeout` | `SEP47IDX_IDLE_TIMEOUT` | 60s | Maximum idle keep-alive time before closing the connection. |
+| `--max-header-bytes` | `SEP47IDX_MAX_HEADER_BYTES` | 16384 | Maximum combined size of request headers. Oversized headers are rejected. |
+
+All timeouts accept Go duration strings (e.g. `30s`, `1m`). Set to `0` to disable a timeout, but this is not recommended for a public endpoint. Graceful shutdown on SIGTERM/SIGINT waits up to 10 seconds for in-flight requests to complete before forcing connections closed.
 
 ## Seed
 

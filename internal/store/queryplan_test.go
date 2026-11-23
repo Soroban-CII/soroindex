@@ -322,6 +322,7 @@ var planCases = []planCase{
 			{match: `^SELECT count\(DISTINCT m\.h\) FROM ` + measured + ` m JOIN interface_matches`, indexes: []string{"idx_matches_sep", "idx_contracts_hash", idxWasmPK, idxClaimsPK}},
 			{match: `^SELECT im\.status, count\(\*\), count\(DISTINCT m\.h\) FROM`, indexes: []string{"idx_matches_sep", "idx_contracts_hash", idxWasmPK}},
 			{match: `^SELECT COALESCE\(sum\(archived\),0\),count\(\*\) FROM contracts$`},
+			{match: `^SELECT count\(\*\) FROM wasm_fetch_queue$`},
 			{match: `FROM parse_anomalies UNION ALL SELECT anomaly FROM wasm_claims WHERE anomaly IS NOT NULL`,
 				fullScanReason: "anomaly totals count every wasm_claims row with an anomaly; no index covers wasm_claims.anomaly, and adding one is a schema change that needs maintainer approval (see docs/query-benchmark.md)"},
 		},

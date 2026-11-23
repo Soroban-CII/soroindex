@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // inTx runs f in a committed transaction.
