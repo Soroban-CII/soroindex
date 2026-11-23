@@ -1,0 +1,19 @@
+{
+  "sep": 50,
+  "ruleset_version": "sep50-v0.1.0",
+  "source": "stellar/stellar-protocol ecosystem/sep-0050.md, Version 0.1.0, Created 2025-03-10; diffed against live text on 2026-11-20",
+  "required": [
+    {"fn": "balance",             "inputs": [["Address"]],                                                       "output": ["u64"]},
+    {"fn": "owner_of",            "inputs": [["u32","u64","u128","u256"]],                                       "output": ["Address"]},
+    {"fn": "transfer",            "inputs": [["Address"],["Address"],["u32","u64","u128","u256"]],                "output": []},
+    {"fn": "transfer_from",       "inputs": [["Address"],["Address"],["Address"],["u32","u64","u128","u256"]],    "output": []},
+    {"fn": "approve",             "inputs": [["Address"],["Address"],["u32","u64","u128","u256"],["u32"]],        "output": []},
+    {"fn": "approve_for_all",     "inputs": [["Address"],["Address"],["u32"]],                                   "output": []},
+    {"fn": "get_approved",        "inputs": [["u32","u64","u128","u256"]],                                       "output": ["Option<Address>"]},
+    {"fn": "is_approved_for_all", "inputs": [["Address"],["Address"]],                                          "output": ["bool"]},
+    {"fn": "name",                "inputs": [],                                                                  "output": ["String"]},
+    {"fn": "symbol",              "inputs": [],                                                                  "output": ["String"]},
+    {"fn": "token_uri",           "inputs": [["u32","u64","u128","u256"]],                                       "output": ["String"]}
+  ],
+  "optional": []
+}

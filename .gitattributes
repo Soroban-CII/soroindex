@@ -1,0 +1,4 @@
+# Keep these files with LF line endings so Go tests comparing JSON output pass
+# on Windows (core.autocrlf=true would otherwise convert them to CRLF).
+testdata/vectors/*.json text eol=lf
+testdata/fuzz/**        text eol=lf

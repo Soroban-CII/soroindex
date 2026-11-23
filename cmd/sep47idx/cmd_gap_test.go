@@ -166,7 +166,7 @@ func TestGapCLIErrorsAndEmptyPage(t *testing.T) {
 			t.Fatal(args, code)
 		}
 	}
-	if code := run([]string{"gap", "--sep", "50"}, &bytes.Buffer{}, &bytes.Buffer{}); code != 2 {
+	if code := run([]string{"gap", "--sep", "999"}, &bytes.Buffer{}, &bytes.Buffer{}); code != 2 {
 		t.Fatal("unknown ruleset did not exit 2", code)
 	}
 	for _, args := range [][]string{{"gap"}, {"gap", "--json"}} {
