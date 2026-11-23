@@ -1,3 +1,4 @@
+// Package rulegen generates rule files from SEP markdown specifications.
 package main
 
 import (
@@ -13,28 +14,29 @@ import (
 // canonicalType maps common Rust types used in SEP traits to the canonical
 // type names used by the matcher (see pkg/sepmeta/spec.go).
 var canonicalType = map[string]string{
-	"Address":    "Address",
-	"MuxedAddress": "MuxedAddress",
-	"i128":       "i128",
-	"u32":        "u32",
-	"String":     "String",
-	"u64":        "u64",
-	"i64":        "i64",
-	"u128":       "u128",
-	"i32":        "i32",
-	"bool":       "bool",
+	"Address":         "Address",
+	"MuxedAddress":    "MuxedAddress",
+	"i128":            "i128",
+	"u32":             "u32",
+	"String":          "String",
+	"u64":             "u64",
+	"i64":             "i64",
+	"u128":            "u128",
+	"i32":             "i32",
+	"bool":            "bool",
 	"Option<Address>": "Option<Address>",
-	"Vec<Address>":  "Vec<Address>",
+	"Vec<Address>":    "Vec<Address>",
 }
 
 // fnPattern matches a Rust fn declaration within a trait, e.g.
+//
 //	fn allowance(env: Env, from: Address, spender: Address) -> i128;
 var fnPattern = regexp.MustCompile(`(?m)^\s*fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)(\s*->\s*([A-Za-z_][A-Za-z0-9_:<>,\[\]\(\) ]*))?\s*;`)
 
 type emittedFn struct {
-	Name      string     `json:"fn"`
-	Inputs    [][]string `json:"inputs"`
-	Output    []string   `json:"output"`
+	Name   string     `json:"fn"`
+	Inputs [][]string `json:"inputs"`
+	Output []string   `json:"output"`
 }
 
 func main() {
@@ -58,12 +60,12 @@ func main() {
 	}
 
 	// Read the markdown file.
-	f, err := os.Open(mdPath)
+	f, err := os.Open(mdPath) //nolint:gosec // mdPath is a trusted file path from command line
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open %s: %v\n", mdPath, err)
 		os.Exit(1)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var builder strings.Builder
 	scanner := bufio.NewScanner(f)
@@ -146,9 +148,9 @@ func main() {
 		output := parseOutputType(outputType)
 
 		funcs = append(funcs, emittedFn{
-			Name:      fnName,
-			Inputs:    inputs,
-			Output:    output,
+			Name:   fnName,
+			Inputs: inputs,
+			Output: output,
 		})
 	}
 
@@ -160,16 +162,16 @@ func main() {
 	// Build the rule file.
 	rulesetVersion := fmt.Sprintf("generated-placeholder-%d", sep)
 	ruleFile := map[string]interface{}{
-		"sep":               sep,
-		"ruleset_version":   rulesetVersion,
-		"source":            fmt.Sprintf("generated from %s trait", mdPath),
-		"required":          funcsToJSON(funcs),
-		"optional":          []interface{}{},
+		"sep":             sep,
+		"ruleset_version": rulesetVersion,
+		"source":          fmt.Sprintf("generated from %s trait", mdPath),
+		"required":        funcsToJSON(funcs),
+		"optional":        []interface{}{},
 	}
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(ruleFile)
+	_ = enc.Encode(ruleFile)
 }
 
 func splitParams(s string) []string {
@@ -266,9 +268,9 @@ func funcsToJSON(funcs []emittedFn) []interface{} {
 			inputs = [][]string{}
 		}
 		item := map[string]interface{}{
-			"fn":      f.Name,
-			"inputs":  inputs,
-			"output":  f.Output,
+			"fn":     f.Name,
+			"inputs": inputs,
+			"output": f.Output,
 		}
 		result = append(result, item)
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
-	q, err := parseQuery(r, "ids", "implements", "implements_any", "tier", "kind", "limit", "cursor")
+	q, err := parseQuery(r, "ids", "implements", "implements_any", "tier", "kind", "archived", "exec_ref_owner", "limit", "cursor")
 	if detailError(w, err) {
 		return
 	}
@@ -29,6 +29,27 @@ func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "bad_request", "invalid implements_any list")
 		return
 	}
+	var archived *bool
+	if v := q.Get("archived"); v != "" {
+		switch v {
+		case "true":
+			b := true
+			archived = &b
+		case "false":
+			b := false
+			archived = &b
+		default:
+			writeError(w, 400, "bad_request", "archived must be true or false")
+			return
+		}
+	}
+	execRefOwner := q.Get("exec_ref_owner")
+	if execRefOwner != "" {
+		if err := store.ValidateContractID(execRefOwner); err != nil {
+			writeError(w, 400, "bad_request", "invalid exec_ref_owner")
+			return
+		}
+	}
 	limit := 50
 	if _, ok := q["limit"]; ok {
 		limit, err = strconv.Atoi(q.Get("limit"))
@@ -38,7 +59,7 @@ func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	b := backendFrom(r.Context())
-	result, err := b.Store.Contracts(r.Context(), store.Filter{Implements: all, ImplementsAny: anySEPs, Tier: q.Get("tier"), Kind: q.Get("kind"), Limit: limit, Cursor: q.Get("cursor"), Rulesets: s.options.Rulesets})
+	result, err := b.Store.Contracts(r.Context(), store.Filter{Implements: all, ImplementsAny: anySEPs, Tier: q.Get("tier"), Kind: q.Get("kind"), Archived: archived, ExecRefOwner: execRefOwner, Limit: limit, Cursor: q.Get("cursor"), Rulesets: s.options.Rulesets})
 	if errors.Is(err, store.ErrBadQuery) {
 		writeError(w, 400, "bad_request", "invalid filter or cursor")
 		return

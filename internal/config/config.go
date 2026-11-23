@@ -26,25 +26,29 @@ type Network struct {
 	DefaultRPCURL string
 }
 
-// Known networks. SDF runs a public testnet RPC but no public mainnet RPC,
-// so mainnet has no default URL.
+// Known networks. SDF runs a public testnet and futurenet RPC but no
+// public mainnet RPC, so mainnet has no default URL.
+// Passphrases from developers.stellar.org/docs/networks, checked 2026-10-24.
 var (
-	Mainnet = Network{Name: "mainnet", Passphrase: "Public Global Stellar Network ; September 2015"}
-	Testnet = Network{Name: "testnet", Passphrase: "Test SDF Network ; September 2015", DefaultRPCURL: "https://soroban-testnet.stellar.org"}
+	Mainnet   = Network{Name: "mainnet", Passphrase: "Public Global Stellar Network ; September 2015"}
+	Testnet   = Network{Name: "testnet", Passphrase: "Test SDF Network ; September 2015", DefaultRPCURL: "https://soroban-testnet.stellar.org"}
+	Futurenet = Network{Name: "futurenet", Passphrase: "Test SDF Future Network ; October 2022", DefaultRPCURL: "https://rpc-futurenet.stellar.org"}
 )
 
 // ErrUnknownNetwork means --network named no known network.
 var ErrUnknownNetwork = errors.New("unknown network")
 
-// NetworkByName returns the network called name ("mainnet" or "testnet").
+// NetworkByName returns the network called name ("mainnet", "testnet", or "futurenet").
 func NetworkByName(name string) (Network, error) {
 	switch name {
 	case Mainnet.Name:
 		return Mainnet, nil
 	case Testnet.Name:
 		return Testnet, nil
+	case Futurenet.Name:
+		return Futurenet, nil
 	}
-	return Network{}, fmt.Errorf("%w %q (want mainnet or testnet)", ErrUnknownNetwork, name)
+	return Network{}, fmt.Errorf("%w %q (want mainnet, testnet, or futurenet)", ErrUnknownNetwork, name)
 }
 
 // Common holds the flags every command shares (CLAUDE.md §5.12).
@@ -70,8 +74,8 @@ type commonRaw struct {
 // not set on the command line.
 func RegisterCommon(fs *flag.FlagSet) func() (Common, error) {
 	var r commonRaw
-	fs.StringVar(&r.network, "network", "testnet", "network: mainnet or testnet (env SEP47IDX_NETWORK)")
-	fs.StringVar(&r.rpcURL, "rpc-url", "", "Stellar RPC URL (env SEP47IDX_RPC_URL; testnet default "+Testnet.DefaultRPCURL+")")
+	fs.StringVar(&r.network, "network", "testnet", "network: mainnet, testnet, or futurenet (env SEP47IDX_NETWORK)")
+	fs.StringVar(&r.rpcURL, "rpc-url", "", "Stellar RPC URL (env SEP47IDX_RPC_URL; testnet default "+Testnet.DefaultRPCURL+", futurenet default "+Futurenet.DefaultRPCURL+")")
 	fs.StringVar(&r.db, "db", "", "SQLite database path (env SEP47IDX_DB; default ./data/<network>.db)")
 	fs.BoolVar(&r.json, "json", false, "print JSON (env SEP47IDX_JSON)")
 	fs.DurationVar(&r.rpcTimeout, "rpc-timeout", 30*time.Second, "timeout per RPC attempt (env SEP47IDX_RPC_TIMEOUT)")

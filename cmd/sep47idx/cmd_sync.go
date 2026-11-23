@@ -134,7 +134,8 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	}
 	if incremental {
 		loop := indexsync.Loop{Store: st, Source: &ingest.LedgerSource{RPC: client}, Apply: ix.ApplyLedger,
-			StartLedger: uint32(*start), Follow: *follow, Interval: *interval} // #nosec G115 -- checked above
+			RetryWasmFetches: ix.RetryWasmFetches,
+			StartLedger:      uint32(*start), Follow: *follow, Interval: *interval} // #nosec G115 -- checked above
 		loop.Apply = func(ctx context.Context, tx *store.Tx, facts ingest.ContractFacts) error {
 			if err := tx.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
 				return err

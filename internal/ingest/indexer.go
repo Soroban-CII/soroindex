@@ -34,7 +34,8 @@ type Indexer struct {
 // already stored as parsed, and returns how many it fetched. seenLedger is
 // recorded as first_seen_ledger (0 if unknown). Code the node no longer has
 // is written as archived, which never overwrites earlier parsed data or
-// deletes its claims.
+// deletes its claims. Hashes that fail to fetch after RPC retries are queued
+// for retry instead of failing the batch.
 func (ix *Indexer) EnsureWasm(ctx context.Context, tx *store.Tx, hashes []string, seenLedger uint32) (int, error) {
 	var need []string
 	for _, h := range hashes {
@@ -51,7 +52,18 @@ func (ix *Indexer) EnsureWasm(ctx context.Context, tx *store.Tx, hashes []string
 	}
 	code, err := FetchCode(ctx, ix.RPC, need)
 	if err != nil {
-		return 0, err
+		// Queue each failed hash for retry instead of failing the batch.
+		// The fetch error is generic (e.g., timeout, connection error), so we
+		// queue all needed hashes with the same error message.
+		for _, h := range need {
+			if err := tx.QueueWasmFetch(ctx, h, err.Error(), ix.Now().Add(30*time.Second).UTC().Format(time.RFC3339)); err != nil {
+				return 0, err
+			}
+		}
+		if ix.Log != nil {
+			ix.Log.LogAttrs(ctx, slog.LevelWarn, "wasm fetch failed, queued for retry", slog.Int("count", len(need)), slog.String("err", err.Error()))
+		}
+		return 0, nil // batch succeeds; queued hashes will be retried later
 	}
 	for _, h := range need {
 		c := code[h]
@@ -224,4 +236,53 @@ func (ix *Indexer) ApplyContract(ctx context.Context, tx *store.Tx, row store.Co
 	return tx.SetVersion(ctx, store.Version{
 		ContractID: row.ID, WasmHash: row.CurrentWasmHash, ExecRefOwner: row.ExecRefOwner, ExecRefTag: row.ExecRefTag, FromLedger: from,
 	})
+}
+
+// RetryWasmFetches retries fetching all queued Wasm hashes that are due
+// for retry (next_retry_at <= now). It returns the number of hashes
+// successfully fetched and removed from the queue, and the number that
+// failed and remain queued (with updated next_retry_at).
+func (ix *Indexer) RetryWasmFetches(ctx context.Context, tx *store.Tx) (success, failed int, err error) {
+	queued, err := tx.ListWasmFetchQueue(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	now := ix.Now().UTC().Format(time.RFC3339)
+	for _, q := range queued {
+		if q.NextRetryAt > now {
+			continue // not due yet
+		}
+		code, err := FetchCode(ctx, ix.RPC, []string{q.Hash})
+		if err != nil {
+			// Update the queue entry with the new error and backoff
+			backoff := time.Duration(30) * time.Second * time.Duration(1<<min(q.AttemptCount, 5))
+			nextRetry := ix.Now().Add(backoff).UTC().Format(time.RFC3339)
+			if err := tx.UpdateWasmFetchAttempt(ctx, q.Hash, err.Error(), nextRetry); err != nil {
+				return success, failed, err
+			}
+			failed++
+			continue
+		}
+		c := code[q.Hash]
+		if c.Archived {
+			// Code is archived; write as archived and remove from queue.
+			if err := tx.UpsertWasm(ctx, store.WasmRow{Hash: q.Hash, FirstSeenLedger: 0, ParseStatus: ParseArchived, ParserVersion: sepmeta.ParserVersion}); err != nil {
+				return success, failed, err
+			}
+			if err := tx.RemoveWasmFetch(ctx, q.Hash); err != nil {
+				return success, failed, err
+			}
+			success++
+			continue
+		}
+		// Successfully fetched; write analysis and remove from queue.
+		if err := ix.writeAnalysis(ctx, tx, q.Hash, c.Bytes, 0); err != nil {
+			return success, failed, err
+		}
+		if err := tx.RemoveWasmFetch(ctx, q.Hash); err != nil {
+			return success, failed, err
+		}
+		success++
+	}
+	return success, failed, nil
 }

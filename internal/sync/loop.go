@@ -134,6 +134,20 @@ func (l *Loop) Run(ctx context.Context) error {
 			}
 			l.Progress(last, b.Latest, false, m)
 		}
+		// Retry queued Wasm fetches after each batch in a separate transaction.
+		if l.RetryWasmFetches != nil {
+			tx, err := l.Store.Begin(ctx)
+			if err != nil {
+				return fmt.Errorf("begin retry transaction: %w", err)
+			}
+			if _, _, err := l.RetryWasmFetches(ctx, tx); err != nil {
+				_ = tx.Rollback()
+				return fmt.Errorf("retry wasm fetches: %w", err)
+			}
+			if err := tx.Commit(); err != nil {
+				return fmt.Errorf("commit retry transaction: %w", err)
+			}
+		}
 		// Window calls getLatestLedger again before any caught_up report.
 	}
 }
