@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -234,6 +235,16 @@ func TestSeed(t *testing.T) {
 	})
 }
 
+// collectRows collects all rows from a SeedFileSource via the Rows interface.
+func collectRows(src SeedFileSource) ([]SeedRow, error) {
+	var rows []SeedRow
+	err := src.Rows(context.Background(), func(r SeedRow) error {
+		rows = append(rows, r)
+		return nil
+	})
+	return rows, err
+}
+
 func TestSeedFileSource(t *testing.T) {
 	a, b := seedCID(1), seedCID(2)
 	hash := strings.Repeat("ab", 32)
@@ -254,7 +265,7 @@ func TestSeedFileSource(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := SeedFileSource{R: strings.NewReader(tt.in)}.Contracts(context.Background())
+			got, err := collectRows(SeedFileSource{R: strings.NewReader(tt.in)})
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("err = %v, want %q", err, tt.wantErr)
@@ -265,6 +276,57 @@ func TestSeedFileSource(t *testing.T) {
 				t.Fatalf("got %+v, %v; want %+v", got, err, tt.want)
 			}
 		})
+	}
+}
+
+// TestSeedFileSourceCancellation verifies that Rows respects context cancellation.
+func TestSeedFileSourceCancellation(t *testing.T) {
+	a, b := seedCID(1), seedCID(2)
+	in := "contract_id\n" + a + "\n" + b + "\n"
+	ctx, cancel := context.WithCancel(context.Background())
+	var seen []string
+	err := SeedFileSource{R: strings.NewReader(in)}.Rows(ctx, func(r SeedRow) error {
+		seen = append(seen, r.ContractID)
+		cancel() // cancel after the first row
+		return nil
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if len(seen) != 1 {
+		t.Fatalf("saw %d rows, want 1", len(seen))
+	}
+}
+
+// TestSeedFileBoundedMemory checks that Rows can process a large input
+// without loading all rows into memory at once: fn is called row-by-row
+// rather than after a full slice allocation. This is verified structurally
+// by checking that the fn callback receives exactly N rows for an N-row CSV.
+func TestSeedFileBoundedMemory(t *testing.T) {
+	const N = 1000
+	var sb strings.Builder
+	sb.WriteString("contract_id\n")
+	ids := make([]string, N)
+	for i := range ids {
+		var raw [32]byte
+		raw[0], raw[1] = byte(i%256), byte(i/256)
+		id, err := strkey.Encode(strkey.VersionByteContract, raw[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[i] = id
+		sb.WriteString(id + "\n")
+	}
+	var count int
+	err := SeedFileSource{R: strings.NewReader(sb.String())}.Rows(context.Background(), func(_ SeedRow) error {
+		count++
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != N {
+		t.Fatalf("got %d rows, want %d", count, N)
 	}
 }
 

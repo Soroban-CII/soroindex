@@ -25,9 +25,16 @@ type SeedRow struct {
 // BackfillSource lists contracts to seed the index with, so a new index
 // does not depend on RPC history it cannot reach. SeedFileSource reads a
 // CSV; a data-lake source is planned (out of scope for v0.1.0).
+//
+// Rows streams each distinct contract without collecting all rows first,
+// so a large source (e.g. the 156,000-row Hubble export) stays within
+// bounded memory per batch rather than loading the whole file at once.
 type BackfillSource interface {
 	Name() string
-	Contracts(ctx context.Context) ([]SeedRow, error)
+	// Rows calls fn once for each distinct contract in source order.
+	// Duplicate contract IDs are silently dropped. If fn returns an error,
+	// streaming stops and that error is returned.
+	Rows(ctx context.Context, fn func(SeedRow) error) error
 }
 
 // SeedFileSource reads a CSV with a contract_id column and an optional
@@ -42,23 +49,51 @@ type SeedFileSource struct {
 // Name implements BackfillSource.
 func (SeedFileSource) Name() string { return "seed-file" }
 
-// Contracts implements BackfillSource. Duplicates are dropped; an invalid
-// contract ID is an error naming its line.
-func (s SeedFileSource) Contracts(_ context.Context) ([]SeedRow, error) {
+// Rows implements BackfillSource. It streams the CSV row by row, calling
+// fn for each unique contract ID. Duplicates are dropped; an invalid
+// contract ID is an error naming its row number.
+func (s SeedFileSource) Rows(ctx context.Context, fn func(SeedRow) error) error {
 	cr := csv.NewReader(s.R)
 	cr.FieldsPerRecord = -1
 	first, err := cr.Read()
 	if errors.Is(err, io.EOF) {
-		return nil, errors.New("seed file is empty")
+		return errors.New("seed file is empty")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("seed file line 1: %w", err)
+		return fmt.Errorf("seed file line 1: %w", err)
 	}
 	idCol, hashCol := 0, 1
-	var rows [][]string
+	seen := map[string]bool{}
+
+	// rowNum is the 1-based index of data rows (header excluded).
+	rowNum := 0
+	emit := func(rec []string) error {
+		rowNum++
+		if idCol >= len(rec) {
+			return fmt.Errorf("seed file row %d: no contract_id field", rowNum)
+		}
+		id := strings.TrimSpace(rec[idCol])
+		if !isContractID(id) {
+			return fmt.Errorf("seed file row %d: %q is not a contract ID", rowNum, id)
+		}
+		if seen[id] {
+			return nil
+		}
+		seen[id] = true
+		r := SeedRow{ContractID: id}
+		if hashCol >= 0 && hashCol < len(rec) {
+			r.WasmHash = strings.ToLower(strings.TrimSpace(rec[hashCol]))
+		}
+		return fn(r)
+	}
+
 	if isContractID(strings.TrimSpace(first[0])) {
-		rows = append(rows, first) // headerless
+		// Headerless: first row is a data row.
+		if err := emit(first); err != nil {
+			return err
+		}
 	} else {
+		// Header row: find the required column positions.
 		idCol, hashCol = -1, -1
 		for i, h := range first {
 			switch strings.TrimSpace(strings.TrimPrefix(h, "\ufeff")) {
@@ -69,40 +104,26 @@ func (s SeedFileSource) Contracts(_ context.Context) ([]SeedRow, error) {
 			}
 		}
 		if idCol < 0 {
-			return nil, fmt.Errorf("seed file header %v has no contract_id column", first)
+			return fmt.Errorf("seed file header %v has no contract_id column", first)
 		}
 	}
+
 	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		rec, err := cr.Read()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("seed file: %w", err)
+			return fmt.Errorf("seed file: %w", err)
 		}
-		rows = append(rows, rec)
+		if err := emit(rec); err != nil {
+			return err
+		}
 	}
-	seen := map[string]bool{}
-	var out []SeedRow
-	for i, rec := range rows {
-		if idCol >= len(rec) {
-			return nil, fmt.Errorf("seed file row %d: no contract_id field", i+1)
-		}
-		id := strings.TrimSpace(rec[idCol])
-		if !isContractID(id) {
-			return nil, fmt.Errorf("seed file row %d: %q is not a contract ID", i+1, id)
-		}
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		r := SeedRow{ContractID: id}
-		if hashCol >= 0 && hashCol < len(rec) {
-			r.WasmHash = strings.ToLower(strings.TrimSpace(rec[hashCol]))
-		}
-		out = append(out, r)
-	}
-	return out, nil
+	return nil
 }
 
 func isContractID(s string) bool {
@@ -130,23 +151,43 @@ type SeedStats struct {
 // the contract's earlier history is unknown to a seed, and the index does
 // not claim it. last_ledger is set to the lowest latestLedger any batch
 // reported, so incremental sync replays from a point every batch reflects.
+//
+// Rows are streamed from src in bounded batches of rpc.MaxLedgerEntryKeys,
+// so a large CSV is processed without holding all rows in memory at once.
 func (ix *Indexer) Seed(ctx context.Context, src BackfillSource) (SeedStats, error) {
-	rows, err := src.Contracts(ctx)
-	if err != nil {
-		return SeedStats{}, err
-	}
-	st := SeedStats{Requested: len(rows)}
-	for start := 0; start < len(rows); start += rpc.MaxLedgerEntryKeys {
-		batch := rows[start:min(start+rpc.MaxLedgerEntryKeys, len(rows))]
+	var st SeedStats
+	var batch []SeedRow
+
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
 		latest, err := ix.seedBatch(ctx, batch, &st)
 		if err != nil {
-			return st, fmt.Errorf("seed batch at %d: %w", start, err)
+			return fmt.Errorf("seed batch ending at row %d: %w", st.Requested, err)
 		}
 		if st.LastLedger == 0 || latest < st.LastLedger {
 			st.LastLedger = latest
 		}
-		ix.Log.LogAttrs(ctx, slog.LevelInfo, "seed batch", slog.Int("done", start+len(batch)), slog.Int("of", len(rows)))
+		ix.Log.LogAttrs(ctx, slog.LevelInfo, "seed batch", slog.Int("done", st.Requested))
+		batch = batch[:0]
+		return nil
 	}
+
+	if err := src.Rows(ctx, func(row SeedRow) error {
+		st.Requested++
+		batch = append(batch, row)
+		if len(batch) >= rpc.MaxLedgerEntryKeys {
+			return flush()
+		}
+		return nil
+	}); err != nil {
+		return st, err
+	}
+	if err := flush(); err != nil {
+		return st, err
+	}
+
 	if st.LastLedger == 0 {
 		return st, nil
 	}

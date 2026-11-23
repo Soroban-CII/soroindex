@@ -51,6 +51,33 @@ Run: 2026-10-07T12:09:34Z, latest ledger 64817831. Parser version 1; rules sep41
 
 Factory deployments make many contracts share one hash, so the two columns can differ a lot.
 
+<figure role="img" aria-label="Bar chart: declaration rate by unique hash (0.60%) versus by contract (0.01%). Hash-weighted and contract-weighted rates are shown side by side. Text equivalent: the table above.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 160" width="420" height="160" aria-hidden="true">
+  <title>Declaration rate: by hash vs by contract (mainnet)</title>
+  <!-- axes -->
+  <line x1="60" y1="10" x2="60" y2="120" stroke="#888" stroke-width="1"/>
+  <line x1="60" y1="120" x2="400" y2="120" stroke="#888" stroke-width="1"/>
+  <!-- y-axis labels -->
+  <text x="55" y="120" text-anchor="end" font-size="10" fill="#666">0%</text>
+  <text x="55" y="80" text-anchor="end" font-size="10" fill="#666">0.3%</text>
+  <text x="55" y="40" text-anchor="end" font-size="10" fill="#666">0.6%</text>
+  <!-- by-hash bar: 0.60% of max 0.6% = full height 80px -->
+  <rect x="80" y="40" width="60" height="80" fill="#4f86c6" rx="2"/>
+  <text x="110" y="35" text-anchor="middle" font-size="11" fill="#333">0.60%</text>
+  <text x="110" y="135" text-anchor="middle" font-size="11" fill="#555">By hash</text>
+  <!-- by-contract bar: 0.01% of max 0.6% → 1.3px ≈ 2px min visible -->
+  <rect x="200" y="118" width="60" height="2" fill="#e07b39" rx="1"/>
+  <text x="230" y="113" text-anchor="middle" font-size="11" fill="#333">0.01%</text>
+  <text x="230" y="135" text-anchor="middle" font-size="11" fill="#555">By contract</text>
+  <!-- legend -->
+  <rect x="310" y="30" width="12" height="12" fill="#4f86c6"/>
+  <text x="326" y="41" font-size="10" fill="#444">Hash-weighted</text>
+  <rect x="310" y="50" width="12" height="12" fill="#e07b39"/>
+  <text x="326" y="61" font-size="10" fill="#444">Contract-weighted</text>
+</svg>
+<figcaption>Declaration rate by unique hash (0.60 %) versus by contract (0.01 %) on mainnet. Factory deployments cause the large gap: many contracts share one hash. Text equivalent: the table above.</figcaption>
+</figure>
+
 | SEP | Hashes | Contracts |
 | ---: | ---: | ---: |
 | 40 | 2 | 2 |
@@ -73,11 +100,92 @@ SEP-41 matcher (rules sep41-v0.5.2), counted over fetched hashes and measured co
 | `mismatch` | 1977 | 140683 | 0 / 0 |
 | `no_spec` | 2 | 3 | 0 / 0 |
 
+<figure role="img" aria-label="Grouped bar chart: SEP-41 matcher status distribution by unique hash and by contract. match: 120 hashes / 1141 contracts; partial: 79 / 150; mismatch: 1977 / 140683; no_spec: 2 / 3. Text equivalent: the table above.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 200" width="500" height="200" aria-hidden="true">
+  <title>SEP-41 matcher distribution (mainnet, by hash and by contract)</title>
+  <!-- axes -->
+  <line x1="70" y1="10" x2="70" y2="150" stroke="#888" stroke-width="1"/>
+  <line x1="70" y1="150" x2="490" y2="150" stroke="#888" stroke-width="1"/>
+  <!-- y-axis labels (log scale labels for readability) -->
+  <text x="65" y="150" text-anchor="end" font-size="9" fill="#666">1</text>
+  <text x="65" y="120" text-anchor="end" font-size="9" fill="#666">10</text>
+  <text x="65" y="90" text-anchor="end" font-size="9" fill="#666">100</text>
+  <text x="65" y="60" text-anchor="end" font-size="9" fill="#666">1 000</text>
+  <text x="65" y="30" text-anchor="end" font-size="9" fill="#666">100 000</text>
+  <!-- gridlines -->
+  <line x1="70" y1="120" x2="490" y2="120" stroke="#eee" stroke-width="1"/>
+  <line x1="70" y1="90" x2="490" y2="90" stroke="#eee" stroke-width="1"/>
+  <line x1="70" y1="60" x2="490" y2="60" stroke="#eee" stroke-width="1"/>
+  <line x1="70" y1="30" x2="490" y2="30" stroke="#eee" stroke-width="1"/>
+  <!-- log10 scale: max=140683; height=140px; h = (log10(v)/log10(140683))*140 -->
+  <!-- match: 120 hashes → log10(120)/5.148*140=58.2; 1141 contracts → log10(1141)/5.148*140=85.3 -->
+  <!-- partial: 79 hashes → 54.4; 150 contracts → 62.4 -->
+  <!-- mismatch: 1977 hashes → 95.4; 140683 contracts → 140 -->
+  <!-- no_spec: 2 hashes → 8.2; 3 contracts → 11.9 -->
+  <!-- match bars -->
+  <rect x="90"  y="91"  width="22" height="59" fill="#4f86c6" rx="2"/>
+  <rect x="114" y="64"  width="22" height="86" fill="#85b4de" rx="2"/>
+  <text x="113" y="162" text-anchor="middle" font-size="9" fill="#444">match</text>
+  <!-- partial bars -->
+  <rect x="190" y="95"  width="22" height="55" fill="#4f86c6" rx="2"/>
+  <rect x="214" y="87"  width="22" height="63" fill="#85b4de" rx="2"/>
+  <text x="213" y="162" text-anchor="middle" font-size="9" fill="#444">partial</text>
+  <!-- mismatch bars -->
+  <rect x="290" y="54"  width="22" height="96" fill="#4f86c6" rx="2"/>
+  <rect x="314" y="10"  width="22" height="140" fill="#85b4de" rx="2"/>
+  <text x="313" y="162" text-anchor="middle" font-size="9" fill="#444">mismatch</text>
+  <!-- no_spec bars -->
+  <rect x="390" y="141" width="22" height="9"  fill="#4f86c6" rx="2"/>
+  <rect x="414" y="138" width="22" height="12" fill="#85b4de" rx="2"/>
+  <text x="413" y="162" text-anchor="middle" font-size="9" fill="#444">no_spec</text>
+  <!-- legend -->
+  <rect x="80" y="175" width="10" height="10" fill="#4f86c6"/>
+  <text x="94" y="184" font-size="9" fill="#444">By unique hash</text>
+  <rect x="200" y="175" width="10" height="10" fill="#85b4de"/>
+  <text x="214" y="184" font-size="9" fill="#444">By contract (log scale)</text>
+</svg>
+<figcaption>SEP-41 matcher status distribution on mainnet (log scale), by unique hash and by contract. The mismatch bar dominates by contract because many factory-deployed contracts share one hash. Text equivalent: the table above.</figcaption>
+</figure>
+
 OK-count histogram (hashes with a spec, by number of the 10 required functions present with accepted types):
 
 | OK | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Hashes | 1822 | 68 | 62 | 13 | 12 | 28 | 3 | 1 | 34 | 13 | 120 |
+
+<figure role="img" aria-label="Bar chart: OK-count histogram. Number of the 10 required SEP-41 functions matched per hash. Bin 0 (1822 hashes) dominates; bin 10 (120 hashes, full match) is the second tallest. Text equivalent: the table above.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 170" width="500" height="170" aria-hidden="true">
+  <title>SEP-41 OK-count histogram (mainnet, by unique hash)</title>
+  <!-- axes -->
+  <line x1="40" y1="10" x2="40" y2="130" stroke="#888" stroke-width="1"/>
+  <line x1="40" y1="130" x2="490" y2="130" stroke="#888" stroke-width="1"/>
+  <!-- y-axis labels -->
+  <text x="35" y="130" text-anchor="end" font-size="9" fill="#666">0</text>
+  <text x="35" y="97"  text-anchor="end" font-size="9" fill="#666">500</text>
+  <text x="35" y="64"  text-anchor="end" font-size="9" fill="#666">1 000</text>
+  <text x="35" y="31"  text-anchor="end" font-size="9" fill="#666">1 500</text>
+  <!-- gridlines -->
+  <line x1="40" y1="97"  x2="490" y2="97"  stroke="#eee" stroke-width="1"/>
+  <line x1="40" y1="64"  x2="490" y2="64"  stroke="#eee" stroke-width="1"/>
+  <line x1="40" y1="31"  x2="490" y2="31"  stroke="#eee" stroke-width="1"/>
+  <!-- bars: values [1822,68,62,13,12,28,3,1,34,13,120]; scale: 1822→120px; each bar 36px wide with 2px gap -->
+  <!-- h = round(v/1822*120) -->
+  <!-- 0: 1822→120 --> <rect x="45"  y="10"  width="34" height="120" fill="#4f86c6" rx="2"/><text x="62"  y="145" text-anchor="middle" font-size="9" fill="#444">0</text>
+  <!-- 1: 68→4   --> <rect x="83"  y="126" width="34" height="4"   fill="#4f86c6" rx="2"/><text x="100" y="145" text-anchor="middle" font-size="9" fill="#444">1</text>
+  <!-- 2: 62→4   --> <rect x="121" y="126" width="34" height="4"   fill="#4f86c6" rx="2"/><text x="138" y="145" text-anchor="middle" font-size="9" fill="#444">2</text>
+  <!-- 3: 13→1   --> <rect x="159" y="129" width="34" height="1"   fill="#4f86c6" rx="2"/><text x="176" y="145" text-anchor="middle" font-size="9" fill="#444">3</text>
+  <!-- 4: 12→1   --> <rect x="197" y="129" width="34" height="1"   fill="#4f86c6" rx="2"/><text x="214" y="145" text-anchor="middle" font-size="9" fill="#444">4</text>
+  <!-- 5: 28→2   --> <rect x="235" y="128" width="34" height="2"   fill="#4f86c6" rx="2"/><text x="252" y="145" text-anchor="middle" font-size="9" fill="#444">5</text>
+  <!-- 6: 3→0.2→1--> <rect x="273" y="129" width="34" height="1"   fill="#4f86c6" rx="2"/><text x="290" y="145" text-anchor="middle" font-size="9" fill="#444">6</text>
+  <!-- 7: 1→0.1→1--> <rect x="311" y="129" width="34" height="1"   fill="#4f86c6" rx="2"/><text x="328" y="145" text-anchor="middle" font-size="9" fill="#444">7</text>
+  <!-- 8: 34→2   --> <rect x="349" y="128" width="34" height="2"   fill="#4f86c6" rx="2"/><text x="366" y="145" text-anchor="middle" font-size="9" fill="#444">8</text>
+  <!-- 9: 13→1   --> <rect x="387" y="129" width="34" height="1"   fill="#4f86c6" rx="2"/><text x="404" y="145" text-anchor="middle" font-size="9" fill="#444">9</text>
+  <!-- 10: 120→8  --> <rect x="425" y="122" width="34" height="8"   fill="#2e6da4" rx="2"/><text x="442" y="145" text-anchor="middle" font-size="9" fill="#444">10</text>
+  <!-- x-axis label -->
+  <text x="265" y="158" text-anchor="middle" font-size="9" fill="#666">Required SEP-41 functions matched (0–10)</text>
+</svg>
+<figcaption>OK-count histogram: number of the 10 required SEP-41 functions matched per hash, across the 2176 hashes with a spec. Bin 0 (1 822 hashes) dominates; bin 10 (120 hashes, all functions matched) is shown in a darker shade. Text equivalent: the table above.</figcaption>
+</figure>
 
 **Undeclared gap** (inferred): 109 hashes / 1127 contracts match SEP-41's interface and declare nothing.
 
@@ -145,11 +253,85 @@ SEP-41 matcher (rules sep41-v0.5.2), counted over fetched hashes and measured co
 | `mismatch` | 441 | 1510 | 0 / 0 |
 | `no_spec` | 0 | 0 | 0 / 0 |
 
+<figure role="img" aria-label="Grouped bar chart: SEP-41 matcher status distribution by unique hash and by contract on testnet. match: 17 hashes / 100 contracts; partial: 21 / 165; mismatch: 441 / 1510; no_spec: 0 / 0. Text equivalent: the table above.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 190" width="500" height="190" aria-hidden="true">
+  <title>SEP-41 matcher distribution (testnet sample, by hash and by contract)</title>
+  <!-- axes -->
+  <line x1="70" y1="10" x2="70" y2="140" stroke="#888" stroke-width="1"/>
+  <line x1="70" y1="140" x2="490" y2="140" stroke="#888" stroke-width="1"/>
+  <!-- y-axis labels -->
+  <text x="65" y="140" text-anchor="end" font-size="9" fill="#666">0</text>
+  <text x="65" y="105" text-anchor="end" font-size="9" fill="#666">100</text>
+  <text x="65" y="70"  text-anchor="end" font-size="9" fill="#666">300</text>
+  <text x="65" y="35"  text-anchor="end" font-size="9" fill="#666">500</text>
+  <!-- gridlines -->
+  <line x1="70" y1="105" x2="490" y2="105" stroke="#eee" stroke-width="1"/>
+  <line x1="70" y1="70"  x2="490" y2="70"  stroke="#eee" stroke-width="1"/>
+  <line x1="70" y1="35"  x2="490" y2="35"  stroke="#eee" stroke-width="1"/>
+  <!-- scale: max=1510; height=130px. h=round(v/1510*130) -->
+  <!-- match: 17→1.5→2; 100→8.6→9 -->
+  <rect x="90"  y="138" width="22" height="2"  fill="#4f86c6" rx="2"/>
+  <rect x="114" y="131" width="22" height="9"  fill="#85b4de" rx="2"/>
+  <text x="113" y="153" text-anchor="middle" font-size="9" fill="#444">match</text>
+  <!-- partial: 21→1.8→2; 165→14.2→14 -->
+  <rect x="190" y="138" width="22" height="2"  fill="#4f86c6" rx="2"/>
+  <rect x="214" y="126" width="22" height="14" fill="#85b4de" rx="2"/>
+  <text x="213" y="153" text-anchor="middle" font-size="9" fill="#444">partial</text>
+  <!-- mismatch: 441→38; 1510→130 -->
+  <rect x="290" y="102" width="22" height="38" fill="#4f86c6" rx="2"/>
+  <rect x="314" y="10"  width="22" height="130" fill="#85b4de" rx="2"/>
+  <text x="313" y="153" text-anchor="middle" font-size="9" fill="#444">mismatch</text>
+  <!-- no_spec: 0 -->
+  <rect x="390" y="140" width="22" height="0"  fill="#4f86c6" rx="2"/>
+  <rect x="414" y="140" width="22" height="0"  fill="#85b4de" rx="2"/>
+  <text x="413" y="153" text-anchor="middle" font-size="9" fill="#444">no_spec</text>
+  <!-- legend -->
+  <rect x="80" y="165" width="10" height="10" fill="#4f86c6"/>
+  <text x="94" y="174" font-size="9" fill="#444">By unique hash</text>
+  <rect x="200" y="165" width="10" height="10" fill="#85b4de"/>
+  <text x="214" y="174" font-size="9" fill="#444">By contract</text>
+</svg>
+<figcaption>SEP-41 matcher status distribution on testnet (sample of 2 000 contracts), by unique hash and by contract. Text equivalent: the table above.</figcaption>
+</figure>
+
 OK-count histogram (hashes with a spec, by number of the 10 required functions present with accepted types):
 
 | OK | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Hashes | 405 | 24 | 6 | 0 | 6 | 2 | 0 | 0 | 15 | 4 | 17 |
+
+<figure role="img" aria-label="Bar chart: OK-count histogram for testnet. Bin 0 (405 hashes) is tallest; bin 10 (17 hashes, full match) is the second tallest. Text equivalent: the table above.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 170" width="500" height="170" aria-hidden="true">
+  <title>SEP-41 OK-count histogram (testnet sample, by unique hash)</title>
+  <!-- axes -->
+  <line x1="40" y1="10" x2="40" y2="130" stroke="#888" stroke-width="1"/>
+  <line x1="40" y1="130" x2="490" y2="130" stroke="#888" stroke-width="1"/>
+  <!-- y-axis labels -->
+  <text x="35" y="130" text-anchor="end" font-size="9" fill="#666">0</text>
+  <text x="35" y="90"  text-anchor="end" font-size="9" fill="#666">130</text>
+  <text x="35" y="50"  text-anchor="end" font-size="9" fill="#666">260</text>
+  <text x="35" y="10"  text-anchor="end" font-size="9" fill="#666">390</text>
+  <!-- gridlines -->
+  <line x1="40" y1="90"  x2="490" y2="90"  stroke="#eee" stroke-width="1"/>
+  <line x1="40" y1="50"  x2="490" y2="50"  stroke="#eee" stroke-width="1"/>
+  <line x1="40" y1="10"  x2="490" y2="10"  stroke="#eee" stroke-width="1"/>
+  <!-- bars: values [405,24,6,0,6,2,0,0,15,4,17]; scale: 405→120px -->
+  <!-- 0: 405→120  --> <rect x="45"  y="10"  width="34" height="120" fill="#4f86c6" rx="2"/><text x="62"  y="145" text-anchor="middle" font-size="9" fill="#444">0</text>
+  <!-- 1: 24→7.1→7--> <rect x="83"  y="123" width="34" height="7"   fill="#4f86c6" rx="2"/><text x="100" y="145" text-anchor="middle" font-size="9" fill="#444">1</text>
+  <!-- 2: 6→1.8→2 --> <rect x="121" y="128" width="34" height="2"   fill="#4f86c6" rx="2"/><text x="138" y="145" text-anchor="middle" font-size="9" fill="#444">2</text>
+  <!-- 3: 0→0     --> <rect x="159" y="130" width="34" height="0"   fill="#4f86c6" rx="2"/><text x="176" y="145" text-anchor="middle" font-size="9" fill="#444">3</text>
+  <!-- 4: 6→2     --> <rect x="197" y="128" width="34" height="2"   fill="#4f86c6" rx="2"/><text x="214" y="145" text-anchor="middle" font-size="9" fill="#444">4</text>
+  <!-- 5: 2→1     --> <rect x="235" y="129" width="34" height="1"   fill="#4f86c6" rx="2"/><text x="252" y="145" text-anchor="middle" font-size="9" fill="#444">5</text>
+  <!-- 6: 0→0     --> <rect x="273" y="130" width="34" height="0"   fill="#4f86c6" rx="2"/><text x="290" y="145" text-anchor="middle" font-size="9" fill="#444">6</text>
+  <!-- 7: 0→0     --> <rect x="311" y="130" width="34" height="0"   fill="#4f86c6" rx="2"/><text x="328" y="145" text-anchor="middle" font-size="9" fill="#444">7</text>
+  <!-- 8: 15→4.4→4--> <rect x="349" y="126" width="34" height="4"   fill="#4f86c6" rx="2"/><text x="366" y="145" text-anchor="middle" font-size="9" fill="#444">8</text>
+  <!-- 9: 4→1.2→1 --> <rect x="387" y="129" width="34" height="1"   fill="#4f86c6" rx="2"/><text x="404" y="145" text-anchor="middle" font-size="9" fill="#444">9</text>
+  <!-- 10: 17→5   --> <rect x="425" y="125" width="34" height="5"   fill="#2e6da4" rx="2"/><text x="442" y="145" text-anchor="middle" font-size="9" fill="#444">10</text>
+  <!-- x-axis label -->
+  <text x="265" y="158" text-anchor="middle" font-size="9" fill="#666">Required SEP-41 functions matched (0–10)</text>
+</svg>
+<figcaption>OK-count histogram: number of the 10 required SEP-41 functions matched per hash, across the 479 testnet hashes with a spec. Bin 0 (405 hashes) dominates; bin 10 (17 hashes, all matched) is shown in a darker shade. Text equivalent: the table above.</figcaption>
+</figure>
 
 **Undeclared gap** (inferred): 17 hashes / 100 contracts match SEP-41's interface and declare nothing.
 

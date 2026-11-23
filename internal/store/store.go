@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -242,31 +243,70 @@ func (s *Store) SetState(ctx context.Context, key, value string) error {
 // IsReadOnly lets HTTP servers reject handles capable of changing the index.
 func (s *Store) IsReadOnly() bool { return s.readOnly }
 
-// CountWasmFetchQueue returns the number of queued wasm fetches.
-func (s *Store) CountWasmFetchQueue(ctx context.Context) (int, error) {
-	var n int
-	err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM wasm_fetch_queue`).Scan(&n)
-	return n, err
+// Backup creates a consistent snapshot of the database at dst using SQLite's
+// VACUUM INTO statement. VACUUM INTO uses an exclusive read transaction on the
+// source, so it produces a point-in-time copy that is consistent with any
+// committed writes; WAL-mode concurrent writes continue while it runs.
+//
+// dst must not already exist: SQLite refuses to overwrite an existing file.
+// After the snapshot is written, Backup opens it read-only and validates the
+// network passphrase, schema version, and committed ledger.
+func (s *Store) Backup(ctx context.Context, dst string) error {
+	if _, err := s.DB.ExecContext(ctx, `VACUUM INTO ?`, dst); err != nil {
+		// Remove a partial file so a re-run can try again from scratch.
+		_ = os.Remove(dst)
+		return fmt.Errorf("backup %s: %w", dst, err)
+	}
+	return s.validateSnapshot(ctx, dst)
 }
 
-// ListWasmFetchQueue returns all queued wasm fetches.
-func (s *Store) ListWasmFetchQueue(ctx context.Context) ([]WasmFetchQueueRow, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT hash, first_failed_at, last_attempt_at, attempt_count, next_retry_at, last_error FROM wasm_fetch_queue ORDER BY next_retry_at`)
+// validateSnapshot opens dst read-only and checks that it carries the same
+// network passphrase and schema version as the source, and that its own
+// last_ledger value (if present) is a parseable uint32.
+func (s *Store) validateSnapshot(ctx context.Context, dst string) error {
+	q := url.Values{}
+	q.Set("mode", "ro")
+	snap, err := sql.Open("sqlite", "file:"+dst+"?"+q.Encode())
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("backup validate: open %s: %w", dst, err)
 	}
-	defer func() { _ = rows.Close() }()
-	var out []WasmFetchQueueRow
-	for rows.Next() {
-		var r WasmFetchQueueRow
-		var lastAttempt sql.NullString
-		if err := rows.Scan(&r.Hash, &r.FirstFailedAt, &lastAttempt, &r.AttemptCount, &r.NextRetryAt, &r.LastError); err != nil {
-			return nil, err
-		}
-		if lastAttempt.Valid {
-			r.LastAttemptAt = &lastAttempt.String
-		}
-		out = append(out, r)
+	defer func() { _ = snap.Close() }()
+	b := &Store{DB: snap, readOnly: true}
+
+	// Schema version must match.
+	srcVer, err := s.schemaVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("backup validate: source schema: %w", err)
 	}
-	return out, rows.Err()
+	dstVer, err := b.schemaVersion(ctx)
+	if err != nil {
+		return fmt.Errorf("backup validate: snapshot schema: %w", err)
+	}
+	if srcVer != dstVer {
+		return fmt.Errorf("backup validate: schema version mismatch: source %d, snapshot %d", srcVer, dstVer)
+	}
+
+	// Network passphrase must match.
+	srcPass, err := s.State(ctx, KeyNetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("backup validate: source passphrase: %w", err)
+	}
+	dstPass, err := b.State(ctx, KeyNetworkPassphrase)
+	if err != nil {
+		return fmt.Errorf("backup validate: snapshot passphrase: %w", err)
+	}
+	if srcPass != dstPass {
+		return fmt.Errorf("%w: backup validate: passphrase mismatch: source %q, snapshot %q", ErrNetworkMismatch, srcPass, dstPass)
+	}
+
+	// If a committed ledger is recorded, it must be a valid uint32.
+	if ledger, err := b.State(ctx, KeyLastLedger); err == nil {
+		if _, err := strconv.ParseUint(ledger, 10, 32); err != nil {
+			return fmt.Errorf("backup validate: last_ledger %q in snapshot is not a valid ledger number: %w", ledger, err)
+		}
+	} else if !errors.Is(err, ErrNotFound) {
+		return fmt.Errorf("backup validate: last_ledger: %w", err)
+	}
+
+	return nil
 }

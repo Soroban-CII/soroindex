@@ -60,7 +60,7 @@ func TestFollowTestnet30Minutes(t *testing.T) {
 	followCtx, stop := context.WithTimeout(ctx, 30*time.Minute)
 	defer stop()
 	l := Loop{Store: s, Source: &ingest.LedgerSource{RPC: client}, Apply: ix.ApplyLedger, StartLedger: tip.Sequence, Follow: true}
-	l.Progress = func(last, latest uint32, done bool) {
+	l.Progress = func(last, latest uint32, done bool, _ BatchMetrics) {
 		if done {
 			t.Logf("caught_up last=%d latest=%d lag=%d", last, latest, latest-last)
 		}

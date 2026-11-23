@@ -153,8 +153,20 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 			}
 			return ix.ApplyLedger(ctx, tx, facts)
 		}
-		loop.Progress = func(last, latest uint32, caught bool) {
-			log.InfoContext(ctx, "sync progress", "last_ledger", last, "latest_ledger", latest, "lag", latest-last, "caught_up", caught)
+		if client != nil {
+			loop.RetryCounter = client.RetryCount
+		}
+		loop.Progress = func(last, latest uint32, caught bool, m indexsync.BatchMetrics) {
+			if caught {
+				log.InfoContext(ctx, "sync progress",
+					"last_ledger", last, "latest_ledger", latest, "lag", latest-last, "caught_up", true)
+			} else {
+				log.InfoContext(ctx, "sync progress",
+					"last_ledger", last, "latest_ledger", latest, "lag", latest-last, "caught_up", false,
+					"batch_duration_ms", m.Duration.Milliseconds(),
+					"facts_processed", m.FactsProcessed,
+					"rpc_retries", m.RPCRetries)
+			}
 		}
 		if err := loop.Run(ctx); err != nil {
 			errorf(stderr, "sep47idx sync: %v\n", err)

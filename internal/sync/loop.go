@@ -15,6 +15,21 @@ import (
 // ErrRetentionGap means the resume point is older than the RPC's retained history.
 var ErrRetentionGap = errors.New("resume point is outside RPC retention; seed or backfill the index")
 
+// BatchMetrics summarises one committed batch. Fields are zeroed when
+// caughtUp is true (no batch was processed in that Progress call).
+//
+// Units:
+//   - Duration: wall-clock time from the first Source.Fetch call to the end
+//     of the transaction commit, in nanoseconds (access via time.Duration).
+//   - FactsProcessed: number of ledgers committed in this batch.
+//   - RPCRetries: RPC retry events fired during the batch. Only populated
+//     when Loop.RetryCounter is non-nil; excludes credentials and payloads.
+type BatchMetrics struct {
+	Duration       time.Duration
+	FactsProcessed int
+	RPCRetries     int64
+}
+
 // Source supplies consecutive ledger batches and fresh retention/tip observations.
 type Source interface {
 	Window(context.Context) (ingest.Window, error)
@@ -23,15 +38,18 @@ type Source interface {
 
 // Loop commits facts and the resume point atomically, then follows the tip if requested.
 type Loop struct {
-	Store            *store.Store
-	Source           Source
-	Apply            func(context.Context, *store.Tx, ingest.ContractFacts) error
-	RetryWasmFetches func(context.Context, *store.Tx) (int, int, error)
-	StartLedger      uint32
-	Follow           bool
-	Interval         time.Duration
+	Store       *store.Store
+	Source      Source
+	Apply       func(context.Context, *store.Tx, ingest.ContractFacts) error
+	StartLedger uint32
+	Follow      bool
+	Interval    time.Duration
+	// RetryCounter, if non-nil, is called once before and once after a batch
+	// to populate BatchMetrics.RPCRetries. It must be safe for concurrent use.
+	RetryCounter func() int64
 	// Progress runs after a batch commits or a fresh tip confirms caught_up.
-	Progress func(last, latest uint32, caughtUp bool)
+	// m is zeroed when caughtUp is true (no batch was processed).
+	Progress func(last, latest uint32, caughtUp bool, m BatchMetrics)
 }
 
 // Run resumes stored progress; StartLedger is required only for an unseeded index.
@@ -70,7 +88,7 @@ func (l *Loop) Run(ctx context.Context) error {
 		}
 		if last == w.Latest {
 			if l.Progress != nil {
-				l.Progress(last, w.Latest, true)
+				l.Progress(last, w.Latest, true, BatchMetrics{})
 			}
 			if !l.Follow {
 				return nil
@@ -84,6 +102,13 @@ func (l *Loop) Run(ctx context.Context) error {
 			}
 			continue
 		}
+
+		var retriesBefore int64
+		if l.RetryCounter != nil {
+			retriesBefore = l.RetryCounter()
+		}
+		fetchStart := time.Now()
+
 		b, err := l.Source.Fetch(ctx, last+1)
 		if err != nil {
 			return err
@@ -98,8 +123,16 @@ func (l *Loop) Run(ctx context.Context) error {
 			return err
 		}
 		last = b.To
+
 		if l.Progress != nil {
-			l.Progress(last, b.Latest, false)
+			m := BatchMetrics{
+				Duration:       time.Since(fetchStart),
+				FactsProcessed: len(b.Facts),
+			}
+			if l.RetryCounter != nil {
+				m.RPCRetries = l.RetryCounter() - retriesBefore
+			}
+			l.Progress(last, b.Latest, false, m)
 		}
 		// Retry queued Wasm fetches after each batch in a separate transaction.
 		if l.RetryWasmFetches != nil {

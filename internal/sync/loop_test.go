@@ -112,7 +112,7 @@ func TestCaughtUpRechecksTip(t *testing.T) {
 	s := testStore(t)
 	src := &source{oldest: 1, latest: 10, advance: true}
 	caught := uint32(0)
-	l := Loop{Store: s, Source: src, StartLedger: 10, Apply: writeFact, Progress: func(last, latest uint32, done bool) {
+	l := Loop{Store: s, Source: src, StartLedger: 10, Apply: writeFact, Progress: func(last, latest uint32, done bool, _ BatchMetrics) {
 		if done {
 			caught = last
 			if last != latest {
@@ -137,7 +137,7 @@ func TestFollowCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s := testStore(t)
-	l := Loop{Store: s, Source: &source{oldest: 1, latest: 10}, StartLedger: 10, Follow: true, Apply: writeFact, Progress: func(_, _ uint32, done bool) {
+	l := Loop{Store: s, Source: &source{oldest: 1, latest: 10}, StartLedger: 10, Follow: true, Apply: writeFact, Progress: func(_, _ uint32, done bool, _ BatchMetrics) {
 		if done {
 			cancel()
 		}
@@ -231,5 +231,99 @@ func TestRetentionGapLeavesEveryTableUnchanged(t *testing.T) {
 	}
 	if after := dumpAll(t, s); after != before {
 		t.Fatalf("database changed across a refused run:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// TestBatchMetricsPopulated verifies that Progress receives non-zero Duration
+// and FactsProcessed on a committed batch, and zero values on a caught_up call.
+func TestBatchMetricsPopulated(t *testing.T) {
+	s := testStore(t)
+	var batches, caughtUps int
+	l := Loop{
+		Store: s, Source: &source{oldest: 1, latest: 3}, StartLedger: 1,
+		Apply: writeFact,
+		Progress: func(last, latest uint32, caughtUp bool, m BatchMetrics) {
+			if caughtUp {
+				caughtUps++
+				if m.Duration != 0 || m.FactsProcessed != 0 || m.RPCRetries != 0 {
+					t.Errorf("caught_up BatchMetrics should be zeroed, got %+v", m)
+				}
+				return
+			}
+			batches++
+			if m.Duration <= 0 {
+				t.Errorf("batch Duration = %v, want > 0", m.Duration)
+			}
+			if m.FactsProcessed <= 0 {
+				t.Errorf("batch FactsProcessed = %d, want > 0", m.FactsProcessed)
+			}
+		},
+	}
+	if err := l.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if batches == 0 {
+		t.Fatal("no batch Progress calls received")
+	}
+	if caughtUps == 0 {
+		t.Fatal("no caught_up Progress calls received")
+	}
+}
+
+// TestBatchMetricsRetryCounter verifies that RPCRetries reflects the counter
+// delta across a batch when RetryCounter is set.
+func TestBatchMetricsRetryCounter(t *testing.T) {
+	s := testStore(t)
+	var n int64 // fake counter: each Fetch increments it
+	src := &source{oldest: 1, latest: 3}
+	var got int64
+	l := Loop{
+		Store: s, Source: src, StartLedger: 1,
+		Apply:        writeFact,
+		RetryCounter: func() int64 { return n },
+		Progress: func(_, _ uint32, caughtUp bool, m BatchMetrics) {
+			if !caughtUp {
+				n++ // simulate one retry after the batch
+				got = m.RPCRetries
+			}
+		},
+	}
+	if err := l.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// RPCRetries is the delta before→after the batch, not after the
+	// Progress-internal increment, so it must be 0 for each batch
+	// (counter didn't move before Progress was called with these values).
+	if got != 0 {
+		t.Fatalf("RPCRetries = %d, want 0 (counter moved after batch committed)", got)
+	}
+}
+
+// TestZeroWorkCaughtUpMetrics verifies that a run that starts already at
+// the tip delivers caughtUp=true with a zeroed BatchMetrics immediately.
+func TestZeroWorkCaughtUpMetrics(t *testing.T) {
+	s := testStore(t)
+	if err := s.SetState(context.Background(), store.KeyLastLedger, "10"); err != nil {
+		t.Fatal(err)
+	}
+	var calls int
+	l := Loop{
+		Store: s, Source: &source{oldest: 1, latest: 10},
+		Apply: writeFact,
+		Progress: func(_, _ uint32, caughtUp bool, m BatchMetrics) {
+			calls++
+			if !caughtUp {
+				t.Error("expected caughtUp=true on a zero-work run")
+			}
+			if m != (BatchMetrics{}) {
+				t.Errorf("expected zeroed BatchMetrics, got %+v", m)
+			}
+		},
+	}
+	if err := l.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("Progress called %d times, want 1", calls)
 	}
 }

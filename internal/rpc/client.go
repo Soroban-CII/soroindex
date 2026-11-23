@@ -67,12 +67,19 @@ type Config struct {
 
 // Client is safe for concurrent use.
 type Client struct {
-	cfg    Config
-	sem    chan struct{}
-	nextID atomic.Uint64
+	cfg     Config
+	sem     chan struct{}
+	nextID  atomic.Uint64
+	retries atomic.Int64
 	// sleep waits for d or until ctx ends; replaced in tests.
 	sleep func(ctx context.Context, d time.Duration) error
 }
+
+// RetryCount returns the cumulative number of RPC retry events since the
+// client was created. Each element of this count is one fired retry (a
+// sleep before a re-attempt), not an initial attempt. The value is safe
+// to read from any goroutine and excludes all credential and payload content.
+func (c *Client) RetryCount() int64 { return c.retries.Load() }
 
 // New returns a Client. It does no I/O.
 func New(cfg Config) (*Client, error) {
@@ -164,6 +171,7 @@ func (c *Client) call(ctx context.Context, method string, params, out any) error
 		if retryAfter > wait {
 			wait = min(retryAfter, c.cfg.MaxBackoff)
 		}
+		c.retries.Add(1)
 		c.cfg.Logger.LogAttrs(ctx, slog.LevelWarn, "rpc retry",
 			slog.String("method", method), slog.Int("attempt", attempt),
 			slog.Duration("wait", wait), slog.String("err", lastErr.Error()))
