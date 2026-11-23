@@ -24,7 +24,27 @@ A rule file lists the functions a SEP requires, by type. The matcher compares a 
 - Only types and their order are compared, never parameter names.
 - `ruleset_version` changes whenever the rules change. `sep47idx sync --recompute` then re-matches stored Wasm without fetching anything.
 
+- The first type at each position is the type the SEP text names. Later types are accepted for compatibility with earlier versions of the SEP.
+
 [`rules/schema.json`](https://github.com/Soroban-CII/soroindex/blob/main/rules/schema.json) validates every rule file; CI runs it (`make rules-check`).
+
+## Historical versions and `matched_version`
+
+`rules/history/` keeps earlier versions of a SEP's interface, named `sep-NNNN-vX.Y.Z.json`. Only the top-level `sep-NNNN.json` produces the stored status and the inferred tier. History is used for one thing: reporting the newest version of the SEP that a Wasm's interface implements. That appears as `matched_version` on API matches and in the `wasm`, `contract` and `inspect` output.
+
+Each version is checked strictly. Only the first type at each position counts, because that is the type that version's text names. A token with `transfer.to: Address` is `match` against the current SEP-41 file, which still accepts `Address`. Its `matched_version` is `sep41-v0.3.0`, the last version before `MuxedAddress`.
+
+| File | Version | stellar-protocol commit | Interface |
+| --- | --- | --- | --- |
+| `sep-0041.json` | 0.5.2 | `4db3e802b2929c865a27bd43f2544c979150137d` | 10 functions, `transfer.to: MuxedAddress` (since v0.4.0, `15335f1e6d7cdb1498741aa6038c8f04c08dc2b6`) |
+| `history/sep-0041-v0.3.0.json` | 0.3.0 | `1e09d9f6363516a4d717cb8780b580c05bd59407` | 10 functions, `transfer.to: Address`; unchanged since v0.2.0 (`306bd66735abf0401ee075578f7567832578e4bb`) |
+| `history/sep-0041-v0.1.0.json` | 0.1.0 | `03a1aed540a231ecaddb12c7171e820e0758e061` | 11 functions, adds `spendable_balance` |
+
+v0.2.0 has no file of its own. Its function list is identical to v0.3.0, so v0.3.0 would always be the newest match. The commits come from `gh api "repos/stellar/stellar-protocol/commits?path=ecosystem/sep-0041.md"`, read on 23 November 2026.
+
+On the golden fixtures, `token_full_sep.wasm` reports `sep41-v0.5.2`, `token_full_legacy.wasm` reports `sep41-v0.3.0`, and `token_partial.wasm` and `not_token.wasm` report `null` (`internal/match/versions_test.go`).
+
+A historical file must describe a SEP that has a current file. It must name exactly one type per input position, have a `ruleset_version` equal to its file name's version, be older than the current file, and have no `requires`. The loader rejects anything else.
 
 ## Status thresholds
 
