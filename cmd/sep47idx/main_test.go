@@ -48,7 +48,7 @@ func TestUsageListsVersion(t *testing.T) {
 }
 
 func TestAllBuiltCommandsAreRegistered(t *testing.T) {
-	for _, name := range []string{"phase0", "sync", "serve", "query", "contract", "wasm", "stats", "gap", "version"} {
+	for _, name := range []string{"phase0", "sync", "serve", "query", "contract", "wasm", "stats", "gap", "check", "version"} {
 		if _, ok := commands[name]; !ok {
 			t.Errorf("command %s missing on %s/%s", name, runtime.GOOS, runtime.GOARCH)
 		}

@@ -5,7 +5,7 @@ GO        ?= go
 BINARY    := sep47idx
 PKG       := ./cmd/sep47idx
 FUZZTIME  ?= 30s
-FUZZPKGS  ?= ./pkg/sepmeta
+FUZZPKGS  ?= ./pkg/sepmeta ./internal/ingest
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 

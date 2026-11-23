@@ -120,7 +120,7 @@ func TestInvariantContractKindsRawSQL(t *testing.T) {
 		{"unknown kind", `INSERT INTO contracts (contract_id, kind) VALUES ('C10','other')`, false},
 		{"archived must be 0 or 1", `INSERT INTO contracts (contract_id, kind, archived) VALUES ('C11','wasm',2)`, false},
 		{"bad parse_status", `INSERT INTO wasm (hash, parse_status, parser_version) VALUES ('aa','weird','1')`, false},
-		{"bad match status", `INSERT INTO interface_matches VALUES ('aa',41,'r','great',0,'[]','[]','{}','t')`, false},
+		{"bad match status", `INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, rule_file_sha256, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at) VALUES ('aa',41,'r','unknown','great',0,'[]','[]','{}','t')`, false},
 		{"version closing before it opens", `INSERT INTO contract_versions (contract_id, from_ledger, to_ledger) VALUES ('C1', 10, 9)`, false},
 	}
 	for _, tt := range tests {

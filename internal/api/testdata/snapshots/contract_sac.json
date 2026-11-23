@@ -1,0 +1,29 @@
+{
+  "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN6IE",
+  "network": "testnet",
+  "kind": "sac",
+  "wasm_hash": null,
+  "exec_ref": null,
+  "archived": false,
+  "claims": [
+    {
+      "sep": 41,
+      "declared": false,
+      "inferred": null,
+      "verified": null,
+      "protocol": true,
+      "source": "protocol",
+      "anomaly": null
+    }
+  ],
+  "history": [
+    {
+      "wasm_hash": null,
+      "from_ledger": 5062909,
+      "to_ledger": null,
+      "exec_ref": null
+    }
+  ],
+  "parser_version": "1",
+  "as_of_ledger": 5062910
+}

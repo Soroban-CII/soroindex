@@ -1,0 +1,62 @@
+{
+  "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALGRU",
+  "network": "testnet",
+  "history": [
+    {
+      "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+      "from_ledger": 5062909,
+      "to_ledger": 5062910,
+      "exec_ref": null,
+      "claims": [
+        {
+          "sep": 41,
+          "declared": true,
+          "inferred": {
+            "status": "match",
+            "ruleset_version": "sep41-v0.5.2",
+            "missing": [],
+            "mismatched": []
+          },
+          "verified": {
+            "verdict": "pass",
+            "tool": "soroban-guard",
+            "tool_version": "0.0.0-fixture",
+            "run_at": "<rfc3339>",
+            "stale": true
+          },
+          "protocol": false,
+          "source": "sep47-meta",
+          "anomaly": null
+        }
+      ]
+    },
+    {
+      "wasm_hash": "2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880",
+      "from_ledger": 5062910,
+      "to_ledger": null,
+      "exec_ref": null,
+      "claims": [
+        {
+          "sep": 41,
+          "declared": true,
+          "inferred": {
+            "status": "partial",
+            "ruleset_version": "sep41-v0.5.2",
+            "missing": [
+              "burn",
+              "burn_from"
+            ],
+            "mismatched": []
+          },
+          "verified": null,
+          "protocol": false,
+          "source": "sep47-meta",
+          "anomaly": null
+        }
+      ]
+    }
+  ],
+  "parser_version": "1",
+  "as_of_ledger": 5062910,
+  "next_cursor": null
+}

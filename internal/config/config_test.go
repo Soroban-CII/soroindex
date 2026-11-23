@@ -73,7 +73,8 @@ func TestRegisterCommonDefaults(t *testing.T) {
 	}{
 		{"testnet defaults to the SDF RPC and its own db", []string{"--network", "testnet"}, Testnet.DefaultRPCURL, "./data/testnet.db", ""},
 		{"mainnet has no default RPC", []string{"--network", "mainnet"}, "", "./data/mainnet.db", ""},
-		{"unknown network is rejected", []string{"--network", "futurenet"}, "", "", "unknown network"},
+		{"futurenet defaults to the SDF RPC and its own db", []string{"--network", "futurenet"}, Futurenet.DefaultRPCURL, "./data/futurenet.db", ""},
+		{"unknown network is rejected", []string{"--network", "unknownnet"}, "", "", "unknown network"},
 		{"non-positive concurrency is rejected", []string{"--rpc-concurrency", "0"}, "", "", "must be positive"},
 	}
 	for _, tt := range tests {
@@ -99,6 +100,37 @@ func TestRegisterCommonDefaults(t *testing.T) {
 			}
 			if (c.RequireRPC() != nil) != (tt.wantURL == "") {
 				t.Fatalf("RequireRPC = %v", c.RequireRPC())
+			}
+		})
+	}
+}
+
+func TestNetworkByName(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantNet Network
+		wantErr bool
+	}{
+		{"mainnet", "mainnet", Mainnet, false},
+		{"testnet", "testnet", Testnet, false},
+		{"futurenet", "futurenet", Futurenet, false},
+		{"unknown", "unknownnet", Network{}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NetworkByName(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Name != tt.wantNet.Name || got.Passphrase != tt.wantNet.Passphrase || got.DefaultRPCURL != tt.wantNet.DefaultRPCURL {
+				t.Fatalf("got %+v, want %+v", got, tt.wantNet)
 			}
 		})
 	}

@@ -47,7 +47,8 @@ func (s *Server) wasm(w http.ResponseWriter, r *http.Request) {
 	if detailError(w, err) {
 		return
 	}
-	d, err := s.options.Store.Wasm(r.Context(), r.PathValue("hash"), limit, cursor, s.options.Rulesets)
+	b := backendFrom(r.Context())
+	d, err := b.Store.Wasm(r.Context(), r.PathValue("hash"), limit, cursor, s.options.Rulesets)
 	if detailError(w, err) {
 		return
 	}

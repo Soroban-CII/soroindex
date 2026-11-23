@@ -1,0 +1,21 @@
+{
+  "contracts": [
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU",
+      "kind": "wasm",
+      "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+      "exec_ref": null,
+      "archived": false
+    },
+    {
+      "contract_id": "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXCU",
+      "kind": "wasm",
+      "wasm_hash": "c51a97e72bb1d51aeebd9c60bfb174fb053a3a76292b9a779707713049eb000c",
+      "exec_ref": null,
+      "archived": false
+    }
+  ],
+  "next_cursor": "eyJ2IjoxLCJpZCI6IkNEWUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFHWENVIn0",
+  "parser_version": "1",
+  "tier": "declared"
+}

@@ -1,0 +1,24 @@
+{
+  "seps": [
+    {
+      "sep": 40,
+      "declared": 1,
+      "inferred": 0,
+      "verified": 0,
+      "protocol": 0
+    },
+    {
+      "sep": 41,
+      "declared": 5,
+      "inferred": 3,
+      "verified": 1,
+      "protocol": 1
+    }
+  ],
+  "next_cursor": null,
+  "ruleset_versions": {
+    "41": "sep41-v0.5.2"
+  },
+  "parser_version": "1",
+  "as_of_ledger": 5062910
+}

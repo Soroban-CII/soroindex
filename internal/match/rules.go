@@ -13,6 +13,7 @@ import (
 	"path"
 	"regexp"
 	"sort"
+	"strings"
 )
 
 // ErrInvalidRules means a rule file failed validation.
@@ -25,6 +26,7 @@ type RuleFile struct {
 	Source         string   `json:"source"`
 	Required       []FnRule `json:"required"`
 	Optional       []FnRule `json:"optional"`
+	Requires       []int    `json:"requires"` // other SEP numbers this SEP requires to match
 }
 
 // FnRule describes one function. Inputs has one element per parameter, each
@@ -76,6 +78,9 @@ func (r RuleFile) validate() error {
 	case r.Optional == nil:
 		return errors.New("optional must be present (use [])")
 	}
+	if err := r.validateRequires(); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	for _, f := range append(append([]FnRule{}, r.Required...), r.Optional...) {
 		if !fnNameRe.MatchString(f.Fn) {
@@ -112,8 +117,26 @@ func (r RuleFile) validate() error {
 	return nil
 }
 
+func (r RuleFile) validateRequires() error {
+	if r.Requires == nil {
+		return nil
+	}
+	seen := map[int]bool{}
+	for _, sep := range r.Requires {
+		if sep < 1 || sep > 999999 {
+			return fmt.Errorf("requires sep %d out of range", sep)
+		}
+		if seen[sep] {
+			return fmt.Errorf("requires sep %d listed twice", sep)
+		}
+		seen[sep] = true
+	}
+	return nil
+}
+
 // LoadRules reads every sep-NNNN.json in fsys, validates each, and returns
-// them sorted by SEP. Two files for the same SEP are an error.
+// them sorted by SEP. Two files for the same SEP are an error. Cycles in the
+// requires graph (A requires B, B requires A) are rejected at load time.
 func LoadRules(fsys fs.FS) ([]RuleFile, error) {
 	names, err := fs.Glob(fsys, "sep-*.json")
 	if err != nil {
@@ -142,6 +165,77 @@ func LoadRules(fsys fs.FS) ([]RuleFile, error) {
 		bySEP[r.SEP] = n
 		out = append(out, r)
 	}
+	if err := checkRequiresCycles(out); err != nil {
+		return nil, err
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].SEP < out[j].SEP })
 	return out, nil
+}
+
+// checkRequiresCycles detects cycles in the requires graph using DFS.
+// It returns an error describing the cycle if one exists.
+func checkRequiresCycles(rules []RuleFile) error {
+	// Build adjacency list: sep -> list of required seps
+	seps := map[int]RuleFile{}
+	for _, r := range rules {
+		seps[r.SEP] = r
+	}
+	// 0 = unvisited, 1 = in progress, 2 = done
+	state := map[int]int{}
+	var dfs func(sep int, path []int) error
+	dfs = func(sep int, path []int) error {
+		if state[sep] == 2 {
+			return nil // already fully processed
+		}
+		if state[sep] == 1 {
+			// found a cycle - find where it starts in the path
+			cycleStart := -1
+			for i, s := range path {
+				if s == sep {
+					cycleStart = i
+					break
+				}
+			}
+			if cycleStart >= 0 {
+				cycle := append(path[cycleStart:], sep)
+				return fmt.Errorf("requires cycle: %s -> %s",
+					strings.Join(mapSep(cycle[:len(cycle)-1], seps), " -> "),
+					strings.Join(mapSep(cycle[1:], seps), " -> "))
+			}
+			return fmt.Errorf("requires cycle involving %d", sep)
+		}
+		state[sep] = 1
+		path = append(path, sep)
+		r, hasRule := seps[sep]
+		if hasRule {
+			for _, required := range r.Requires {
+				if err := dfs(required, path); err != nil {
+					return err
+				}
+			}
+		}
+		state[sep] = 2
+		return nil
+	}
+	for _, r := range rules {
+		if state[r.SEP] == 0 {
+			if err := dfs(r.SEP, []int{}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// mapSep returns the source name for a sep, or "sep-NNN" if not found.
+func mapSep(s []int, seps map[int]RuleFile) []string {
+	out := make([]string, len(s))
+	for i, s := range s {
+		if r, ok := seps[s]; ok {
+			out[i] = fmt.Sprintf("sep-%d", r.SEP)
+		} else {
+			out[i] = fmt.Sprintf("sep-%d", s)
+		}
+	}
+	return out
 }

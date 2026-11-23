@@ -1,0 +1,55 @@
+{
+  "network": "testnet",
+  "measured_hashes": 5,
+  "measured_contracts": 6,
+  "toolchains": {
+    "cliver": [
+      {
+        "version": "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea",
+        "hashes": 5,
+        "contracts": 6,
+        "declaring_hashes": 4,
+        "declaring_contracts": 5,
+        "sep41_match_hashes": 2,
+        "sep41_match_contracts": 3,
+        "declaring_pct_by_hash": 80,
+        "declaring_pct_by_contract": 83.33,
+        "sep41_match_pct_by_hash": 40,
+        "sep41_match_pct_by_contract": 50
+      }
+    ],
+    "rssdkver": [
+      {
+        "version": "28.0.0#48d506712f964094d14176e2f0b02afcd1054567",
+        "hashes": 5,
+        "contracts": 6,
+        "declaring_hashes": 4,
+        "declaring_contracts": 5,
+        "sep41_match_hashes": 2,
+        "sep41_match_contracts": 3,
+        "declaring_pct_by_hash": 80,
+        "declaring_pct_by_contract": 83.33,
+        "sep41_match_pct_by_hash": 40,
+        "sep41_match_pct_by_contract": 50
+      }
+    ],
+    "rsver": [
+      {
+        "version": "1.98.1",
+        "hashes": 5,
+        "contracts": 6,
+        "declaring_hashes": 4,
+        "declaring_contracts": 5,
+        "sep41_match_hashes": 2,
+        "sep41_match_contracts": 3,
+        "declaring_pct_by_hash": 80,
+        "declaring_pct_by_contract": 83.33,
+        "sep41_match_pct_by_hash": 40,
+        "sep41_match_pct_by_contract": 50
+      }
+    ]
+  },
+  "sep41_ruleset_version": "sep41-v0.5.2",
+  "parser_version": "1",
+  "as_of_ledger": 5062910
+}
