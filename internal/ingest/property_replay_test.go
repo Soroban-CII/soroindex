@@ -47,7 +47,7 @@ type referenceState struct {
 }
 
 func newFactGenerator(t *testing.T, seed int64) *factGenerator {
-	rng := rand.New(rand.NewSource(seed))
+	rng := rand.New(rand.NewSource(seed)) //nolint:gosec // seeded math/rand on purpose: a failing seed must replay exactly
 	return &factGenerator{
 		t:          t,
 		seed:       seed,
@@ -80,7 +80,7 @@ func (g *factGenerator) randomWasmHash() string {
 	for h := range g.codeHashes {
 		hashes = append(hashes, h)
 	}
-	return hashes[g.rng.Int31n(int32(len(hashes)))]
+	return hashes[g.rng.Intn(len(hashes))]
 }
 
 // randomContractID returns a random existing contract ID. Panics if none exist.
@@ -92,14 +92,14 @@ func (g *factGenerator) randomContractID() string {
 	for id := range g.contracts {
 		ids = append(ids, id)
 	}
-	return ids[g.rng.Int31n(int32(len(ids)))]
+	return ids[g.rng.Intn(len(ids))]
 }
 
 // newContractID generates a new contract ID.
 func (g *factGenerator) newContractID() string {
 	var raw [32]byte
 	for i := range raw {
-		raw[i] = byte(g.rng.Int63())
+		raw[i] = byte(g.rng.Int63() & 0xff)
 	}
 	// Make it a valid contract ID by setting the version byte
 	s, _ := strkey.Encode(strkey.VersionByteContract, raw[:])
@@ -246,7 +246,7 @@ func (g *factGenerator) updateReference() Change {
 	for k := range g.references {
 		keys = append(keys, k)
 	}
-	key := keys[g.rng.Int31n(int32(len(keys)))]
+	key := keys[g.rng.Intn(len(keys))]
 	ref := g.references[key]
 	hash := g.randomWasmHash()
 	h, _ := ParseWasmHash(hash)
