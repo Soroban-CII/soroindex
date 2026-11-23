@@ -176,6 +176,7 @@ func TestDecodeSpecEveryPrefix(t *testing.T) {
 	for _, name := range []string{
 		"token_full_sep.wasm", "token_full_legacy.wasm", "token_partial.wasm", "not_token.wasm", "multi_sep.wasm", "no_meta.wasm",
 		"oracle_sep40.wasm", "nft_sep50.wasm", "nft_sep50_partial.wasm", "vault_sep56.wasm",
+		"token_wrong_output.wasm", "token_swapped_args.wasm", "token_duplicate_fn.wasm", "token_renamed_params.wasm",
 	} {
 		t.Run(name, func(t *testing.T) {
 			section := fixtureSection(t, name, SectionSpec)

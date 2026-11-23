@@ -15,6 +15,10 @@ members = [
     "nft_sep50",
     "nft_sep50_partial",
     "vault_sep56",
+    "token_wrong_output",
+    "token_swapped_args",
+    "token_duplicate_fn",
+    "token_renamed_params",
 ]
 
 [workspace.package]

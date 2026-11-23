@@ -1885,6 +1885,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
+name = "token_duplicate_fn"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "token_full_legacy"
 version = "0.1.0"
 dependencies = [
@@ -1902,6 +1910,30 @@ dependencies = [
 
 [[package]]
 name = "token_partial"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "token_renamed_params"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "token_swapped_args"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "token_wrong_output"
 version = "0.1.0"
 dependencies = [
  "common",

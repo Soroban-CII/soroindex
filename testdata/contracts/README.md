@@ -40,14 +40,19 @@ lists the expected hashes.
 | `nft_sep50.wasm` | `nft_sep50/` | All 11 SEP-50 `NonFungibleToken` functions, `TokenID` and `Balance` as `u32`; `sep=50`. |
 | `nft_sep50_partial.wasm` | `nft_sep50_partial/` | `nft_sep50` without `approve_for_all` (10 of 11); `sep=50`. For partial-match tests. |
 | `vault_sep56.wasm` | `vault_sep56/` | The 17 SEP-56 `TokenizedVault` functions plus all 10 SEP-41 functions for the share token; `sep=41,56`. |
+| `token_wrong_output.wasm` | `token_wrong_output/` | SEP-41 surface, `balance` returns `u128`. Matcher: `partial` 9/10, `balance` mismatched (`types`). |
+| `token_swapped_args.wasm` | `token_swapped_args/` | SEP-41 surface, `transfer(from, amount, to)`. Matcher: `partial` 9/10, `transfer` mismatched (`types`). |
+| `token_duplicate_fn.wasm` | `token_duplicate_fn/` | SEP-41 surface plus a second `balance` spec entry (`-> u64`) from another module. Matcher: `partial` 9/10, `balance` mismatched (`duplicate`). |
+| `token_renamed_params.wasm` | `token_renamed_params/` | SEP-41 surface, every parameter renamed, every type correct. Matcher: `match` 10/10, which shows names are never compared. |
 
 `common/` holds the token logic the SEP-41 fixtures share. It has no
 `contractmeta!`, so every `sep` entry comes from the fixture's own source.
 
-The three token fixtures also export `__constructor(admin, decimals, name,
-symbol)`, `mint` and `upgrade`. These are admin-gated and not part of SEP-41;
-they exist so the tokens can be deployed, funded and upgraded on testnet
-(CLAUDE.md §7 step 28). The matcher ignores functions not in a rule file.
+`token_full_sep`, `token_full_legacy` and `token_partial` also export
+`__constructor(admin, decimals, name, symbol)`, `mint` and `upgrade`. These
+are admin-gated and not part of SEP-41; they exist so the tokens can be
+deployed, funded and upgraded on testnet (CLAUDE.md §7 step 28). The matcher
+ignores functions not in a rule file.
 
 Besides `sep`, every fixture carries the meta that the toolchain adds itself:
 `rsver`, `rssdkver`, `rssdk_spec_shaking` and `cliver`.
@@ -93,3 +98,18 @@ the token fixtures follow from the SEP:
   vault has no admin `mint`; shares come only from `deposit` and `mint`.
 - `burn` and `burn_from` also lower `total_supply`, which SEP-41 does not
   define but SEP-56 does.
+
+## Negative token fixtures
+
+`token_wrong_output`, `token_swapped_args`, `token_duplicate_fn` and
+`token_renamed_params` are matcher edge cases. Each exports exactly the 10
+SEP-41 functions and nothing else (no constructor or admin functions; they
+are not meant to be deployed), declares `sep=41`, and differs from a match
+in exactly one way, so that one difference is the only thing the matcher can
+be reacting to.
+
+`token_duplicate_fn` cannot export `balance` twice: the linker rejects a
+duplicate symbol. Its second entry comes from `#[contractspecfn]` on a
+trait in another module, which writes spec entries without exports, as an
+interface crate does. stellar-cli 28.0.0 warns "spec entry 'balance' is
+defined more than once" while building it; that warning is expected.
