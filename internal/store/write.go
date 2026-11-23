@@ -325,6 +325,14 @@ WHERE exec_refs.updated_ledger IS NULL OR excluded.updated_ledger IS NULL OR exc
 		owner, tag, nullStr(hash), nullLedger(ledger), archived)
 }
 
+// HasWasm on the store reads committed state outside any batch, so Wasm
+// prefetching can skip hashes already indexed before a transaction opens.
+func (s *Store) HasWasm(ctx context.Context, hash string) (bool, error) {
+	var n int
+	err := s.DB.QueryRowContext(ctx, `SELECT count(*) FROM wasm WHERE hash = ?`, hash).Scan(&n)
+	return n > 0, err
+}
+
 // HasWasm reports whether a Wasm row exists in any status, archived
 // included, so the indexer fetches each hash once. Re-fetching code that
 // comes back from the archive is driven by the ledger's Restored change

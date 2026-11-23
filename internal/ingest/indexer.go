@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/claims"
@@ -28,6 +29,13 @@ type Indexer struct {
 	Claims  *claims.Registry
 	Log     *slog.Logger
 	Now     func() time.Time
+	// Concurrency bounds the worker pool that fetches and analyzes Wasm
+	// (and, when seeding, prepares contract batches). The sync command
+	// sets it from --rpc-concurrency; zero means DefaultConcurrency.
+	Concurrency int
+
+	cacheMu sync.Mutex
+	cache   map[string]*prefetched // see prefetch.go
 }
 
 // EnsureWasm fetches, analyzes and writes every hash in hashes that is not
@@ -47,37 +55,61 @@ func (ix *Indexer) EnsureWasm(ctx context.Context, tx *store.Tx, hashes []string
 			need = append(need, h)
 		}
 	}
-	if len(need) == 0 {
-		return 0, nil
+	written := 0
+	var fetch []string
+	for _, h := range need {
+		p := ix.takePrefetched(h)
+		if p == nil {
+			fetch = append(fetch, h)
+			continue
+		}
+		ok, err := ix.writeCached(ctx, tx, h, p, seenLedger)
+		if err != nil {
+			return 0, err
+		}
+		if ok {
+			written++
+		}
 	}
-	code, err := FetchCode(ctx, ix.RPC, need)
+	if len(fetch) == 0 {
+		return written, nil
+	}
+	code, err := FetchCodeWith(ctx, ix.RPC, fetch, ix.workers())
 	if err != nil {
 		// Queue each failed hash for retry instead of failing the batch.
-		// The fetch error is generic (e.g., timeout, connection error), so we
-		// queue all needed hashes with the same error message.
-		for _, h := range need {
-			if err := tx.QueueWasmFetch(ctx, h, err.Error(), ix.Now().Add(30*time.Second).UTC().Format(time.RFC3339)); err != nil {
-				return 0, err
-			}
-		}
-		if ix.Log != nil {
-			ix.Log.LogAttrs(ctx, slog.LevelWarn, "wasm fetch failed, queued for retry", slog.Int("count", len(need)), slog.String("err", err.Error()))
-		}
-		return 0, nil // batch succeeds; queued hashes will be retried later
+		// The batch succeeds; queued hashes are retried later.
+		return written, ix.queueFetch(ctx, tx, fetch, err)
 	}
-	for _, h := range need {
+	for _, h := range fetch {
 		c := code[h]
 		if c.Archived {
 			if err := tx.UpsertWasm(ctx, store.WasmRow{Hash: h, FirstSeenLedger: seenLedger, ParseStatus: ParseArchived, ParserVersion: sepmeta.ParserVersion}); err != nil {
 				return 0, err
 			}
+			written++
 			continue
 		}
 		if err := ix.writeAnalysis(ctx, tx, h, c.Bytes, seenLedger); err != nil {
 			return 0, err
 		}
+		written++
 	}
-	return len(need), nil
+	return written, nil
+}
+
+// queueFetch records hashes whose fetch failed after the RPC client's own
+// retries, so RetryWasmFetches tries them again later. The fetch error is
+// generic (a timeout, a connection error), so every hash gets the same one.
+func (ix *Indexer) queueFetch(ctx context.Context, tx *store.Tx, hashes []string, ferr error) error {
+	for _, h := range hashes {
+		if err := tx.QueueWasmFetch(ctx, h, ferr.Error(), ix.Now().Add(30*time.Second).UTC().Format(time.RFC3339)); err != nil {
+			return err
+		}
+	}
+	if ix.Log != nil {
+		ix.Log.LogAttrs(ctx, slog.LevelWarn, "wasm fetch failed, queued for retry", slog.Int("count", len(hashes)), slog.String("err", ferr.Error()))
+	}
+	return nil
 }
 
 // analysis is every row writeAnalysis stores for one Wasm. It is built
@@ -132,11 +164,23 @@ func (ix *Indexer) analyze(ctx context.Context, hash string, code []byte, seenLe
 }
 
 // writeAnalysis stores one Wasm's parse, claims, anomalies and matches.
+// A finished prefetch of the same hash is reused: the hash is the SHA-256
+// of the code, so the analysis is the same one this call would compute.
 func (ix *Indexer) writeAnalysis(ctx context.Context, tx *store.Tx, hash string, code []byte, seenLedger uint32) error {
-	a, err := ix.analyze(ctx, hash, code, seenLedger)
-	if err != nil {
-		return err
+	a, ok := ix.peekPrefetched(hash)
+	if ok {
+		a.wasm.FirstSeenLedger = seenLedger
+	} else {
+		var err error
+		if a, err = ix.analyze(ctx, hash, code, seenLedger); err != nil {
+			return err
+		}
 	}
+	return ix.writeRows(ctx, tx, hash, a)
+}
+
+// writeRows stores one analysis: the Wasm row, claims, anomalies, matches.
+func (ix *Indexer) writeRows(ctx context.Context, tx *store.Tx, hash string, a analysis) error {
 	if err := tx.UpsertWasm(ctx, a.wasm); err != nil {
 		return err
 	}

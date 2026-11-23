@@ -108,7 +108,7 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	reg := claims.Default(sepmeta.DefaultLimits())
 	reg.AllowInvocation = *allowInvocation
 	ix := &ingest.Indexer{Store: st, Rules: ruleFiles, Matcher: match.Matcher{PartialThreshold: *threshold},
-		Limits: sepmeta.DefaultLimits(), Claims: reg, Log: log, Now: time.Now}
+		Limits: sepmeta.DefaultLimits(), Claims: reg, Log: log, Now: time.Now, Concurrency: cfg.Concurrency}
 	if client != nil {
 		ix.RPC = client
 		if *seed != "" {
@@ -134,8 +134,8 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	}
 	if incremental {
 		loop := indexsync.Loop{Store: st, Source: &ingest.LedgerSource{RPC: client}, Apply: ix.ApplyLedger,
-			RetryWasmFetches: ix.RetryWasmFetches,
-			StartLedger:      uint32(*start), Follow: *follow, Interval: *interval} // #nosec G115 -- checked above
+			RetryWasmFetches: ix.RetryWasmFetches, Prefetch: ix.PrefetchBatch, Log: log,
+			StartLedger: uint32(*start), Follow: *follow, Interval: *interval} // #nosec G115 -- checked above
 		loop.Apply = func(ctx context.Context, tx *store.Tx, facts ingest.ContractFacts) error {
 			if err := tx.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
 				return err
