@@ -7,6 +7,11 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/xdr"
+
+	"github.com/Soroban-CII/soroindex/internal/rpc"
 )
 
 // factGenerator generates random but valid sequences of contract facts.
@@ -14,7 +19,7 @@ type factGenerator struct {
 	t          *testing.T
 	seed       int64
 	rng        *rand.Rand
-	contracts  map[string]*contractState // contractID -> state
+	contracts  map[string]*contractState  // contractID -> state
 	references map[string]*referenceState // owner:tag -> state
 	codeHashes map[string][]byte          // hash -> wasm bytes
 	ledger     uint32
@@ -221,16 +226,16 @@ func (g *factGenerator) createReference() Change {
 	b := xdr.ScBytes(h[:])
 	s := xdr.ScString(tag)
 	cd := xdr.ContractDataEntry{
-		Contract: contractAddr(g.t, owner),
+		Contract:   contractAddr(g.t, owner),
 		Durability: xdr.ContractDataDurabilityPersistent,
-		Key: xdr.ScVal{Type: xdr.ScValTypeScvExecutableTag, ExecutableTag: &s},
-		Val: xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &b},
+		Key:        xdr.ScVal{Type: xdr.ScValTypeScvExecutableTag, ExecutableTag: &s},
+		Val:        xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &b},
 	}
 	refKey := fmt.Sprintf("%s:%s", owner, tag)
 	g.references[refKey] = &referenceState{
-		owner:    owner,
-		tag:      tag,
-		wasmHash: hash,
+		owner:     owner,
+		tag:       tag,
+		wasmHash:  hash,
 		updatedAt: g.ledger,
 	}
 	return dataChange(cd, Created)
@@ -248,10 +253,10 @@ func (g *factGenerator) updateReference() Change {
 	b := xdr.ScBytes(h[:])
 	s := xdr.ScString(ref.tag)
 	cd := xdr.ContractDataEntry{
-		Contract: contractAddr(g.t, ref.owner),
+		Contract:   contractAddr(g.t, ref.owner),
 		Durability: xdr.ContractDataDurabilityPersistent,
-		Key: xdr.ScVal{Type: xdr.ScValTypeScvExecutableTag, ExecutableTag: &s},
-		Val: xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &b},
+		Key:        xdr.ScVal{Type: xdr.ScValTypeScvExecutableTag, ExecutableTag: &s},
+		Val:        xdr.ScVal{Type: xdr.ScValTypeScvBytes, Bytes: &b},
 	}
 	ref.wasmHash = hash
 	ref.updatedAt = g.ledger
@@ -264,9 +269,9 @@ func (g *factGenerator) createReferenceContract() Change {
 	// First create the reference
 	refKey := fmt.Sprintf("%s:%s", owner, tag)
 	g.references[refKey] = &referenceState{
-		owner:    owner,
-		tag:      tag,
-		wasmHash: hash,
+		owner:     owner,
+		tag:       tag,
+		wasmHash:  hash,
 		updatedAt: g.ledger,
 	}
 	// Then create the contract using the reference
@@ -298,11 +303,10 @@ func (g *factGenerator) archiveContract() Change {
 	var key xdr.LedgerKey
 	if st.kind == KindWasmRef {
 		// Archive the instance
-		h, _ := ParseWasmHash(st.wasmHash)
 		key = xdr.LedgerKey{Type: xdr.LedgerEntryTypeContractData, ContractData: &xdr.LedgerKeyContractData{
-			Contract: contractAddr(g.t, id),
+			Contract:   contractAddr(g.t, id),
 			Durability: xdr.ContractDataDurabilityPersistent,
-			Key: xdr.ScVal{Type: xdr.ScValTypeScvLedgerKeyContractInstance},
+			Key:        xdr.ScVal{Type: xdr.ScValTypeScvLedgerKeyContractInstance},
 		}}
 	} else {
 		// Archive the code
@@ -458,7 +462,7 @@ func TestPropertyBasedReplay(t *testing.T) {
 				t.Fatalf("seed %d: replay changed state", seed)
 			}
 
-			t.Logf("Seed %d: all three runs identical (%d contracts, %d references)", 
+			t.Logf("Seed %d: all three runs identical (%d contracts, %d references)",
 				seed, len(g.contracts), len(g.references))
 		})
 	}
