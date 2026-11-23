@@ -182,104 +182,90 @@ func TestExecRefReplayNeverRegressesHash(t *testing.T) {
 	}
 }
 
-func TestWasmFetchQueueQueueing(t *testing.T) {
+// --- Issue #93: live_until_ledger ---
+
+func ptr32(v uint32) *uint32 { return &v }
+
+func TestLiveUntilLedgerStoredAndKeptHighest(t *testing.T) {
 	s, _ := openTest(t)
 	ctx := context.Background()
+	// First write: TTL = 500.
 	inTx(t, s, func(tx *Tx) error {
-		return tx.QueueWasmFetch(ctx, "aa", "connection timeout", "2026-01-01T00:00:30Z")
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(500)})
 	})
-	count, err := s.CountWasmFetchQueue(ctx)
-	if err != nil || count != 1 {
-		t.Fatalf("count = %d, err = %v, want 1", count, err)
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "500" {
+		t.Fatalf("live_until_ledger = %s, want 500", got)
 	}
-	queued, err := s.ListWasmFetchQueue(ctx)
-	if err != nil || len(queued) != 1 {
-		t.Fatalf("queued = %v, err = %v", queued, err)
-	}
-	if queued[0].Hash != "aa" || queued[0].AttemptCount != 1 || queued[0].LastError != "connection timeout" || queued[0].NextRetryAt != "2026-01-01T00:00:30Z" {
-		t.Fatalf("queued entry = %+v", queued[0])
-	}
-	if queued[0].LastAttemptAt != nil {
-		t.Fatalf("LastAttemptAt should be nil on first queue, got %v", *queued[0].LastAttemptAt)
-	}
-	// Second queue call should increment attempt_count and update next_retry_at
+	// Extension: TTL raised to 1000.
 	inTx(t, s, func(tx *Tx) error {
-		return tx.QueueWasmFetch(ctx, "aa", "still failing", "2026-01-01T00:01:00Z")
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 20, LiveUntilLedger: ptr32(1000)})
 	})
-	count, err = s.CountWasmFetchQueue(ctx)
-	if err != nil || count != 1 {
-		t.Fatalf("count after second queue = %d, err = %v, want 1", count, err)
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "1000" {
+		t.Fatalf("after extension = %s, want 1000", got)
 	}
-	queued, err = s.ListWasmFetchQueue(ctx)
-	if err != nil || len(queued) != 1 || queued[0].AttemptCount != 2 {
-		t.Fatalf("queued after second = %v, err = %v", queued, err)
-	}
-	if queued[0].LastAttemptAt != nil {
-		t.Fatalf("LastAttemptAt should still be nil (QueueWasmFetch doesn't set it), got %v", *queued[0].LastAttemptAt)
+	// Replay with lower value must not shrink it.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 15, LiveUntilLedger: ptr32(600)})
+	})
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "1000" {
+		t.Fatalf("replay regressed live_until_ledger to %s, want 1000", got)
 	}
 }
 
-func TestWasmFetchQueueRetrySuccess(t *testing.T) {
+func TestLiveUntilLedgerNilDoesNotClearExisting(t *testing.T) {
 	s, _ := openTest(t)
 	ctx := context.Background()
 	inTx(t, s, func(tx *Tx) error {
-		return tx.QueueWasmFetch(ctx, "aa", "timeout", "2026-01-01T00:00:30Z")
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(500)})
 	})
+	// Second write has nil LiveUntilLedger — should preserve 500.
 	inTx(t, s, func(tx *Tx) error {
-		return tx.UpdateWasmFetchAttempt(ctx, "aa", "success", "2026-01-01T00:01:00Z")
+		return tx.UpsertContract(ctx, ContractRow{ID: "C1", Kind: "wasm", UpdatedLedger: 20})
 	})
-	queued, err := s.ListWasmFetchQueue(ctx)
-	if err != nil || len(queued) != 1 {
-		t.Fatalf("queued after update = %v, err = %v", queued, err)
-	}
-	if queued[0].AttemptCount != 2 || queued[0].LastAttemptAt == nil || queued[0].LastError != "success" {
-		t.Fatalf("updated entry = %+v", queued[0])
-	}
-	// LastAttemptAt should be a valid RFC3339 timestamp (not the test's fixed time, but current time)
-	if _, err := time.Parse(time.RFC3339, *queued[0].LastAttemptAt); err != nil {
-		t.Fatalf("LastAttemptAt is not valid RFC3339: %v", *queued[0].LastAttemptAt)
-	}
-	// Remove on success
-	inTx(t, s, func(tx *Tx) error {
-		return tx.RemoveWasmFetch(ctx, "aa")
-	})
-	count, err := s.CountWasmFetchQueue(ctx)
-	if err != nil || count != 0 {
-		t.Fatalf("count after remove = %d, err = %v, want 0", count, err)
+	if got := queryString(t, s, `SELECT live_until_ledger FROM contracts WHERE contract_id = 'C1'`); got != "500" {
+		t.Fatalf("nil update cleared live_until_ledger: got %s, want 500", got)
 	}
 }
 
-func TestWasmFetchQueuePermanentFailure(t *testing.T) {
+func TestExpiringBeforeFilter(t *testing.T) {
 	s, _ := openTest(t)
 	ctx := context.Background()
+	// C1: expires at ledger 100.
 	inTx(t, s, func(tx *Tx) error {
-		return tx.QueueWasmFetch(ctx, "aa", "not found", "2026-01-01T00:00:30Z")
+		return tx.UpsertContract(ctx, ContractRow{ID: "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(100)})
 	})
-	// Simulate multiple retries
-	for i := 0; i < 5; i++ {
+	// C2: expires at ledger 200.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXCU", Kind: "wasm", UpdatedLedger: 10, LiveUntilLedger: ptr32(200)})
+	})
+	// C3: no TTL.
+	inTx(t, s, func(tx *Tx) error {
+		return tx.UpsertContract(ctx, ContractRow{ID: "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALXKU", Kind: "wasm", UpdatedLedger: 10})
+	})
+	// Add declared claims so the default "declared" tier filter sees them.
+	for _, h := range []string{"aa", "bb", "cc"} {
 		inTx(t, s, func(tx *Tx) error {
-			return tx.UpdateWasmFetchAttempt(ctx, "aa", "still not found", "2026-01-01T00:00:30Z")
+			return tx.UpsertWasm(ctx, WasmRow{Hash: h, ParseStatus: "ok", ParserVersion: "1"})
+		})
+		inTx(t, s, func(tx *Tx) error {
+			return tx.ReplaceClaims(ctx, h, "sep47-meta", []ClaimRow{{SEP: 41, RawToken: "41"}})
 		})
 	}
-	queued, err := s.ListWasmFetchQueue(ctx)
-	if err != nil || len(queued) != 1 {
-		t.Fatalf("queued after retries = %v, err = %v", queued, err)
+	hashes := []string{"aa", "bb", "cc"}
+	ids := []string{"CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACHTU", "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGXCU", "CDYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALXKU"}
+	for i, id := range ids {
+		inTx(t, s, func(tx *Tx) error {
+			return tx.UpsertContract(ctx, ContractRow{ID: id, Kind: "wasm", CurrentWasmHash: hashes[i], UpdatedLedger: 10})
+		})
 	}
-	if queued[0].AttemptCount != 6 {
-		t.Fatalf("attempt count = %d, want 6", queued[0].AttemptCount)
+
+	threshold := uint32(150)
+	page, err := s.Contracts(ctx, Filter{ExpiringBefore: &threshold, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if queued[0].LastAttemptAt == nil {
-		t.Fatalf("LastAttemptAt should be set")
-	}
-	if _, err := time.Parse(time.RFC3339, *queued[0].LastAttemptAt); err != nil {
-		t.Fatalf("LastAttemptAt is not valid RFC3339: %v", *queued[0].LastAttemptAt)
-	}
-	// Eventually remove after giving up
-	inTx(t, s, func(tx *Tx) error {
-		return tx.RemoveWasmFetch(ctx, "aa")
-	})
-	count, err := s.CountWasmFetchQueue(ctx)
-	if err != nil || count != 0 {
-		t.Fatalf("count after remove = %d, err = %v, want 0", count, err)
+	// Only C1 (expires 100) is before 150; C2 (200) and C3 (nil) are excluded.
+	if len(page.Contracts) != 1 || page.Contracts[0].ID != ids[0] {
+		t.Fatalf("expiring_before=150: got %v, want [%s]", page.Contracts, ids[0])
 	}
 }

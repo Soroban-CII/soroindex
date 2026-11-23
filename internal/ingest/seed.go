@@ -185,9 +185,10 @@ func (ix *Indexer) seedBatch(ctx context.Context, batch []SeedRow, st *SeedStats
 		return 0, err
 	}
 	type seeded struct {
-		inst     Instance
-		from     uint32
-		archived bool
+		inst        Instance
+		from        uint32
+		archived    bool
+		liveUntil   *uint32 // nil if the node did not return a TTL
 	}
 	var got []seeded
 	for _, e := range res.Entries {
@@ -204,7 +205,7 @@ func (ix *Indexer) seedBatch(ctx context.Context, batch []SeedRow, st *SeedStats
 			return 0, fmt.Errorf("instance of %s: %w", row.ContractID, err)
 		}
 		archived := e.LiveUntilLedgerSeq != nil && *e.LiveUntilLedgerSeq < res.LatestLedger
-		got = append(got, seeded{inst: inst, from: e.LastModifiedLedgerSeq, archived: archived})
+		got = append(got, seeded{inst: inst, from: e.LastModifiedLedgerSeq, archived: archived, liveUntil: e.LiveUntilLedgerSeq})
 		if row.WasmHash != "" && inst.Kind == KindWasm && row.WasmHash != inst.WasmHash {
 			st.HintMismatch++
 		}
@@ -293,7 +294,8 @@ func (ix *Indexer) seedBatch(ctx context.Context, batch []SeedRow, st *SeedStats
 	for _, s := range got {
 		in := s.inst
 		row := store.ContractRow{ID: in.ContractID, Kind: string(in.Kind), CurrentWasmHash: in.WasmHash,
-			ExecRefOwner: in.RefOwner, ExecRefTag: in.RefTag, SACAsset: in.SACAsset, UpdatedLedger: s.from, Archived: s.archived}
+			ExecRefOwner: in.RefOwner, ExecRefTag: in.RefTag, SACAsset: in.SACAsset,
+			UpdatedLedger: s.from, LiveUntilLedger: s.liveUntil, Archived: s.archived}
 		if in.Kind == KindSAC {
 			row.CurrentWasmHash = ""
 		}

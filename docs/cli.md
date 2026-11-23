@@ -81,6 +81,8 @@ Seeds an index, recomputes interface matches, or applies consecutive ledger batc
 | Flag | Meaning |
 | --- | --- |
 | `--start-ledger` | First ledger to index when the database has no resume point. An existing resume point takes precedence. |
+| `--stop-ledger` | Stop and exit cleanly after committing this ledger sequence number. Must not be less than `--start-ledger` when both are set. `0` means no limit (default). Useful for bounded back-fills or reproducible test runs. |
+| `--verify-url` | Secondary Stellar RPC URL whose `getLedgers` responses are cross-checked against the primary. The two endpoints must serve the same network passphrase. If a ledger hash in any batch does not match, the loop halts without committing that batch. |
 | `--follow` | Keep polling after catching up. Combine with a seed to seed and then follow. |
 | `--interval` | Positive polling duration, default `5s`. |
 

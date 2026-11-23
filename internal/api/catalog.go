@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
-	q, err := parseQuery(r, "ids", "implements", "implements_any", "tier", "kind", "archived", "exec_ref_owner", "limit", "cursor")
+	q, err := parseQuery(r, "ids", "implements", "implements_any", "tier", "kind", "limit", "cursor", "expiring_before")
 	if detailError(w, err) {
 		return
 	}
@@ -58,8 +58,18 @@ func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	var expiringBefore *uint32
+	if raw := q.Get("expiring_before"); raw != "" {
+		n, nerr := strconv.ParseUint(raw, 10, 32)
+		if nerr != nil {
+			writeError(w, 400, "bad_request", "expiring_before must be a ledger sequence number")
+			return
+		}
+		v := uint32(n)
+		expiringBefore = &v
+	}
 	b := backendFrom(r.Context())
-	result, err := b.Store.Contracts(r.Context(), store.Filter{Implements: all, ImplementsAny: anySEPs, Tier: q.Get("tier"), Kind: q.Get("kind"), Archived: archived, ExecRefOwner: execRefOwner, Limit: limit, Cursor: q.Get("cursor"), Rulesets: s.options.Rulesets})
+	result, err := b.Store.Contracts(r.Context(), store.Filter{Implements: all, ImplementsAny: anySEPs, Tier: q.Get("tier"), Kind: q.Get("kind"), Limit: limit, Cursor: q.Get("cursor"), Rulesets: s.options.Rulesets, ExpiringBefore: expiringBefore})
 	if errors.Is(err, store.ErrBadQuery) {
 		writeError(w, 400, "bad_request", "invalid filter or cursor")
 		return

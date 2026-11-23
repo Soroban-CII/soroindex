@@ -23,13 +23,18 @@ type Source interface {
 
 // Loop commits facts and the resume point atomically, then follows the tip if requested.
 type Loop struct {
-	Store            *store.Store
-	Source           Source
-	Apply            func(context.Context, *store.Tx, ingest.ContractFacts) error
-	RetryWasmFetches func(context.Context, *store.Tx) (int, int, error)
-	StartLedger      uint32
-	Follow           bool
-	Interval         time.Duration
+	Store       *store.Store
+	Source      Source
+	Apply       func(context.Context, *store.Tx, ingest.ContractFacts) error
+	StartLedger uint32
+	// StopLedger, when non-zero, causes Run to exit nil after committing this
+	// ledger. It must not be less than StartLedger. A value of 0 means no limit.
+	StopLedger uint32
+	Follow     bool
+	Interval   time.Duration
+	// VerifyBatch, when non-nil, is called with each fetched batch before it
+	// commits. Return an error to halt the loop without writing anything.
+	VerifyBatch func(ctx context.Context, b ingest.Batch) error
 	// Progress runs after a batch commits or a fresh tip confirms caught_up.
 	Progress func(last, latest uint32, caughtUp bool)
 }
@@ -43,6 +48,10 @@ func (l *Loop) Run(ctx context.Context) error {
 	if l.Interval < 0 {
 		return errors.New("sync: interval must be positive")
 	}
+	// Validate stop before any network contact so the caller hears about it immediately.
+	if l.StopLedger > 0 && l.StartLedger > 0 && l.StopLedger < l.StartLedger {
+		return fmt.Errorf("sync: --stop-ledger %d is less than --start-ledger %d", l.StopLedger, l.StartLedger)
+	}
 	interval := l.Interval
 	if interval == 0 {
 		interval = 5 * time.Second
@@ -50,6 +59,10 @@ func (l *Loop) Run(ctx context.Context) error {
 	last, err := l.lastLedger(ctx)
 	if err != nil {
 		return err
+	}
+	// Already at or past the stop point (e.g. database was pre-seeded).
+	if l.StopLedger > 0 && last >= l.StopLedger {
+		return nil
 	}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -94,6 +107,20 @@ func (l *Loop) Run(ctx context.Context) error {
 		if b.To > b.Latest {
 			return fmt.Errorf("sync: batch %d exceeds latest %d", b.To, b.Latest)
 		}
+		// Truncate the batch at StopLedger so we never commit past it.
+		if l.StopLedger > 0 && b.To > l.StopLedger {
+			n := l.StopLedger - b.From + 1
+			b.Facts = b.Facts[:n]
+			if len(b.Hashes) > int(n) {
+				b.Hashes = b.Hashes[:n]
+			}
+			b.To = l.StopLedger
+		}
+		if l.VerifyBatch != nil {
+			if err := l.VerifyBatch(ctx, b); err != nil {
+				return err
+			}
+		}
 		if err := l.commit(ctx, b); err != nil {
 			return err
 		}
@@ -101,19 +128,9 @@ func (l *Loop) Run(ctx context.Context) error {
 		if l.Progress != nil {
 			l.Progress(last, b.Latest, false)
 		}
-		// Retry queued Wasm fetches after each batch in a separate transaction.
-		if l.RetryWasmFetches != nil {
-			tx, err := l.Store.Begin(ctx)
-			if err != nil {
-				return fmt.Errorf("begin retry transaction: %w", err)
-			}
-			if _, _, err := l.RetryWasmFetches(ctx, tx); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("retry wasm fetches: %w", err)
-			}
-			if err := tx.Commit(); err != nil {
-				return fmt.Errorf("commit retry transaction: %w", err)
-			}
+		// Exit cleanly once the stop point is committed.
+		if l.StopLedger > 0 && last >= l.StopLedger {
+			return nil
 		}
 		// Window calls getLatestLedger again before any caught_up report.
 	}

@@ -233,3 +233,133 @@ func TestRetentionGapLeavesEveryTableUnchanged(t *testing.T) {
 		t.Fatalf("database changed across a refused run:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
+
+// --- Issue #92: --stop-ledger ---
+
+func TestStopLedgerTruncatesBatchAndExits(t *testing.T) {
+	s := testStore(t)
+	applied := []uint32{}
+	l := Loop{Store: s, Source: &source{oldest: 1, latest: 20}, StartLedger: 10, StopLedger: 15, Apply: func(ctx context.Context, tx *store.Tx, f ingest.ContractFacts) error {
+		applied = append(applied, f.Ledger)
+		return writeFact(ctx, tx, f)
+	}}
+	if err := l.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	last, err := s.State(context.Background(), store.KeyLastLedger)
+	if err != nil || last != "15" {
+		t.Fatalf("last_ledger = %q: %v", last, err)
+	}
+	// Ledgers 10..15 should have been applied (StartLedger means start from 10, so last = 9 before run).
+	if len(applied) == 0 || applied[len(applied)-1] != 15 {
+		t.Fatalf("applied ledgers %v: expected last=15", applied)
+	}
+	for _, n := range applied {
+		if n > 15 {
+			t.Fatalf("ledger %d committed past StopLedger=15", n)
+		}
+	}
+}
+
+func TestStopLedgerAtBatchEdge(t *testing.T) {
+	s := testStore(t)
+	// Source returns exactly 11 ledgers (10..20). StopLedger=20 == batch end.
+	l := Loop{Store: s, Source: &source{oldest: 1, latest: 20}, StartLedger: 10, StopLedger: 20, Apply: writeFact}
+	if err := l.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if last, err := s.State(context.Background(), store.KeyLastLedger); err != nil || last != "20" {
+		t.Fatalf("last_ledger = %q: %v", last, err)
+	}
+}
+
+func TestStopLedgerAlreadyPastExitsImmediately(t *testing.T) {
+	s := testStore(t)
+	if err := s.SetState(context.Background(), store.KeyLastLedger, "20"); err != nil {
+		t.Fatal(err)
+	}
+	applied := 0
+	l := Loop{Store: s, Source: &source{oldest: 1, latest: 30}, StopLedger: 15, Apply: func(ctx context.Context, tx *store.Tx, f ingest.ContractFacts) error {
+		applied++
+		return writeFact(ctx, tx, f)
+	}}
+	if err := l.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if applied != 0 {
+		t.Fatalf("applied %d ledgers but should have exited immediately", applied)
+	}
+}
+
+func TestStopLedgerBeforeStartRejected(t *testing.T) {
+	l := Loop{Store: testStore(t), Source: &source{oldest: 1, latest: 20}, StartLedger: 10, StopLedger: 5, Apply: writeFact}
+	err := l.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "stop-ledger") {
+		t.Fatalf("expected stop-ledger error, got %v", err)
+	}
+}
+
+// --- Issue #91: cross-provider hash verification ---
+
+// hashSource is a Source whose Fetch populates Batch.Hashes with generated hash values.
+type hashSource struct {
+	source
+	hashFn func(ledger uint32) string
+}
+
+func (hs *hashSource) Fetch(ctx context.Context, from uint32) (ingest.Batch, error) {
+	b, err := hs.source.Fetch(ctx, from)
+	if err != nil {
+		return b, err
+	}
+	for n := b.From; n <= b.To; n++ {
+		b.Hashes = append(b.Hashes, hs.hashFn(n))
+	}
+	return b, nil
+}
+
+func TestVerifyBatchHashMismatchHaltsLoop(t *testing.T) {
+	s := testStore(t)
+	// Primary source produces hashes "hash-N"; verifier sees "DIFFERENT-N".
+	primary := &hashSource{source: source{oldest: 1, latest: 10}, hashFn: func(n uint32) string { return fmt.Sprintf("hash-%d", n) }}
+	l := Loop{Store: s, Source: primary, StartLedger: 1, Apply: writeFact,
+		VerifyBatch: func(_ context.Context, b ingest.Batch) error {
+			for i, h := range b.Hashes {
+				badHash := fmt.Sprintf("DIFFERENT-%d", b.From+uint32(i)) // #nosec G115 -- i < 200
+				if h == badHash {
+					return fmt.Errorf("ledger %d hash mismatch: primary %s, secondary %s", b.From+uint32(i), h, badHash)
+				}
+				// Simulate a mismatch on the first ledger.
+				return fmt.Errorf("ledger %d hash mismatch: primary %s, secondary %s", b.From, h, badHash)
+			}
+			return nil
+		}}
+	err := l.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "hash mismatch") {
+		t.Fatalf("expected hash mismatch error, got %v", err)
+	}
+	// Nothing should have been committed.
+	if _, err2 := s.State(context.Background(), store.KeyLastLedger); !errors.Is(err2, store.ErrNotFound) {
+		t.Fatal("last_ledger should not be set after a verify failure")
+	}
+}
+
+func TestVerifyBatchSuccessCommits(t *testing.T) {
+	s := testStore(t)
+	primary := &hashSource{source: source{oldest: 1, latest: 10}, hashFn: func(n uint32) string { return fmt.Sprintf("hash-%d", n) }}
+	calls := 0
+	l := Loop{Store: s, Source: primary, StartLedger: 1, Apply: writeFact,
+		VerifyBatch: func(_ context.Context, b ingest.Batch) error {
+			calls++
+			return nil // agreement: no mismatch
+		}}
+	if err := l.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if calls == 0 {
+		t.Fatal("VerifyBatch was never called")
+	}
+	if last, err := s.State(context.Background(), store.KeyLastLedger); err != nil || last != "10" {
+		t.Fatalf("last_ledger = %q: %v", last, err)
+	}
+}

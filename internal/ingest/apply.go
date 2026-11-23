@@ -79,6 +79,18 @@ func (ix *Indexer) ApplyLedger(ctx context.Context, tx *store.Tx, f ContractFact
 				if c.Kind == Created {
 					row.CreatedLedger = f.Ledger
 				}
+				// Look up the TTL for this instance key from the same ledger's TTL changes.
+				if len(f.TTLs) > 0 {
+					key := xdr.LedgerKey{Type: xdr.LedgerEntryTypeContractData, ContractData: &xdr.LedgerKeyContractData{
+						Contract: cd.Contract, Key: xdr.ScVal{Type: xdr.ScValTypeScvLedgerKeyContractInstance},
+						Durability: xdr.ContractDataDurabilityPersistent,
+					}}
+					if kh, err := ledgerKeyHash(key); err == nil {
+						if ttl, ok := f.TTLs[kh]; ok {
+							row.LiveUntilLedger = &ttl
+						}
+					}
+				}
 				if in.Kind == KindWasmRef {
 					hash, archived, err := ix.resolveReference(ctx, tx, in.RefOwner, in.RefTag, f.Ledger)
 					if err != nil {
