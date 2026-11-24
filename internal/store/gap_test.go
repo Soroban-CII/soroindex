@@ -138,6 +138,75 @@ func TestGapRejectsInvalidPaginationAndCancellation(t *testing.T) {
 	}
 }
 
+func TestGapGroups(t *testing.T) {
+	s, _ := openTest(t)
+	ctx := context.Background()
+	for _, q := range []string{
+		// Two contracts share factory hash F; one contract runs hash G.
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C1','wasm','F')`,
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash, exec_ref_owner, exec_ref_tag) VALUES ('C2','wasm_ref','F','C90','v1')`,
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C3','wasm','G')`,
+		// Archived contract on F and archived code on H are both excluded.
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash, archived) VALUES ('C4','wasm','F',1)`,
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C5','wasm','H')`,
+		`INSERT INTO wasm (hash, parse_status, parser_version) VALUES ('H','archived','1')`,
+		// Declares 41: not in the gap.
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C6','wasm','D')`,
+		// Partial: not in the gap.
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C7','wasm','P')`,
+		// Match only under an older ruleset: not in the current gap.
+		`INSERT INTO contracts (contract_id, kind, current_wasm_hash) VALUES ('C8','wasm','S')`,
+		// SAC: protocol tier, never the inferred gap.
+		`INSERT INTO contracts (contract_id, kind) VALUES ('C9','sac')`,
+	} {
+		if err := exec(t, s, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	for _, q := range []string{
+		`INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, rule_file_sha256, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at) VALUES ('F',41,'cur','x','match',10,'[]','[]','{}','t')`,
+		`INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, rule_file_sha256, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at) VALUES ('G',41,'cur','x','match',9,'[]','[]','{}','t')`,
+		`INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, rule_file_sha256, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at) VALUES ('D',41,'cur','x','match',10,'[]','[]','{}','t')`,
+		`INSERT INTO wasm_claims VALUES ('D',41,'sep47-meta','41',NULL)`,
+		`INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, rule_file_sha256, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at) VALUES ('P',41,'cur','x','partial',8,'[]','[]','{}','t')`,
+		`INSERT INTO interface_matches (wasm_hash, sep, ruleset_version, rule_file_sha256, status, ok_count, missing_json, mismatched_json, matched_variants_json, computed_at) VALUES ('S',41,'old','x','match',10,'[]','[]','{}','t')`,
+	} {
+		if err := exec(t, s, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	groups, totalGroups, totalContracts, err := s.GapGroups(ctx, 41, "cur", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if totalGroups != 2 || totalContracts != 3 || len(groups) != 2 {
+		t.Fatalf("groups = %+v, totals %d/%d", groups, totalGroups, totalContracts)
+	}
+	if groups[0].WasmHash != "F" || len(groups[0].Contracts) != 2 || groups[0].Contracts[0] != "C1" || groups[0].Contracts[1] != "C2" || groups[0].OKCount != 10 {
+		t.Fatalf("largest group = %+v", groups[0])
+	}
+	if groups[1].WasmHash != "G" || len(groups[1].Contracts) != 1 || groups[1].OKCount != 9 {
+		t.Fatalf("second group = %+v", groups[1])
+	}
+	capped, tg, tc, err := s.GapGroups(ctx, 41, "cur", 1)
+	if err != nil || len(capped) != 1 || capped[0].WasmHash != "F" || tg != 2 || tc != 3 {
+		t.Fatalf("cap: %+v, %d/%d, %v", capped, tg, tc, err)
+	}
+	for _, bad := range []struct {
+		sep, max int
+		ruleset  string
+	}{{0, 10, "cur"}, {1000000, 10, "cur"}, {41, 0, "cur"}, {41, 501, "cur"}, {41, 10, ""}} {
+		if _, _, _, err := s.GapGroups(ctx, bad.sep, bad.ruleset, bad.max); !errors.Is(err, ErrBadQuery) {
+			t.Fatalf("%+v: %v", bad, err)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, _, err := s.GapGroups(ctx, 41, "cur", 10); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+}
+
 func TestTotalsInstanceArchival(t *testing.T) {
 	s, _ := openTest(t)
 	ctx := context.Background()

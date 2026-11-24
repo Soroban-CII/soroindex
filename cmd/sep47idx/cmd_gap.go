@@ -10,6 +10,7 @@ import (
 
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/match"
+	"github.com/Soroban-CII/soroindex/internal/outreach"
 	"github.com/Soroban-CII/soroindex/internal/store"
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 	"github.com/Soroban-CII/soroindex/rules"
@@ -34,7 +35,20 @@ type gapOutput struct {
 	NextCursor     *string        `json:"next_cursor,omitempty"`
 }
 
-// runGap implements `sep47idx gap --sep 41 [--limit N] [--cursor C] [--json]`.
+// outreachOutput is the --outreach --json shape. Like gapOutput, it says
+// "inferred": none of these contracts declares a SEP.
+type outreachOutput struct {
+	SEP            int              `json:"sep"`
+	Tier           string           `json:"tier"`
+	RulesetVersion string           `json:"ruleset_version"`
+	ParserVersion  string           `json:"parser_version"`
+	Groups         []outreach.Group `json:"groups"`
+	TotalGroups    int              `json:"total_groups"`
+	TotalContracts int              `json:"total_contracts"`
+}
+
+// runGap implements `sep47idx gap --sep 41 [--limit N] [--cursor C] [--json]`
+// and the grouped `--outreach` form.
 func runGap(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("gap", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -42,6 +56,7 @@ func runGap(args []string, stdout, stderr io.Writer) int {
 	sep := flags.Int("sep", 41, "SEP number")
 	limit := flags.Int("limit", 50, "page size, 1..500")
 	cursor := flags.String("cursor", "", "opaque continuation cursor")
+	outreachMode := flags.Bool("outreach", false, "group the gap by Wasm hash with a contractmeta! line and pull-request body")
 	if err := flags.Parse(args); err != nil {
 		return exitError
 	}
@@ -52,6 +67,10 @@ func runGap(args []string, stdout, stderr io.Writer) int {
 	}
 	if flags.NArg() != 0 || *sep < 1 || *sep > 999999 || *limit < 1 || *limit > 500 {
 		errorf(stderr, "sep47idx gap: unexpected argument, invalid SEP or limit (want 1..500)\n")
+		return exitError
+	}
+	if *outreachMode && *cursor != "" {
+		errorf(stderr, "sep47idx gap: --outreach groups the whole gap and does not page; --limit caps the number of Wasm hashes\n")
 		return exitError
 	}
 	ruleFiles, err := match.LoadRules(rules.FS)
@@ -81,6 +100,33 @@ func runGap(args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 	defer func() { _ = st.Close() }() // read-only
+	if *outreachMode {
+		groups, totalGroups, totalContracts, err := st.GapGroups(ctx, *sep, ruleset, *limit)
+		if err != nil {
+			errorf(stderr, "sep47idx gap: %v\n", err)
+			return exitError
+		}
+		out := make([]outreach.Group, 0, len(groups))
+		for _, g := range groups {
+			out = append(out, outreach.Group{WasmHash: g.WasmHash, OKCount: g.OKCount, Contracts: g.Contracts})
+		}
+		out = outreach.GroupOutputs(*sep, ruleset, out)
+		if cfg.JSON {
+			b, err := json.MarshalIndent(outreachOutput{SEP: *sep, Tier: "inferred", RulesetVersion: ruleset,
+				ParserVersion: sepmeta.ParserVersion, Groups: out, TotalGroups: totalGroups, TotalContracts: totalContracts}, "", "  ")
+			if err != nil {
+				return exitError
+			}
+			if _, err := fmt.Fprintln(stdout, string(b)); err != nil {
+				return exitError
+			}
+			return exitOK
+		}
+		if _, err := io.WriteString(stdout, outreach.Markdown(*sep, ruleset, out, totalGroups, totalContracts)); err != nil {
+			return exitError
+		}
+		return exitOK
+	}
 	page, err := st.Gap(ctx, *sep, ruleset, *limit, *cursor)
 	if err != nil {
 		errorf(stderr, "sep47idx gap: %v\n", err)

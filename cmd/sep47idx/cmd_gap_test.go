@@ -155,6 +155,93 @@ func TestGapCLIContinuationAndEnvironment(t *testing.T) {
 	}
 }
 
+func TestGapOutreachGroupsByHashAndNamesNoProject(t *testing.T) {
+	db, ids, hash := gapFixture(t, 1)
+	ctx := context.Background()
+	s, err := store.Open(ctx, db, store.Options{Passphrase: config.Testnet.Passphrase})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := s.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	factoryHash := strings.Repeat("b", 64)
+	if err := tx.UpsertMatch(ctx, store.MatchRow{Hash: factoryHash, SEP: 41, RulesetVersion: "sep41-v0.5.2", Status: "match", OKCount: 10,
+		MissingJSON: "[]", MismatchedJSON: "[]", MatchedVariantsJSON: "{}", ComputedAt: "2026-10-26T00:00:00Z"}); err != nil {
+		t.Fatal(err)
+	}
+	var factoryIDs []string
+	for i := 0; i < 2; i++ {
+		raw := make([]byte, 32)
+		raw[0] = byte(90 + i)
+		id, err := strkey.Encode(strkey.VersionByteContract, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		factoryIDs = append(factoryIDs, id)
+		if err := tx.UpsertContract(ctx, store.ContractRow{ID: id, Kind: "wasm", CurrentWasmHash: factoryHash}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(factoryIDs)
+	t.Setenv("SEP47IDX_DB", db)
+
+	var out, stderr bytes.Buffer
+	if code := run([]string{"gap", "--outreach", "--json"}, &out, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	var report outreachOutput
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.Tier != "inferred" || report.SEP != 41 || report.RulesetVersion != "sep41-v0.5.2" || report.TotalGroups != 2 || report.TotalContracts != 3 {
+		t.Fatalf("report = %+v", report)
+	}
+	if len(report.Groups) != 2 || report.Groups[0].WasmHash != factoryHash || len(report.Groups[0].Contracts) != 2 || report.Groups[0].Contracts[0] != factoryIDs[0] {
+		t.Fatalf("groups = %+v", report.Groups)
+	}
+	if report.Groups[0].ContractMeta != `contractmeta!(key = "sep", val = "41");` || !strings.Contains(report.Groups[0].PRTemplate, "Declared SEP-41") {
+		t.Fatalf("group output = %+v", report.Groups[0])
+	}
+	if report.Groups[1].WasmHash != hash || len(report.Groups[1].Contracts) != 1 || report.Groups[1].Contracts[0] != ids[0] {
+		t.Fatalf("second group = %+v", report.Groups[1])
+	}
+
+	out.Reset()
+	stderr.Reset()
+	if code := run([]string{"gap", "--outreach"}, &out, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	for _, want := range []string{"**Inferred, not declared.**", "## Wasm `" + factoryHash + "` — 2 contract(s)", "- `" + factoryIDs[0] + "`", "contractmeta!(key = \"sep\", val = \"41\");", "Pull-request body"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("markdown lacks %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "{{") {
+		t.Errorf("unreplaced placeholder:\n%s", out.String())
+	}
+	t.Logf("outreach fixture output:\n%s", out.String())
+
+	out.Reset()
+	if code := run([]string{"gap", "--outreach", "--limit", "1", "--json"}, &out, &stderr); code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr.String())
+	}
+	report = outreachOutput{}
+	if err := json.Unmarshal(out.Bytes(), &report); err != nil || len(report.Groups) != 1 || report.TotalGroups != 2 || report.TotalContracts != 3 {
+		t.Fatalf("capped report = %+v, %v", report, err)
+	}
+	if code := run([]string{"gap", "--outreach", "--cursor", "abc", "--json"}, &bytes.Buffer{}, &bytes.Buffer{}); code != 1 {
+		t.Fatal("--outreach with --cursor accepted")
+	}
+}
+
 func TestGapCLIErrorsAndEmptyPage(t *testing.T) {
 	db, _, _ := gapFixture(t, 2)
 	t.Setenv("SEP47IDX_DB", db)
