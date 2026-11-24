@@ -41,7 +41,7 @@ func dumpAll(t *testing.T, s *Store) string {
 	}
 	var b strings.Builder
 	for _, n := range names {
-		rows, err := s.DB.Query(`SELECT * FROM "` + n + `" ORDER BY 1`)
+		rows, err := s.DB.Query(`SELECT * FROM "` + n + `" ORDER BY 1`) // #nosec G202 -- table names come from sqlite_master, not input
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -70,7 +70,7 @@ func dumpAll(t *testing.T, s *Store) string {
 
 // runBatchAndDump applies a representative batch of writes and returns a dump
 // of the database. If failAt > 0, the batch will fail at the N-th exec call.
-func runBatchAndDump(t *testing.T, s *Store, ctx context.Context, failAt int) string {
+func runBatchAndDump(ctx context.Context, t *testing.T, s *Store, failAt int) string {
 	t.Helper()
 	var tx *Tx
 	var err error
@@ -82,7 +82,7 @@ func runBatchAndDump(t *testing.T, s *Store, ctx context.Context, failAt int) st
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := applyBatch(t, tx, ctx); err != nil {
+	if err := applyBatch(ctx, t, tx); err != nil {
 		if failAt == 0 {
 			t.Fatalf("clean batch failed: %v", err)
 		}
@@ -100,7 +100,7 @@ func runBatchAndDump(t *testing.T, s *Store, ctx context.Context, failAt int) st
 
 // applyBatch applies a representative batch of writes covering all write paths
 // in store/write.go.
-func applyBatch(t *testing.T, tx interface {
+func applyBatch(ctx context.Context, t *testing.T, tx interface {
 	exec(context.Context, string, string, ...any) error
 	SetState(context.Context, string, string) error
 	SetLastLedger(context.Context, uint32) error
@@ -112,7 +112,7 @@ func applyBatch(t *testing.T, tx interface {
 	SetVersion(context.Context, Version) (bool, error)
 	UpsertExecRef(context.Context, string, string, string, uint32, bool) error
 	SetContractArchived(context.Context, string, bool) error
-}, ctx context.Context) error {
+}) error {
 	t.Helper()
 	// 1. SetState / SetLastLedger
 	if err := tx.SetState(ctx, "test_key", "test_value"); err != nil {
@@ -196,7 +196,7 @@ func TestFaultInjectionHarness(t *testing.T) {
 
 	// Record a clean run to get the expected final state.
 	cleanStore := openTestStore(t)
-	cleanState := runBatchAndDump(t, cleanStore, ctx, 0)
+	cleanState := runBatchAndDump(ctx, t, cleanStore, 0)
 
 	// For each possible failure point in the batch, inject a failure and verify:
 	// 1. The database state is unchanged from empty (rolled back)
@@ -209,7 +209,7 @@ func TestFaultInjectionHarness(t *testing.T) {
 			if err != nil {
 				t.Fatalf("begin with fail at %d: %v", i, err)
 			}
-			if err := applyBatch(t, failTx, ctx); err != nil {
+			if err := applyBatch(ctx, t, failTx); err != nil {
 				_ = failTx.Rollback()
 				return
 			}
@@ -224,7 +224,7 @@ func TestFaultInjectionHarness(t *testing.T) {
 
 			// Rerun cleanly and verify final state matches clean run.
 			retryStore := openTestStore(t)
-			retryState := runBatchAndDump(t, retryStore, ctx, 0)
+			retryState := runBatchAndDump(ctx, t, retryStore, 0)
 			if retryState != cleanState {
 				t.Fatalf("clean rerun after fail at %d differs from clean run:\ngot:\n%s\nwant:\n%s", i, retryState, cleanState)
 			}
