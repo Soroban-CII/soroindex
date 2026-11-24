@@ -3,6 +3,7 @@ package match
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
@@ -38,6 +39,26 @@ type Mismatch struct {
 }
 
 // Result is the outcome of matching one Wasm against one rule file.
+type EventSignature struct {
+	Topics []string `json:"topics"`
+	Data   []string `json:"data"`
+}
+
+type EventMismatch struct {
+	Name     string         `json:"name"`
+	Reason   string         `json:"reason"`
+	Expected EventSignature `json:"expected"`
+	Actual   EventSignature `json:"actual"`
+}
+
+type EventMatchResult struct {
+	Status        Status          `json:"status"`
+	OKCount       int             `json:"ok_count"`
+	RequiredCount int             `json:"required_count"`
+	Missing       []string        `json:"missing"`
+	Mismatched    []EventMismatch `json:"mismatched"`
+}
+
 type Result struct {
 	SEP             int               `json:"sep"`
 	RulesetVersion  string            `json:"ruleset_version"`
@@ -47,6 +68,7 @@ type Result struct {
 	Missing         []string          `json:"missing"`
 	Mismatched      []Mismatch        `json:"mismatched"`
 	MatchedVariants map[string]string `json:"matched_variants"`
+	Events          *EventMatchResult `json:"events,omitempty"`
 }
 
 // Matcher holds the tunable cutoff between partial and mismatch.
@@ -224,6 +246,124 @@ func equal(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func (m Matcher) MatchEvents(events []sepmeta.EventSig, r RuleFile) *EventMatchResult {
+	if len(r.Events) == 0 {
+		return nil
+	}
+	res := &EventMatchResult{
+		RequiredCount: len(r.Events),
+		Missing:       []string{},
+		Mismatched:    []EventMismatch{},
+	}
+	byName := map[string][]sepmeta.EventSig{}
+	for _, ev := range events {
+		matchedKey := ev.Name
+		for _, pt := range ev.PrefixTopics {
+			for _, rule := range r.Events {
+				if strings.EqualFold(pt, rule.Name) {
+					matchedKey = rule.Name
+					break
+				}
+			}
+		}
+		if matchedKey == ev.Name {
+			for _, rule := range r.Events {
+				if strings.EqualFold(ev.Name, rule.Name) {
+					matchedKey = rule.Name
+					break
+				}
+			}
+		}
+		byName[matchedKey] = append(byName[matchedKey], ev)
+	}
+
+	for _, rule := range r.Events {
+		got := byName[rule.Name]
+		switch {
+		case len(got) == 0:
+			res.Missing = append(res.Missing, rule.Name)
+		case len(got) > 1:
+			res.Mismatched = append(res.Mismatched, eventMismatch(rule, got[0], "duplicate"))
+		default:
+			if fitsEvent(rule, got[0]) {
+				res.OKCount++
+			} else {
+				res.Mismatched = append(res.Mismatched, eventMismatch(rule, got[0], "types"))
+			}
+		}
+	}
+
+	sort.Strings(res.Missing)
+	sort.Slice(res.Mismatched, func(i, j int) bool { return res.Mismatched[i].Name < res.Mismatched[j].Name })
+
+	threshold := m.PartialThreshold
+	if threshold <= 0 {
+		threshold = DefaultPartialThreshold
+	}
+	switch {
+	case res.OKCount == res.RequiredCount:
+		res.Status = StatusMatch
+	case float64(res.OKCount) >= threshold*float64(res.RequiredCount):
+		res.Status = StatusPartial
+	default:
+		res.Status = StatusMismatch
+	}
+	return res
+}
+
+func fitsEvent(rule EventRule, sig sepmeta.EventSig) bool {
+	if len(sig.Topics) != len(rule.Topics) || len(sig.Data) != len(rule.Data) {
+		return false
+	}
+	for i, alts := range rule.Topics {
+		found := false
+		for _, a := range alts {
+			if sig.Topics[i] == a {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	for i, alts := range rule.Data {
+		found := false
+		for _, a := range alts {
+			if sig.Data[i] == a {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func eventMismatch(rule EventRule, got sepmeta.EventSig, reason string) EventMismatch {
+	exp := EventSignature{Topics: []string{}, Data: []string{}}
+	for _, alts := range rule.Topics {
+		exp.Topics = append(exp.Topics, alts[0])
+	}
+	for _, alts := range rule.Data {
+		exp.Data = append(exp.Data, alts[0])
+	}
+	return EventMismatch{
+		Name:     rule.Name,
+		Reason:   reason,
+		Expected: exp,
+		Actual:   EventSignature{Topics: nonNil(got.Topics), Data: nonNil(got.Data)},
+	}
+}
+
+func (m Matcher) MatchWithEvents(fns []sepmeta.FnSig, events []sepmeta.EventSig, r RuleFile) Result {
+	res := m.Match(fns, r)
+	res.Events = m.MatchEvents(events, r)
+	return res
 }
 
 func nonNil(s []string) []string {

@@ -34,6 +34,11 @@
       "type": "array",
       "items": { "$ref": "#/$defs/fn" }
     },
+    "events": {
+      "description": "Events specified by the SEP, matching against contractspecv0 event entries.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/event" }
+    },
     "requires": {
       "description": "Other SEP numbers that this SEP requires to match. A composite result is \"match\" only when the SEP and every required SEP match. Cycles are rejected at rule-file load time.",
       "type": "array",
@@ -72,6 +77,38 @@
           "type": "array",
           "maxItems": 1,
           "items": { "$ref": "#/$defs/type" }
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "topics", "data"],
+      "properties": {
+        "name": {
+          "description": "Event name or prefix topic symbol.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_]{1,32}$"
+        },
+        "topics": {
+          "description": "Topic types, one entry per topic. Each entry lists accepted types for that topic position.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/type" }
+          }
+        },
+        "data": {
+          "description": "Data payload types. Each entry lists accepted types for that data position.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "$ref": "#/$defs/type" }
+          }
         }
       }
     }

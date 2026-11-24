@@ -250,3 +250,61 @@ func TestDecodeSpecErrors(t *testing.T) {
 		}
 	})
 }
+
+func TestEvents(t *testing.T) {
+	spec, err := DecodeSpec(fixtureSection(t, "token_full_sep.wasm", SectionSpec), DefaultLimits())
+	if err != nil {
+		t.Fatalf("DecodeSpec: %v", err)
+	}
+	events := Events(spec)
+	if len(events) != 4 {
+		t.Fatalf("expected 4 events, got %d", len(events))
+	}
+	expected := []struct {
+		name   string
+		prefix []string
+		topics []string
+		data   []string
+		format string
+	}{
+		{"Burn", []string{"burn"}, []string{"Address"}, []string{"i128"}, "single-value"},
+		{"Mint", []string{"mint"}, []string{"Address"}, []string{"Option<u64>", "i128"}, "map"},
+		{"Approve", []string{"approve"}, []string{"Address", "Address"}, []string{"i128", "u32"}, "vec"},
+		{"Transfer", []string{"transfer"}, []string{"Address", "Address"}, []string{"Option<u64>", "i128"}, "map"},
+	}
+	for i, exp := range expected {
+		got := events[i]
+		if got.Name != exp.name {
+			t.Errorf("[%d] Name = %q, want %q", i, got.Name, exp.name)
+		}
+		if !reflect.DeepEqual(got.PrefixTopics, exp.prefix) {
+			t.Errorf("[%d] PrefixTopics = %v, want %v", i, got.PrefixTopics, exp.prefix)
+		}
+		if !reflect.DeepEqual(got.Topics, exp.topics) {
+			t.Errorf("[%d] Topics = %v, want %v", i, got.Topics, exp.topics)
+		}
+		if !reflect.DeepEqual(got.Data, exp.data) {
+			t.Errorf("[%d] Data = %v, want %v", i, got.Data, exp.data)
+		}
+		if got.Format != exp.format {
+			t.Errorf("[%d] Format = %q, want %q", i, got.Format, exp.format)
+		}
+	}
+
+	partialSpec, err := DecodeSpec(fixtureSection(t, "token_partial.wasm", SectionSpec), DefaultLimits())
+	if err != nil {
+		t.Fatalf("DecodeSpec partial: %v", err)
+	}
+	partialEvents := Events(partialSpec)
+	if len(partialEvents) != 3 {
+		t.Fatalf("expected 3 events, got %d", len(partialEvents))
+	}
+
+	notTokenSpec, err := DecodeSpec(fixtureSection(t, "not_token.wasm", SectionSpec), DefaultLimits())
+	if err != nil {
+		t.Fatalf("DecodeSpec not_token: %v", err)
+	}
+	if len(Events(notTokenSpec)) != 0 {
+		t.Fatalf("expected 0 events for not_token")
+	}
+}
