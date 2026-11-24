@@ -34,7 +34,7 @@ func main() {
 
 func run(profilePath, thresholdsPath string) error {
 	cleanThresholds := filepath.Clean(thresholdsPath)
-	threshData, err := os.ReadFile(cleanThresholds) // #nosec G304
+	threshData, err := os.ReadFile(cleanThresholds) // #nosec G304 G703
 	if err != nil {
 		return fmt.Errorf("read thresholds %s: %w", thresholdsPath, err)
 	}
@@ -44,7 +44,7 @@ func run(profilePath, thresholdsPath string) error {
 	}
 
 	cleanProfile := filepath.Clean(profilePath)
-	f, err := os.Open(cleanProfile) // #nosec G304
+	f, err := os.Open(cleanProfile) // #nosec G304 G703
 	if err != nil {
 		return fmt.Errorf("open profile %s: %w", profilePath, err)
 	}
@@ -152,7 +152,7 @@ func run(profilePath, thresholdsPath string) error {
 	if summaryFile != "" {
 		summaryLines = append(summaryLines, "", fmt.Sprintf("**Total coverage:** %d/%d (%.1f%%)", totalCovered, totalStmts, totalPct))
 		cleanSummary := filepath.Clean(summaryFile)
-		_ = os.WriteFile(cleanSummary, []byte(strings.Join(summaryLines, "\n")+"\n"), 0600) // #nosec G306
+		_ = os.WriteFile(cleanSummary, []byte(strings.Join(summaryLines, "\n")+"\n"), 0600) // #nosec G306 G703
 	}
 
 	if len(failed) > 0 {
