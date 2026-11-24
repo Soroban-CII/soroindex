@@ -30,7 +30,7 @@ func hostile(t *testing.T, h func(w http.ResponseWriter, id string)) (*httptest.
 // and is not retried, so retries never multiply the memory cost.
 func TestHugeDeclaredBodyFailsBeforeRead(t *testing.T) {
 	var wrote atomic.Int64
-	srv, n := hostile(t, func(w http.ResponseWriter, id string) {
+	srv, n := hostile(t, func(w http.ResponseWriter, _ string) {
 		w.Header().Set("Content-Length", strconv.Itoa(64<<20))
 		chunk := []byte(strings.Repeat("x", 32<<10))
 		for range 2048 { // up to 64 MiB, stopped when the client hangs up
