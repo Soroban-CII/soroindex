@@ -3,12 +3,11 @@ package main
 import (
 	"context"
 	"encoding/csv"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"strconv"
 
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/store"
 )
@@ -18,8 +17,8 @@ func init() {
 }
 
 func runQuery(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("query", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("query", stderr, jsonMode)
 	resolve := config.RegisterCommon(fs)
 	all := fs.String("implements", "", "comma-separated SEPs required together (AND)")
 	anySEPs := fs.String("implements-any", "", "comma-separated alternative SEPs (OR)")
@@ -29,23 +28,23 @@ func runQuery(args []string, stdout, stderr io.Writer) int {
 	cursor := fs.String("cursor", "", "opaque continuation cursor")
 	csvMode := fs.Bool("csv", false, "write CSV")
 	allPages := fs.Bool("all", false, "export all remaining pages (requires --csv)")
-	if err := fs.Parse(args); err != nil {
-		return readExit("query", err, stderr)
+	if err := parse(fs, args); err != nil {
+		return readExit("query", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		return readExit("query", err, stderr)
+		return readExit("query", err, stderr, jsonMode)
 	}
 	if fs.NArg() != 0 || *limit < 1 || *limit > 500 || (*csvMode && cfg.JSON) || (*allPages && !*csvMode) {
-		return readExit("query", errors.New("unexpected argument, invalid limit or conflicting --json/--csv or --all without --csv"), stderr)
+		return readExit("query", clierr.Newf("bad_request", "unexpected argument, invalid limit or conflicting --json/--csv or --all without --csv"), stderr, jsonMode)
 	}
 	seps, err := store.ParseSEPs(*all)
 	if err != nil {
-		return readExit("query", err, stderr)
+		return readExit("query", err, stderr, jsonMode)
 	}
 	alternatives, err := store.ParseSEPs(*anySEPs)
 	if err != nil {
-		return readExit("query", err, stderr)
+		return readExit("query", err, stderr, jsonMode)
 	}
 	err = readIndex(cfg, func(ctx context.Context, s *store.Store, rulesets map[int]string) error {
 		filter := store.Filter{Implements: seps, ImplementsAny: alternatives, Tier: *tier, Kind: *kind, Limit: *limit, Cursor: *cursor, Rulesets: rulesets}
@@ -85,7 +84,7 @@ func runQuery(args []string, stdout, stderr io.Writer) int {
 		}
 		return err
 	})
-	return readExit("query", err, stderr)
+	return readExit("query", err, stderr, jsonMode)
 }
 
 // exportQueryCSV flushes each bounded page before fetching its successor.

@@ -28,11 +28,6 @@ type GapGroup struct {
 	Contracts []string `json:"contracts"`
 }
 
-// Gap pages through the undeclared gap for one SEP (CLAUDE.md §5.6): live contracts
-// whose current Wasm's inferred status for sep under rulesetVersion is
-// "match" and that declare nothing at all. This is the inferred tier only;
-// the contracts make no claim, and callers must label the result
-// "inferred".
 // GapGroups groups the undeclared gap for one SEP by Wasm hash, ordered by
 // live contract count (largest first, hash as the tie-break) and capped at
 // maxGroups. totalGroups and totalContracts describe the uncapped result, so
@@ -88,6 +83,11 @@ ORDER BY im.wasm_hash, c.contract_id`, sep, rulesetVersion)
 	return groups, totalGroups, totalContracts, nil
 }
 
+// Gap pages through the undeclared gap for one SEP (CLAUDE.md §5.6): live contracts
+// whose current Wasm's inferred status for sep under rulesetVersion is
+// "match" and that declare nothing at all. This is the inferred tier only;
+// the contracts make no claim, and callers must label the result
+// "inferred".
 func (s *Store) Gap(ctx context.Context, sep int, rulesetVersion string, limit int, cursor string) (GapPage, error) {
 	page := GapPage{Contracts: []GapRow{}}
 	limit, after, err := contractPageInput(limit, cursor)

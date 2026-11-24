@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"io/fs"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/phase0"
@@ -36,8 +36,8 @@ func init() {
 //	sep47idx phase0 --network mainnet --hashes report/mainnet_hashes.csv --instances report/mainnet_instances.csv --out report/
 //	sep47idx phase0 --network testnet --sample 2000 --out report/
 func runPhase0(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("phase0", flag.ContinueOnError)
-	flags.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	flags := newFlagSet("phase0", stderr, jsonMode)
 	resolve := config.RegisterCommon(flags)
 	hashes := flags.String("hashes", "", "mainnet: Hubble code-hash CSV (Q1 of scripts/hubble-export.sql)")
 	instances := flags.String("instances", "", "mainnet: Hubble instance CSV (Q2)")
@@ -53,37 +53,33 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	renderOnly := flags.Bool("render-only", false, "only rebuild <out>/ADOPTION.md from the *-summary.json files already there")
 	threshold := flags.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold: share of required functions for \"partial\"")
 	topHashes := flags.Int("top-hashes", phase0.DefaultTopHashes, "rank this many Wasm hashes by contract count in ADOPTION.md, 1..100")
-	if err := flags.Parse(args); err != nil {
-		return exitError
+	if err := parse(flags, args); err != nil {
+		return readExit("phase0", err, stderr, jsonMode)
 	}
 	if *renderOnly {
 		if err := phase0.RegenerateAdoption(*out); err != nil {
-			errorf(stderr, "sep47idx phase0: %v\n", err)
-			return exitError
+			return fail(stderr, jsonMode, "phase0", fmt.Errorf("render: %w", err))
 		}
 		return exitOK
 	}
 	cfg, err := resolve()
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	if *verifyDB != "" {
-		return verifyPhase0DB(cfg, *out, *verifyDB, stdout, stderr)
+		return verifyPhase0DB(cfg, *out, *verifyDB, stdout, stderr, jsonMode)
 	}
 	if *archivalDB != "" {
-		return recordInstanceArchival(cfg, *out, *archivalDB, stdout, stderr)
+		return recordInstanceArchival(cfg, *out, *archivalDB, stdout, stderr, jsonMode)
 	}
 	if *toolchainsDB != "" {
-		return recordToolchains(cfg, *out, *toolchainsDB, stdout, stderr)
+		return recordToolchains(cfg, *out, *toolchainsDB, stdout, stderr, jsonMode)
 	}
 	if err := cfg.RequireRPC(); err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "%v", err))
 	}
 	if *threshold <= 0 || *threshold > 1 || *pageSize < 1 || *pageSize > rpc.MaxLedgersLimit || *topHashes < 1 || *topHashes > 100 {
-		errorf(stderr, "sep47idx phase0: --partial-threshold must be in (0,1], --page-size in 1..%d, and --top-hashes in 1..100\n", rpc.MaxLedgersLimit)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "--partial-threshold must be in (0,1], --page-size in 1..%d, and --top-hashes in 1..100", rpc.MaxLedgersLimit))
 	}
 
 	var rfs fs.FS = rules.FS
@@ -92,15 +88,13 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	}
 	ruleFiles, err := match.LoadRules(rfs)
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: rules: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", fmt.Errorf("rules: %w", err))
 	}
 
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
 	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, Logger: log})
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -108,12 +102,10 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	// Refuse to measure one network while talking to another.
 	n, err := client.GetNetwork(ctx)
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: getNetwork: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", fmt.Errorf("getNetwork: %w", err))
 	}
 	if n.Passphrase != cfg.Network.Passphrase {
-		errorf(stderr, "sep47idx phase0: RPC %s serves %q, not %s\n", cfg.RPCURL, n.Passphrase, cfg.Network.Name)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("network_mismatch", "RPC %s serves %q, not %s", cfg.RPCURL, n.Passphrase, cfg.Network.Name))
 	}
 
 	opts := phase0.Options{Rules: ruleFiles, Matcher: match.Matcher{PartialThreshold: *threshold},
@@ -126,12 +118,10 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 		res, err = phase0.RunTestnet(ctx, client, phase0.SampleConfig{Target: *sample, Strata: *strata, PageSize: uint32(*pageSize)}, opts) // #nosec G115 -- page-size checked to be 1..200 above
 	}
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	if err := phase0.Write(*out, res); err != nil {
-		errorf(stderr, "sep47idx phase0: write report: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", fmt.Errorf("write report: %w", err))
 	}
 	s := res.Summary
 	if _, err := fmt.Fprintf(stdout, "%s: %d contracts (%d SAC, %d wasm, %d wasm_ref); %d hashes fetched, %d archived; declares any SEP: %d/%d hashes (%.2f%%), %d/%d contracts (%.2f%%); SEP-41 match %d hashes; undeclared gap %d hashes\nwrote %s\n",
@@ -139,7 +129,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 		s.DeclaresAny.ByHash.N, s.DeclaresAny.ByHash.Of, s.DeclaresAny.ByHash.Pct,
 		s.DeclaresAny.ByContract.N, s.DeclaresAny.ByContract.Of, s.DeclaresAny.ByContract.Pct,
 		s.SEP41.Status["match"].Hashes, s.SEP41.UndeclaredGap.Hashes, *out); err != nil {
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	return exitOK
 }
@@ -172,22 +162,19 @@ func runMainnetPhase0(ctx context.Context, c *rpc.Client, hashes, instances, exe
 }
 
 // verifyPhase0DB implements --verify-db (CLAUDE.md §7 step 20).
-func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Writer) int {
+func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Writer, jsonMode bool) int {
 	b, err := os.ReadFile(filepath.Join(out, cfg.Network.Name+"-summary.json")) // #nosec G304 -- operator-chosen report directory
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "%v", err))
 	}
 	var s phase0.Summary
 	if err := json.Unmarshal(b, &s); err != nil {
-		errorf(stderr, "sep47idx phase0: summary: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "summary: %v", err))
 	}
 	ctx := context.Background()
 	st, err := store.Open(ctx, dbPath, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	defer func() { _ = st.Close() }() // read-only
 	ruleset := ""
@@ -198,12 +185,14 @@ func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Wri
 	}
 	t, err := st.Totals(ctx, ruleset, !phase0.InstanceArchivalChecked(s))
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	ok, err := phase0.PrintChecks(stdout, phase0.Verify(s, t))
-	if err != nil || !ok {
-		return exitError
+	if err != nil {
+		return fail(stderr, jsonMode, "phase0", err)
+	}
+	if !ok {
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("internal", "phase0 summary and database disagree"))
 	}
 	return exitOK
 }
@@ -211,44 +200,37 @@ func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Wri
 // recordToolchains implements --record-toolchains: read the stored meta of a
 // database seeded from the census population and add the toolchain
 // distribution to the summary, then rebuild ADOPTION.md.
-func recordToolchains(cfg config.Common, out, dbPath string, stdout, stderr io.Writer) int {
+func recordToolchains(cfg config.Common, out, dbPath string, stdout, stderr io.Writer, jsonMode bool) int {
 	s, err := phase0.ReadSummary(out, cfg.Network.Name)
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "%v", err))
 	}
 	if s.Toolchains != nil {
-		errorf(stderr, "sep47idx phase0: the %s summary already records a toolchain census\n", cfg.Network.Name)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "the %s summary already records a toolchain census", cfg.Network.Name))
 	}
 	rulesets, err := loadedRulesets()
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: rules: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", fmt.Errorf("rules: %w", err))
 	}
 	ctx := context.Background()
 	st, err := store.Open(ctx, dbPath, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	defer func() { _ = st.Close() }() // read-only
 	stats, err := st.Toolchains(ctx, cfg.Network.Name, rulesets)
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	if stats.MeasuredHashes == 0 {
-		errorf(stderr, "sep47idx phase0: database holds no measured Wasm; seed it from %s-contracts.csv first\n", cfg.Network.Name)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "database holds no measured Wasm; seed it from %s-contracts.csv first", cfg.Network.Name))
 	}
 	if err := phase0.RecordToolchains(out, s, stats); err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	if _, err := fmt.Fprintf(stdout, "%s: %d hashes / %d contracts carry toolchain meta as of ledger %d; ADOPTION.md rebuilt\n",
 		cfg.Network.Name, stats.MeasuredHashes, stats.MeasuredContracts, stats.AsOfLedger); err != nil {
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	return exitOK
 }
@@ -256,49 +238,41 @@ func recordToolchains(cfg config.Common, out, dbPath string, stdout, stderr io.W
 // recordInstanceArchival implements --record-instance-archival: for a
 // census whose source has no instance TTLs, record the archival a seed of
 // the same population measured, with its ledger, and rebuild ADOPTION.md.
-func recordInstanceArchival(cfg config.Common, out, dbPath string, stdout, stderr io.Writer) int {
+func recordInstanceArchival(cfg config.Common, out, dbPath string, stdout, stderr io.Writer, jsonMode bool) int {
 	s, err := phase0.ReadSummary(out, cfg.Network.Name)
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "%v", err))
 	}
 	if phase0.InstanceArchivalChecked(s) {
-		errorf(stderr, "sep47idx phase0: the %s census already measured instance archival itself\n", cfg.Network.Name)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "the %s census already measured instance archival itself", cfg.Network.Name))
 	}
 	ctx := context.Background()
 	st, err := store.Open(ctx, dbPath, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	defer func() { _ = st.Close() }() // read-only
 	archived, total, err := st.InstanceArchivalCounts(ctx)
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	if total != s.Contracts.Total {
-		errorf(stderr, "sep47idx phase0: database holds %d contracts, census %d: seed it from %s-contracts.csv first\n", total, s.Contracts.Total, cfg.Network.Name)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", clierr.Newf("bad_request", "database holds %d contracts, census %d: seed it from %s-contracts.csv first", total, s.Contracts.Total, cfg.Network.Name))
 	}
 	last, err := st.State(ctx, store.KeyLastLedger)
 	if err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	var ledger uint32
 	if _, err := fmt.Sscan(last, &ledger); err != nil {
-		errorf(stderr, "sep47idx phase0: last_ledger %q: %v\n", last, err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", fmt.Errorf("last_ledger %q: %w", last, err))
 	}
 	s.InstanceArchival = &phase0.InstanceArchival{Archived: archived, Of: total, Ledger: ledger, Source: "seeding the census population"}
 	if err := phase0.WriteSummary(out, s); err != nil {
-		errorf(stderr, "sep47idx phase0: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	if _, err := fmt.Fprintf(stdout, "%s: %d of %d instances archived as of ledger %d; ADOPTION.md rebuilt\n", cfg.Network.Name, archived, total, ledger); err != nil {
-		return exitError
+		return fail(stderr, jsonMode, "phase0", err)
 	}
 	return exitOK
 }

@@ -34,6 +34,29 @@ commands:
 | `--rpc-timeout` | `30s` | Timeout per RPC attempt. |
 | `--rpc-concurrency` | `4` | RPC requests in flight. |
 
+## Errors and exit codes
+
+Every failure has a stable code. In text mode a command prints
+`sep47idx <command>: <message>`; with `--json` (or `SEP47IDX_JSON=true`) it
+writes one JSON line to stderr instead, in the same shape the API uses:
+
+```text
+$ sep47idx gap --sep 0 --json
+{"error":{"code":"bad_request","message":"unexpected argument, invalid SEP or limit (want 1..500)"}}
+$ echo $?
+1
+$ sep47idx gap --sep 50 --json
+{"error":{"code":"not_found","message":"no rule file for SEP-50, so no interface can be inferred"}}
+$ echo $?
+2
+```
+
+Exit status is 0 on success, 1 on error and 2 when the requested object does
+not exist. The full list of codes, the sentinel each maps from, and the exit
+status is the [CLI error catalog](errors.md). It is generated from
+`internal/clierr` by `scripts/gen-error-catalog.sh`, and a test fails when the
+committed page is stale.
+
 ## phase0
 
 Measures adoption across a network and writes `report/ADOPTION.md`, `<network>-summary.json`, `<network>-raw.csv` and `<network>-contracts.csv`.

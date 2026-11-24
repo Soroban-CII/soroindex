@@ -27,7 +27,7 @@ type Group struct {
 	PRTemplate   string `json:"pr_template"`
 }
 
-// GroupOutput fills the derived fields of every group. Callers pass groups
+// GroupOutputs fills the derived fields of every group. Callers pass groups
 // read from the index so no output logic lives in the CLI handlers.
 func GroupOutputs(sep int, ruleset string, groups []Group) []Group {
 	out := make([]Group, 0, len(groups))

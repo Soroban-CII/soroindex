@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 
@@ -15,20 +14,20 @@ func init() {
 }
 
 func runContract(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("contract", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("contract", stderr, jsonMode)
 	resolve := config.RegisterCommon(fs)
 	history := fs.Bool("history", false, "include claims for every code version")
 	id, err := parseObject(fs, args)
 	if err != nil {
-		return readExit("contract", err, stderr)
+		return readExit("contract", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		return readExit("contract", err, stderr)
+		return readExit("contract", err, stderr, jsonMode)
 	}
 	if err = store.ValidateContractID(id); err != nil {
-		return readExit("contract", err, stderr)
+		return readExit("contract", err, stderr, jsonMode)
 	}
 	err = readIndex(cfg, func(ctx context.Context, s *store.Store, rulesets map[int]string) error {
 		if *history {
@@ -88,7 +87,7 @@ func runContract(args []string, stdout, stderr io.Writer) int {
 		}
 		return printClaims(stdout, d.Claims)
 	})
-	return readExit("contract", err, stderr)
+	return readExit("contract", err, stderr, jsonMode)
 }
 
 func printClaims(out io.Writer, claims []store.ClaimDetail) error {

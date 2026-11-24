@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/claims"
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/ingest"
 	"github.com/Soroban-CII/soroindex/internal/match"
@@ -36,8 +37,8 @@ func init() {
 //	sep47idx sync --network <n> --seed <file>
 //	sep47idx sync --network <n> --recompute
 func runSync(args []string, stdout, stderr io.Writer) int {
-	flags := flag.NewFlagSet("sync", flag.ContinueOnError)
-	flags.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	flags := newFlagSet("sync", stderr, jsonMode)
 	resolve := config.RegisterCommon(flags)
 	seed := flags.String("seed", "", "CSV of contract_id[,wasm_hash] to seed from (e.g. the Hubble Q2 export)")
 	allowInvocation := flags.Bool("allow-invocation", false, "run claim sources that simulate contract calls (none ship by default)")
@@ -46,20 +47,15 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	start := flags.Uint64("start-ledger", 0, "first ledger to index on an unseeded database")
 	follow := flags.Bool("follow", false, "poll for new ledgers after catching up")
 	interval := flags.Duration("interval", 5*time.Second, "poll interval when following")
-	if err := flags.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			return exitOK
-		}
-		return exitError
+	if err := parse(flags, args); err != nil {
+		return readExit("sync", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		errorf(stderr, "sep47idx sync: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "sync", err)
 	}
 	if *start > uint64(^uint32(0)) || (*start == 0 && wasSet(flags, "start-ledger")) || *interval <= 0 || flags.NArg() != 0 {
-		errorf(stderr, "sep47idx sync: start-ledger must be 1..4294967295, interval must be positive, and positional arguments are not accepted\n")
-		return exitError
+		return fail(stderr, jsonMode, "sync", clierr.Newf("bad_request", "start-ledger must be 1..4294967295, interval must be positive, and positional arguments are not accepted"))
 	}
 	incremental := *seed == "" && !*recompute || *start != 0 || *follow
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
@@ -70,38 +66,31 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	var client *rpc.Client
 	if *seed != "" || incremental {
 		if err := cfg.RequireRPC(); err != nil {
-			errorf(stderr, "sep47idx sync: %v\n", err)
-			return exitError
+			return fail(stderr, jsonMode, "sync", clierr.Newf("bad_request", "%v", err))
 		}
 		c, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency, Logger: log})
 		if err != nil {
-			errorf(stderr, "sep47idx sync: %v\n", err)
-			return exitError
+			return fail(stderr, jsonMode, "sync", err)
 		}
 		n, err := c.GetNetwork(ctx)
 		if err != nil {
-			errorf(stderr, "sep47idx sync: getNetwork: %v\n", err)
-			return exitError
+			return fail(stderr, jsonMode, "sync", fmt.Errorf("getNetwork: %w", err))
 		}
 		if n.Passphrase != cfg.Network.Passphrase {
-			errorf(stderr, "sep47idx sync: RPC %s serves %q, not %s\n", cfg.RPCURL, n.Passphrase, cfg.Network.Name)
-			return exitError
+			return fail(stderr, jsonMode, "sync", clierr.Newf("network_mismatch", "RPC %s serves %q, not %s", cfg.RPCURL, n.Passphrase, cfg.Network.Name))
 		}
 		client = c
 	}
 	ruleFiles, err := match.LoadRules(rules.FS)
 	if err != nil {
-		errorf(stderr, "sep47idx sync: rules: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "sync", fmt.Errorf("rules: %w", err))
 	}
 	if err := os.MkdirAll(filepath.Dir(cfg.DB), 0o750); err != nil {
-		errorf(stderr, "sep47idx sync: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "sync", err)
 	}
 	st, err := store.Open(ctx, cfg.DB, store.Options{Passphrase: cfg.Network.Passphrase})
 	if err != nil {
-		errorf(stderr, "sep47idx sync: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "sync", err)
 	}
 	defer func() { _ = st.Close() }() // close error after a completed seed carries nothing actionable
 
@@ -113,10 +102,9 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 		ix.RPC = client
 		if *seed != "" {
 			if err := st.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
-				errorf(stderr, "sep47idx sync: %v\n", err)
-				return exitError
+				return fail(stderr, jsonMode, "sync", err)
 			}
-			if code := runSeed(ctx, ix, *seed, stdout, stderr); code != exitOK {
+			if code := runSeed(ctx, ix, *seed, stdout, stderr, jsonMode); code != exitOK {
 				return code
 			}
 		}
@@ -124,12 +112,11 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	if *recompute {
 		rs, err := ix.Recompute(ctx)
 		if err != nil {
-			errorf(stderr, "sep47idx sync: recompute: %v\n", err)
-			return exitError
+			return fail(stderr, jsonMode, "sync", fmt.Errorf("recompute: %w", err))
 		}
 		if _, err := fmt.Fprintf(stdout, "recompute: %d recomputed, %d no_spec, %d need a re-fetch (analyzed before migration 0002), %d archived before parsing\n",
 			rs.Recomputed, rs.NoSpec, rs.NeedsRefetch, rs.NeverParsed); err != nil {
-			return exitError
+			return fail(stderr, jsonMode, "sync", err)
 		}
 	}
 	if incremental {
@@ -157,8 +144,7 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 			log.InfoContext(ctx, "sync progress", "last_ledger", last, "latest_ledger", latest, "lag", latest-last, "caught_up", caught)
 		}
 		if err := loop.Run(ctx); err != nil {
-			errorf(stderr, "sep47idx sync: %v\n", err)
-			return exitError
+			return fail(stderr, jsonMode, "sync", err)
 		}
 	}
 	return exitOK
@@ -174,25 +160,22 @@ func wasSet(fs *flag.FlagSet, name string) bool {
 	return found
 }
 
-func runSeed(ctx context.Context, ix *ingest.Indexer, seed string, stdout, stderr io.Writer) int {
+func runSeed(ctx context.Context, ix *ingest.Indexer, seed string, stdout, stderr io.Writer, jsonMode bool) int {
 	if err := recordRulesetsIfUnset(ctx, ix.Store, ix.Rules); err != nil {
-		errorf(stderr, "sep47idx sync: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "sync", err)
 	}
 	f, err := os.Open(seed) // #nosec G304 -- operator-supplied seed path
 	if err != nil {
-		errorf(stderr, "sep47idx sync: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "sync", clierr.Newf("bad_request", "%v", err))
 	}
 	defer func() { _ = f.Close() }() // read-only
 	res, err := ix.Seed(ctx, ingest.SeedFileSource{R: f})
 	if err != nil {
-		errorf(stderr, "sep47idx sync: %v\n", err)
-		return exitError
+		return fail(stderr, jsonMode, "sync", err)
 	}
 	if _, err := fmt.Fprintf(stdout, "seeded %d of %d contracts (%d not found, %d archived, %d hash hints differed); fetched %d wasm; last_ledger %d\n",
 		res.Seeded, res.Requested, res.NotFound, res.Archived, res.HintMismatch, res.WasmFetched, res.LastLedger); err != nil {
-		return exitError
+		return fail(stderr, jsonMode, "sync", err)
 	}
 	return exitOK
 }

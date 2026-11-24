@@ -66,7 +66,7 @@ func TestPhase0RecordToolchainsFromFixtureIndex(t *testing.T) {
 	if err := phase0.WriteSummary(dir, s); err != nil {
 		t.Fatal(err)
 	}
-	if md, err := os.ReadFile(filepath.Join(dir, "ADOPTION.md")); err != nil || !strings.Contains(string(md), "Not recorded for this run") {
+	if md, err := os.ReadFile(filepath.Join(dir, "ADOPTION.md")); err != nil || !strings.Contains(string(md), "Not recorded for this run") { // #nosec G304 -- test-owned temp directory
 		t.Fatalf("summary without a census should say it is not recorded: %v", err)
 	}
 
@@ -79,7 +79,7 @@ func TestPhase0RecordToolchainsFromFixtureIndex(t *testing.T) {
 	if !strings.Contains(out.String(), "3 hashes / 4 contracts carry toolchain meta as of ledger 10") {
 		t.Fatalf("stdout = %q", out.String())
 	}
-	md, err := os.ReadFile(filepath.Join(dir, "ADOPTION.md"))
+	md, err := os.ReadFile(filepath.Join(dir, "ADOPTION.md")) // #nosec G304 -- test-owned temp directory
 	if err != nil {
 		t.Fatal(err)
 	}

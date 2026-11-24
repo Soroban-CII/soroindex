@@ -480,9 +480,7 @@ func topHashes(contractsByHash map[string]int, results map[string]ingest.WasmRes
 		if measured > 0 {
 			t.SharePct = 100 * float64(count) / float64(measured)
 		}
-		for _, sep := range r.Claims.SEPs {
-			t.DeclaredSEPs = append(t.DeclaredSEPs, sep)
-		}
+		t.DeclaredSEPs = append(t.DeclaredSEPs, r.Claims.SEPs...)
 		sort.Ints(t.DeclaredSEPs)
 		if m, ok := r.MatchFor(41); ok {
 			t.SEP41Status = string(m.Status)
