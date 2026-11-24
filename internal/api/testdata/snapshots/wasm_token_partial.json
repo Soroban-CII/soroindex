@@ -45,6 +45,16 @@
       "matched_variants": {
         "transfer.inputs[1]": "MuxedAddress"
       },
+      "extra": [
+        "mint",
+        "upgrade",
+        "__constructor"
+      ],
+      "coverage": {
+        "required_ok": 8,
+        "optional_ok": 0,
+        "extra": 3
+      },
       "matched_version": null
     }
   ],

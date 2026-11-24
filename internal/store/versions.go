@@ -52,9 +52,14 @@ func (s *Store) AnnotateContract(ctx context.Context, d *ContractDetail, resolve
 	return nil
 }
 
-// AnnotateWasm fills matched_version on each interface match of a Wasm.
+type CoverageResolver func(sep int, fns []sepmeta.FnSig) (cov CoverageSummary, extra []string, ok bool)
+
 func (s *Store) AnnotateWasm(ctx context.Context, d *WasmDetail, resolve VersionResolver) error {
-	if resolve == nil || len(d.Matches) == 0 {
+	return s.AnnotateWasmWithCoverage(ctx, d, resolve, nil)
+}
+
+func (s *Store) AnnotateWasmWithCoverage(ctx context.Context, d *WasmDetail, resolve VersionResolver, covResolve CoverageResolver) error {
+	if len(d.Matches) == 0 {
 		return nil
 	}
 	fns, ok, err := s.Functions(ctx, d.Hash)
@@ -63,7 +68,16 @@ func (s *Store) AnnotateWasm(ctx context.Context, d *WasmDetail, resolve Version
 	}
 	for i := range d.Matches {
 		if d.Matches[i].Status != "no_spec" {
-			d.Matches[i].MatchedVersion = versionPtr(resolve(d.Matches[i].SEP, fns))
+			if resolve != nil {
+				d.Matches[i].MatchedVersion = versionPtr(resolve(d.Matches[i].SEP, fns))
+			}
+			if covResolve != nil {
+				cov, extra, cok := covResolve(d.Matches[i].SEP, fns)
+				if cok {
+					d.Matches[i].Extra = extra
+					d.Matches[i].Coverage = &cov
+				}
+			}
 		}
 	}
 	return nil

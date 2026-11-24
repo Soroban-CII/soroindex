@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/Soroban-CII/soroindex/internal/store"
+	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
 
 // TestInspectMatchesStoredEvidence writes every golden fixture through the
@@ -34,6 +37,18 @@ func TestInspectMatchesStoredEvidence(t *testing.T) {
 			}
 			stored, err := s.Wasm(ctx, hash, 1, "", rulesets)
 			if err != nil {
+				t.Fatal(err)
+			}
+			covResolver := func(sep int, fns []sepmeta.FnSig) (store.CoverageSummary, []string, bool) {
+				for _, rf := range ix.Rules {
+					if rf.SEP == sep {
+						res := ix.Matcher.Match(fns, rf)
+						return store.CoverageSummary{RequiredOK: res.Coverage.RequiredOK, OptionalOK: res.Coverage.OptionalOK, Extra: res.Coverage.Extra}, res.Extra, true
+					}
+				}
+				return store.CoverageSummary{}, nil, false
+			}
+			if err := s.AnnotateWasmWithCoverage(ctx, &stored, nil, covResolver); err != nil {
 				t.Fatal(err)
 			}
 			got, err := (&Indexer{Rules: ix.Rules, Matcher: ix.Matcher, Limits: ix.Limits, Claims: ix.Claims, Now: ix.Now}).Inspect(ctx, code)

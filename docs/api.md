@@ -854,6 +854,16 @@ GET /v1/wasm/2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880
       "matched_variants": {
         "transfer.inputs[1]": "MuxedAddress"
       },
+      "extra": [
+        "mint",
+        "upgrade",
+        "__constructor"
+      ],
+      "coverage": {
+        "required_ok": 8,
+        "optional_ok": 0,
+        "extra": 3
+      },
       "matched_version": null
     }
   ],

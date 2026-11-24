@@ -51,6 +51,16 @@
       ],
       "mismatched": [],
       "matched_variants": {},
+      "extra": [
+        "add",
+        "hello",
+        "version"
+      ],
+      "coverage": {
+        "required_ok": 0,
+        "optional_ok": 0,
+        "extra": 3
+      },
       "matched_version": null
     }
   ],

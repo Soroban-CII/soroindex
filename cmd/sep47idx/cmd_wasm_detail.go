@@ -11,6 +11,7 @@ import (
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/store"
+	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
 
 // signature renders a function's types as "(a, b) -> c", or "-> ()" when it
@@ -52,6 +53,16 @@ func writeMatchEvidence(w io.Writer, m store.WasmMatch) error {
 			_, err = fmt.Fprintf(w, "  %s %s: expected %s, found %s\n", label, mm.Fn, signature(mm.Expected), signature(mm.Actual))
 		}
 		if err != nil {
+			return err
+		}
+	}
+	if len(m.Extra) > 0 {
+		if _, err := fmt.Fprintf(w, "  Extra: %s\n", strings.Join(m.Extra, ", ")); err != nil {
+			return err
+		}
+	}
+	if m.Coverage != nil {
+		if _, err := fmt.Fprintf(w, "  Coverage: %d required OK, %d optional OK, %d extra\n", m.Coverage.RequiredOK, m.Coverage.OptionalOK, m.Coverage.Extra); err != nil {
 			return err
 		}
 	}
@@ -132,7 +143,14 @@ func runWasm(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return err
 		}
-		if err := s.AnnotateWasm(ctx, &d, versions.Highest); err != nil {
+		covResolver := func(sep int, fns []sepmeta.FnSig) (store.CoverageSummary, []string, bool) {
+			cov, extra, ok := versions.MatchCoverage(sep, fns)
+			if !ok {
+				return store.CoverageSummary{}, nil, false
+			}
+			return store.CoverageSummary{RequiredOK: cov.RequiredOK, OptionalOK: cov.OptionalOK, Extra: cov.Extra}, extra, true
+		}
+		if err := s.AnnotateWasmWithCoverage(ctx, &d, versions.Highest, covResolver); err != nil {
 			return err
 		}
 		if cfg.JSON {

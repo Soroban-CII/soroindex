@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sort"
 
+	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/store"
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
@@ -92,13 +93,28 @@ func (ix *Indexer) Inspect(ctx context.Context, code []byte) (Evidence, error) {
 	sort.Slice(e.Anomalies, func(i, j int) bool { return e.Anomalies[i].RawToken < e.Anomalies[j].RawToken })
 
 	var fns []sepmeta.FnSig
-	haveFns := ix.Versions != nil && a.wasm.FunctionsJSON != "" && json.Unmarshal([]byte(a.wasm.FunctionsJSON), &fns) == nil
+	haveFns := a.wasm.FunctionsJSON != "" && json.Unmarshal([]byte(a.wasm.FunctionsJSON), &fns) == nil
+	ruleMap := map[int]match.RuleFile{}
+	for _, rf := range ix.Rules {
+		ruleMap[rf.SEP] = rf
+	}
 	for _, m := range a.matches {
 		wm := store.WasmMatch{SEP: m.SEP, RulesetVersion: m.RulesetVersion, Status: m.Status, OKCount: m.OKCount,
 			Missing: json.RawMessage(m.MissingJSON), Mismatched: json.RawMessage(m.MismatchedJSON), MatchedVariants: json.RawMessage(m.MatchedVariantsJSON)}
 		if haveFns && m.Status != "no_spec" {
-			if v := ix.Versions(m.SEP, fns); v != "" {
-				wm.MatchedVersion = &v
+			if ix.Versions != nil {
+				if v := ix.Versions(m.SEP, fns); v != "" {
+					wm.MatchedVersion = &v
+				}
+			}
+			if rf, ok := ruleMap[m.SEP]; ok {
+				res := ix.Matcher.Match(fns, rf)
+				wm.Extra = res.Extra
+				wm.Coverage = &store.CoverageSummary{
+					RequiredOK: res.Coverage.RequiredOK,
+					OptionalOK: res.Coverage.OptionalOK,
+					Extra:      res.Coverage.Extra,
+				}
 			}
 		}
 		e.Matches = append(e.Matches, wm)

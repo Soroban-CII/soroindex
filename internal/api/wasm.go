@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/Soroban-CII/soroindex/internal/store"
+	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
 
 func parseQuery(r *http.Request, allowed ...string) (url.Values, error) {
@@ -52,7 +53,14 @@ func (s *Server) wasm(w http.ResponseWriter, r *http.Request) {
 	if detailError(w, err) {
 		return
 	}
-	if detailError(w, b.Store.AnnotateWasm(r.Context(), &d, s.versions.Highest)) {
+	covResolver := func(sep int, fns []sepmeta.FnSig) (store.CoverageSummary, []string, bool) {
+		cov, extra, ok := s.versions.MatchCoverage(sep, fns)
+		if !ok {
+			return store.CoverageSummary{}, nil, false
+		}
+		return store.CoverageSummary{RequiredOK: cov.RequiredOK, OptionalOK: cov.OptionalOK, Extra: cov.Extra}, extra, true
+	}
+	if detailError(w, b.Store.AnnotateWasmWithCoverage(r.Context(), &d, s.versions.Highest, covResolver)) {
 		return
 	}
 	writeJSON(w, 200, d)
