@@ -48,6 +48,97 @@ func Functions(spec []xdr.ScSpecEntry) []FnSig {
 	return out
 }
 
+type UDTKind string
+
+const (
+	UDTKindStruct    UDTKind = "struct"
+	UDTKindUnion     UDTKind = "union"
+	UDTKindEnum      UDTKind = "enum"
+	UDTKindErrorEnum UDTKind = "error_enum"
+)
+
+type StructField struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type UnionCase struct {
+	Name  string   `json:"name"`
+	Types []string `json:"types"`
+}
+
+type EnumCase struct {
+	Name  string `json:"name"`
+	Value uint32 `json:"value"`
+}
+
+type UDTDef struct {
+	Name   string        `json:"name"`
+	Kind   UDTKind       `json:"kind"`
+	Fields []StructField `json:"fields,omitempty"`
+	Cases  []UnionCase   `json:"cases,omitempty"`
+	Enums  []EnumCase    `json:"enums,omitempty"`
+}
+
+type TypeTable map[string]UDTDef
+
+func Types(spec []xdr.ScSpecEntry) TypeTable {
+	table := make(TypeTable)
+	for _, e := range spec {
+		switch e.Kind {
+		case xdr.ScSpecEntryKindScSpecEntryUdtStructV0:
+			if e.UdtStructV0 == nil {
+				continue
+			}
+			s := e.UdtStructV0
+			def := UDTDef{Name: s.Name, Kind: UDTKindStruct, Fields: make([]StructField, 0, len(s.Fields))}
+			for _, f := range s.Fields {
+				def.Fields = append(def.Fields, StructField{Name: f.Name, Type: TypeName(f.Type)})
+			}
+			table[s.Name] = def
+		case xdr.ScSpecEntryKindScSpecEntryUdtUnionV0:
+			if e.UdtUnionV0 == nil {
+				continue
+			}
+			u := e.UdtUnionV0
+			def := UDTDef{Name: u.Name, Kind: UDTKindUnion, Cases: make([]UnionCase, 0, len(u.Cases))}
+			for _, c := range u.Cases {
+				if tc, ok := c.GetTupleCase(); ok {
+					types := make([]string, 0, len(tc.Type))
+					for _, ty := range tc.Type {
+						types = append(types, TypeName(ty))
+					}
+					def.Cases = append(def.Cases, UnionCase{Name: string(tc.Name), Types: types})
+				} else if vc, ok := c.GetVoidCase(); ok {
+					def.Cases = append(def.Cases, UnionCase{Name: string(vc.Name), Types: []string{}})
+				}
+			}
+			table[u.Name] = def
+		case xdr.ScSpecEntryKindScSpecEntryUdtEnumV0:
+			if e.UdtEnumV0 == nil {
+				continue
+			}
+			en := e.UdtEnumV0
+			def := UDTDef{Name: en.Name, Kind: UDTKindEnum, Enums: make([]EnumCase, 0, len(en.Cases))}
+			for _, c := range en.Cases {
+				def.Enums = append(def.Enums, EnumCase{Name: c.Name, Value: uint32(c.Value)})
+			}
+			table[en.Name] = def
+		case xdr.ScSpecEntryKindScSpecEntryUdtErrorEnumV0:
+			if e.UdtErrorEnumV0 == nil {
+				continue
+			}
+			ee := e.UdtErrorEnumV0
+			def := UDTDef{Name: ee.Name, Kind: UDTKindErrorEnum, Enums: make([]EnumCase, 0, len(ee.Cases))}
+			for _, c := range ee.Cases {
+				def.Enums = append(def.Enums, EnumCase{Name: c.Name, Value: uint32(c.Value)})
+			}
+			table[ee.Name] = def
+		}
+	}
+	return table
+}
+
 // scalarNames maps every non-parameterized spec type to its canonical name.
 // The names follow the Rust SDK's spelling, which is what SEP documents use.
 var scalarNames = map[xdr.ScSpecType]string{
