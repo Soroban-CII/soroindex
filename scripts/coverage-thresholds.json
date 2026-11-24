@@ -1,0 +1,14 @@
+{
+  "cmd/sep47idx": 60.0,
+  "internal/api": 87.1,
+  "internal/claims": 95.7,
+  "internal/config": 98.3,
+  "internal/ingest": 72.2,
+  "internal/match": 80.4,
+  "internal/phase0": 84.7,
+  "internal/rpc": 95.6,
+  "internal/store": 63.9,
+  "internal/sync": 77.2,
+  "pkg/client": 70.7,
+  "pkg/sepmeta": 97.4
+}
