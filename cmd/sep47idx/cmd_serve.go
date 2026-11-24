@@ -34,6 +34,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	writeTimeout := fs.Duration("write-timeout", 20*time.Second, "maximum time to write response")
 	idleTimeout := fs.Duration("idle-timeout", 60*time.Second, "maximum time to wait for next request on keep-alive connection")
 	maxHeaderBytes := fs.Int("max-header-bytes", 16<<10, "maximum size of request headers in bytes")
+	waitForDB := fs.Duration("wait-for-db", 0, "duration to wait for the database to be initialized by sync")
 	if err := fs.Parse(args); err != nil {
 		return readExit("serve", err, stderr)
 	}
@@ -50,6 +51,9 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	if *maxHeaderBytes < 0 {
 		return readExit("serve", fmt.Errorf("max-header-bytes must not be negative"), stderr)
 	}
+	if *waitForDB < 0 {
+		return readExit("serve", fmt.Errorf("wait-for-db must not be negative"), stderr)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -63,7 +67,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 		handler, cleanup, err = multiNetworkHandler(ctx, cfg, *rate)
 		label = cfg.DB
 	} else {
-		handler, cleanup, err = singleNetworkHandler(ctx, cfg, *rate)
+		handler, cleanup, err = singleNetworkHandler(ctx, cfg, *rate, *waitForDB)
 	}
 	if err != nil {
 		return readExit("serve", err, stderr)
@@ -80,12 +84,26 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	return readExit("serve", serveHTTP(ctx, listener, handler, *readHeaderTimeout, *readTimeout, *writeTimeout, *idleTimeout, *maxHeaderBytes), stderr)
 }
 
-func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http.Handler, func(), error) {
+func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int, waitForDB time.Duration) (http.Handler, func(), error) {
 	if err := cfg.RequireRPC(); err != nil {
 		return nil, nil, err
 	}
-	s, err := store.Open(ctx, cfg.DB, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
-	if err != nil {
+	var s *store.Store
+	deadline := time.Now().Add(waitForDB)
+	for {
+		var err error
+		s, err = store.Open(ctx, cfg.DB, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
+		if err == nil {
+			break
+		}
+		if waitForDB > 0 && (errors.Is(err, store.ErrReadOnlyUninitialized) || os.IsNotExist(err) || errors.Is(err, store.ErrNotFound)) && time.Now().Before(deadline) {
+			select {
+			case <-ctx.Done():
+				return nil, nil, ctx.Err()
+			case <-time.After(500 * time.Millisecond):
+				continue
+			}
+		}
 		return nil, nil, err
 	}
 	cleanup := func() { _ = s.Close() }

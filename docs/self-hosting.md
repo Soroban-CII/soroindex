@@ -172,3 +172,38 @@ no proxy settings and no CA bundle; `docker history` shows neither.
   them byte for byte. `sep47idx version` reports `v0.1.0` in both.
 
 A new GHCR package starts private. Make it public once, in the package's settings.
+
+## Docker Compose deployment
+
+A multi-container deployment stack is defined in `compose.yaml` to orchestrate background synchronization (`sync --follow`) alongside the read-only HTTP API server (`serve`) over a shared persistent volume.
+
+### Security and Architecture
+
+- **Shared Volume:** Both containers coordinate over the `soroindex-data` volume mounted at `/data`.
+- **Read-Only API Mount:** The `serve` API container mounts the data volume as read-only (`/data:ro`), preventing any state modification by the API process.
+- **Read-Only Root Filesystems:** Both containers run with `read_only: true` on their root filesystems and drop privileges to UID `65532:65532`.
+- **Health Checks & Startup Order:** 
+  - `sync` performs periodic health checks using `sep47idx stats`.
+  - `serve` performs HTTP health probes against `/v1/health` via `sep47idx health`.
+  - Startup order is coordinated via Docker Compose dependencies (`depends_on: sync: condition: service_healthy`) and `--wait-for-db 30s` to cleanly handle empty initial index states without crashing.
+- **Restart Policies:** Both services declare `restart: unless-stopped`.
+
+### Starting the stack
+
+```sh
+docker compose up -d
+```
+
+Check logs and health status:
+
+```sh
+docker compose ps
+docker compose logs -f
+```
+
+Query the API once healthy:
+
+```sh
+curl http://127.0.0.1:8080/v1/health
+curl http://127.0.0.1:8080/v1/stats
+```
