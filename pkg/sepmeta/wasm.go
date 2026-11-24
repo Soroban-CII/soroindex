@@ -36,6 +36,12 @@ type Limits struct {
 	MaxSections int
 	// MaxXDRDepth caps nesting depth when decoding XDR from a section.
 	MaxXDRDepth uint
+	// MaxTypeEntries caps how many spec entries a type table may hold, so a
+	// crafted contractspecv0 cannot make Types allocate without bound.
+	MaxTypeEntries int
+	// MaxTypeNameLen caps the byte length of a user-defined type or field
+	// name read into a type table.
+	MaxTypeNameLen int
 }
 
 // DefaultLimits returns the limits from CLAUDE.md §5.1. They are well above
@@ -47,6 +53,8 @@ func DefaultLimits() Limits {
 		MaxSectionBytes: 256 << 10, // 256 KiB
 		MaxSections:     10_000,
 		MaxXDRDepth:     500,
+		MaxTypeEntries:  10_000,
+		MaxTypeNameLen:  1024,
 	}
 }
 
@@ -65,6 +73,12 @@ func (lim Limits) withDefaults() Limits {
 	}
 	if lim.MaxXDRDepth == 0 {
 		lim.MaxXDRDepth = d.MaxXDRDepth
+	}
+	if lim.MaxTypeEntries <= 0 {
+		lim.MaxTypeEntries = d.MaxTypeEntries
+	}
+	if lim.MaxTypeNameLen <= 0 {
+		lim.MaxTypeNameLen = d.MaxTypeNameLen
 	}
 	return lim
 }
