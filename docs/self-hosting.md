@@ -171,4 +171,34 @@ no proxy settings and no CA bundle; `docker history` shows neither.
   (`v0.0.0-20261109093629-3abe5a30038d`), and a rebuild at the tag cannot match
   them byte for byte. `sep47idx version` reports `v0.1.0` in both.
 
+### Reproducible release builds
+
+Every release run builds the archives twice, in two jobs (`build-a` and
+`build-b`) on fresh runners with no Go build cache, from the same tag. The
+`reproducible` job runs `scripts/compare-release.sh` on the two results and
+fails unless their `SHA256SUMS` are identical. On a mismatch it prints each
+differing file and the `go version -m` difference of the `sep47idx` binary in
+each differing archive. The draft release and the image are only made after
+that job passes, and the published archives are `build-a`'s.
+
+To reproduce a release yourself, check out the tag (a detached checkout of
+the tag, not a branch, so Go stamps the tag's version) with a clean tree, and
+build with the Go version in `go.mod`'s `toolchain` line:
+
+```sh
+git clone https://github.com/Soroban-CII/soroindex && cd soroindex
+git checkout vX.Y.Z
+GOTOOLCHAIN=local ./scripts/build-release.sh vX.Y.Z   # needs go1.27.4 and python3
+curl -fsSLO https://github.com/Soroban-CII/soroindex/releases/download/vX.Y.Z/SHA256SUMS
+mkdir -p published && mv SHA256SUMS published/
+./scripts/compare-release.sh published dist/vX.Y.Z
+```
+
+`compare-release.sh` only needs a directory with a `SHA256SUMS` file on one
+side, so this compares your build with the published checksums; it extracts
+archives for the `go version -m` difference only when both sides have them.
+A tree with uncommitted changes records `"source_tree_dirty": true` in
+`BUILD.json` and does not match. Releases made before this check (v0.1.0)
+cannot be reproduced, as explained above.
+
 A new GHCR package starts private. Make it public once, in the package's settings.
