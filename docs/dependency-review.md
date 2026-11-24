@@ -92,3 +92,34 @@ The command runs from the CLI package because the repository root has no Go
 files, and module scanning does not accept `./...` patterns. Local validation
 used the unmodified official database snapshot described above; the CI commands
 use the live database. Hosted results must be checked after pushing.
+
+## OpenSSF Scorecard review and findings
+
+The repository runs the OpenSSF Scorecard action on weekly schedule and on `main` pushes (`.github/workflows/scorecard.yml`), publishing results to the OpenSSF Scorecard API and GitHub Code Scanning.
+
+### Findings and remediation status
+
+1. **Token-Permissions:**
+   - *Status:* Remediated.
+   - *Implementation:* All workflow definitions declare minimum permissions (`permissions: contents: read` or `permissions: read-all`) at the top level and grant specific scopes only where needed (e.g. `pages: write`, `id-token: write`).
+2. **Pinned-Dependencies:**
+   - *Status:* Remediated.
+   - *Implementation:* All GitHub Actions are pinned to immutable 40-character commit SHAs with version comments (e.g. `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1`).
+3. **Branch-Protection:**
+   - *Status:* Documented and configured.
+   - *Implementation:* Branch protection for `main` is automated via `scripts/repo-settings.sh`, requiring 1 pull request review approval, blocking force pushes, disallowing deletions, and requiring status checks (`lint`, `test`, `fuzz-smoke`, `build`). The public Scorecard check in GitHub Actions without a PAT with repository administration scope cannot query the GitHub Branch Protection API directly; this policy is maintained and enforced via repository configuration.
+4. **Binary-Artifacts:**
+   - *Status:* Documented by design.
+   - *Implementation:* Static golden `.wasm` test fixtures are stored in `testdata/wasm/` for deterministic offline testing of SEP metadata parsing without network access or local Rust compiler installations. All fixture hashes are tracked in `testdata/wasm/SHA256SUMS`, and their source code is included under `testdata/contracts/` along with `scripts/build-fixtures.sh`.
+5. **Dependency-Update-Tool:**
+   - *Status:* Remediated.
+   - *Implementation:* Dependabot is configured in `.github/dependabot.yml` to check Go modules and GitHub Actions weekly.
+6. **Vulnerabilities:**
+   - *Status:* Remediated / Monitored.
+   - *Implementation:* Continuous vulnerability scanning is enforced on every PR and main push via `govulncheck` in `.github/workflows/security.yml`.
+7. **Security-Policy:**
+   - *Status:* Remediated.
+   - *Implementation:* Documented in `SECURITY.md` with GitHub Private Vulnerability Reporting enabled.
+8. **Fuzzing:**
+   - *Status:* Remediated.
+   - *Implementation:* Native Go fuzz tests for untrusted parser and ingest inputs run as smoke checks on PRs (`fuzz-smoke` in `ci.yml`) and in an extended nightly workflow with corpus caching (`.github/workflows/fuzz.yml`).
