@@ -1,6 +1,6 @@
 # CLI reference
 
-The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. Command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2). The `maintenance` captures come from a darwin/arm64 build on 20 November 2026 (Go 1.27.4). The help output and the `inspect` captures come from a darwin/arm64 build on 21 November 2026 (Go 1.27.4).
+The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. Command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2). The `maintenance` captures come from a darwin/arm64 build on 20 November 2026 (Go 1.27.4). The help output and the `inspect` captures come from a darwin/arm64 build on 21 November 2026 (Go 1.27.4). The `doctor` and `export` captures come from a linux/amd64 build on 24 November 2026 (Go 1.27.3).
 
 Every flag also has an environment variable: `SEP47IDX_` plus the flag name in capitals, dashes as underscores (`--rpc-url` is `SEP47IDX_RPC_URL`). A flag on the command line overrides the variable. Exit codes: `0` ok, `1` error, `2` not found.
 
@@ -11,6 +11,8 @@ usage: sep47idx <command> [flags]
 commands:
   check        compare a seeded sample of stored contracts with live RPC entries
   contract     show a contract's claims and optional full history
+  doctor       check the database, RPC, lag, disk and rules, and suggest fixes
+  export       write a checksummed CSV bundle of the index and a manifest
   gap          list contracts that match a SEP's interface but declare nothing (inferred)
   inspect      analyze a local Wasm file offline, as the indexer would
   maintenance  check integrity, refresh query statistics and vacuum while no sync is writing
@@ -650,6 +652,198 @@ The corrupted-database path is covered by `TestMaintainReportsCorruptedCopy` in
 `internal/store/maintenance_test.go`: it flips one byte of a stored hash inside
 an index page, and maintenance reports `row … missing from index …`, exits with
 `ErrIntegrity`, and leaves the file byte-for-byte unchanged.
+
+## doctor
+
+Checks the things a stuck index fails on, in one pass, and prints the fix for
+each failure. It opens the database read-only and never writes: no WAL, no
+schema change, no sync_state update. Exit 0 means every check passed; exit 1
+means at least one check failed or the command could not run; exit 2 is not
+used.
+
+```sh
+sep47idx doctor --network testnet --db ./data/testnet.db --rpc-url https://soroban-testnet.stellar.org
+```
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--max-lag` | `0` | Fail when the index is more than this many ledgers behind the RPC tip. `0` reports the lag without failing. |
+| `--min-free-mb` | `100` | Fail when the database filesystem has less free space than this. |
+
+Checks, in order: `rules` (embedded rule files load and validate), `database`
+(file opens read-only and carries this network's passphrase), `integrity`
+(`PRAGMA quick_check`), `sync_state` (`last_ledger` exists and parses), `rpc`
+(reachable and serving this network), `lag`, and `disk`. A missing database
+skips `sync_state` and everything after it that needs one, so the output still
+shows which check to fix first.
+
+```text
+$ ./sep47idx doctor --network testnet --db testnet.db --rpc-url https://soroban-testnet.stellar.org
+PASS rules      embedded rule files load and validate
+PASS database   testnet.db opens read-only and records the testnet network passphrase
+PASS integrity  PRAGMA quick_check reports ok
+PASS sync_state last_ledger is 5899112
+PASS rpc        https://soroban-testnet.stellar.org serves testnet at ledger 5899114
+PASS lag        2 ledgers behind the RPC tip
+PASS disk       . has 37832 MiB free
+
+All checks passed for testnet (testnet.db).
+```
+
+A lag threshold and a missing database, in one run each:
+
+```text
+$ ./sep47idx doctor --network testnet --db testnet.db --rpc-url https://soroban-testnet.stellar.org --max-lag 1; echo "exit $?"
+PASS rules      embedded rule files load and validate
+PASS database   testnet.db opens read-only and records the testnet network passphrase
+PASS integrity  PRAGMA quick_check reports ok
+PASS sync_state last_ledger is 5899112
+PASS rpc        https://soroban-testnet.stellar.org serves testnet at ledger 5899120
+FAIL lag        8 ledgers behind
+     fix: check that the follow process is running and advancing, not only that health is green
+PASS disk       . has 37832 MiB free
+
+Some checks failed for testnet (testnet.db). Fix them in the order shown.
+exit 1
+```
+
+```text
+$ ./sep47idx doctor --network testnet --db missing.db --rpc-url https://soroban-testnet.stellar.org --min-free-mb 999999999; echo "exit $?"
+PASS rules      embedded rule files load and validate
+FAIL database   inspect schema: unable to open database file (14)
+     fix: check --db; if the file is missing, run: sep47idx sync --network <network> --seed <contracts.csv>
+PASS rpc        https://soroban-testnet.stellar.org serves testnet at ledger 5899120
+SKIP lag        sync_state has no last_ledger
+FAIL disk       . has 37832 MiB free, below the 999999999 MiB requirement
+     fix: free space, move the database to a larger volume, or lower --min-free-mb deliberately
+
+Some checks failed for testnet (missing.db). Fix them in the order shown.
+exit 1
+```
+
+`--json` prints the same checks:
+
+```text
+$ ./sep47idx doctor --json --network testnet --db testnet.db --rpc-url https://soroban-testnet.stellar.org
+{
+  "ok": true,
+  "network": "testnet",
+  "db": "testnet.db",
+  "checks": [
+    {
+      "name": "rules",
+      "status": "pass",
+      "detail": "embedded rule files load and validate"
+    },
+...
+    {
+      "name": "disk",
+      "status": "pass",
+      "detail": ". has 37832 MiB free"
+    }
+  ]
+}
+```
+
+## export
+
+Writes the whole index as CSV plus `manifest.json`, for researchers and for
+anyone who wants the data without running the server. The export is one
+read-only transaction: every file shows the same ledger, even if a sync is
+committing while it runs. Each table is streamed row by row, so memory does
+not grow with the table.
+
+```sh
+sep47idx export --network testnet --db ./data/testnet.db --out bundle/
+```
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--out` | none (required) | Directory for the bundle. Created if missing; existing files with the same names are overwritten. |
+
+Six tables are written in this order: `contracts.csv`, `versions.csv`,
+`wasm.csv`, `claims.csv`, `anomalies.csv`, `matches.csv`. Column order is
+stable; new columns are appended, never inserted. A NULL value is an empty
+field. The timestamp-free manifest makes an unchanged index re-export
+byte-identically, so a checksum change always means the data changed.
+
+`contracts.csv` columns:
+
+| Column | Meaning |
+| --- | --- |
+| `contract_id` | `C...` strkey. |
+| `kind` | `wasm`, `wasm_ref` or `sac`. |
+| `current_wasm_hash` | Resolved hash, empty for a SAC or an unresolved reference. |
+| `exec_ref_owner`, `exec_ref_tag` | CAP-85 reference, empty unless `kind` is `wasm_ref`. |
+| `sac_asset` | `native` or `CODE:ISSUER`, empty for Wasm contracts. |
+| `created_ledger`, `updated_ledger` | Ledger numbers, empty when unknown. |
+| `archived` | `1` when the contract's entries are archived. |
+| `declared_seps` | Comma-separated SEPs from the contract's meta, ordered. |
+| `inferred_seps` | SEPs whose current rule file the contract's spec matches. |
+| `verified_seps` | SEPs with a passing testnet verification for this exact hash. |
+| `protocol_seps` | `41` for a SAC, otherwise empty. |
+
+The four tier columns are separate on purpose (see the trust-tier rules in the
+README): a contract that matches SEP-41 without declaring it is never in
+`declared_seps`, and a SAC is never in `declared_seps` either.
+
+`versions.csv` columns: `contract_id`, `wasm_hash`, `exec_ref_owner`,
+`exec_ref_tag`, `from_ledger`, `to_ledger` (empty while current). The remaining
+files are the stored tables verbatim: `wasm.csv` (hash, size, flags,
+`meta_json`, `functions_json`, CLI interface version, parse status and version),
+`claims.csv` (hash, SEP, source, raw token, anomaly), `anomalies.csv` (hash,
+raw token, anomaly) and `matches.csv` (hash, SEP, ruleset version and rule-file
+sha256, status, OK count, missing/mismatched/variants JSON, computed at).
+
+```text
+$ ./sep47idx export --network testnet --db testnet.db --out bundle; echo "exit $?"
+Wrote 6 files to bundle for testnet at ledger 5899112
+  contracts.csv         1 rows  7d5d73e08ea4d339f0c4a501578211d32fed1d3e496d40a850b9f3c03563d523
+  versions.csv          1 rows  a5390cfcbb7734f1e9973530ff9e10e171f3cf722ef87463ceb205a5090948a7
+  wasm.csv              0 rows  f4ac2447998ee0bd562d1214b412d925b1994908e5460a70ae57972f6a4361d5
+  claims.csv            0 rows  9db7bcce8424b1ca3228078a5f7fed8416c768fcafe281a161742a02bc94c5a8
+  anomalies.csv         0 rows  9ed2a3011fba347c15f08979abb8fecae24e443d14a1a89afc116169e28f89f9
+  matches.csv           0 rows  d5feeca47388b93efc48cec352c5ff94ae7f1f12f3424681e34e86320f0fb9c1
+exit 0
+```
+
+```text
+$ cat bundle/manifest.json
+{
+  "format": "sep47idx-export",
+  "format_version": 1,
+  "network": "testnet",
+  "last_ledger": 5899112,
+  "schema_version": 5,
+  "parser_version": "1",
+  "ruleset_versions": {
+    "41": "sep41-v0.5.2"
+  },
+  "files": [
+    {
+      "name": "contracts.csv",
+      "rows": 1,
+      "sha256": "7d5d73e08ea4d339f0c4a501578211d32fed1d3e496d40a850b9f3c03563d523"
+    },
+...
+  ]
+}
+```
+
+With one SAC contract in the database:
+
+```text
+$ cat bundle/contracts.csv
+contract_id,kind,current_wasm_hash,exec_ref_owner,exec_ref_tag,sac_asset,created_ledger,updated_ledger,archived,declared_seps,inferred_seps,verified_seps,protocol_seps
+CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC,sac,,,,native,,4609662,0,,,,41
+```
+
+A re-export of the unchanged index is byte-identical:
+
+```text
+$ ./sep47idx export --network testnet --db testnet.db --out bundle2 >/dev/null && cmp bundle/manifest.json bundle2/manifest.json && echo "manifest identical"
+manifest identical
+```
 
 ## verify
 

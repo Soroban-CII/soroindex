@@ -59,7 +59,11 @@ type WasmDetail struct {
 	ParseStatus   string            `json:"parse_status"`
 	ParseError    *string           `json:"parse_error"`
 	ParserVersion string            `json:"parser_version"`
-	AsOfLedger    uint32            `json:"as_of_ledger"`
+	// InterfaceVersion is the protocol the code was built against, from
+	// contractenvmetav0. nil means the section is absent or unreadable.
+	InterfaceVersion    *uint32 `json:"interface_version"`
+	InterfacePrerelease *uint32 `json:"interface_prerelease"`
+	AsOfLedger          uint32  `json:"as_of_ledger"`
 }
 
 // Wasm reads parsing data and a bounded page of live users in one snapshot.
@@ -78,7 +82,8 @@ func (s *Store) Wasm(ctx context.Context, hash string, limit int, cursor string,
 	}
 	defer func() { _ = tx.Rollback() }()
 	var meta sql.NullString
-	err = tx.QueryRowContext(ctx, `SELECT meta_json,parse_status,parse_error,parser_version FROM wasm WHERE hash = ?`, hash).Scan(&meta, &d.ParseStatus, &d.ParseError, &d.ParserVersion)
+	var ifaceVersion, ifacePrerelease sql.NullInt64
+	err = tx.QueryRowContext(ctx, `SELECT meta_json,parse_status,parse_error,parser_version,interface_version,interface_prerelease FROM wasm WHERE hash = ?`, hash).Scan(&meta, &d.ParseStatus, &d.ParseError, &d.ParserVersion, &ifaceVersion, &ifacePrerelease)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
 	}
@@ -90,6 +95,14 @@ func (s *Store) Wasm(ctx context.Context, hash string, limit int, cursor string,
 			return d, errors.New("invalid stored metadata JSON")
 		}
 		d.Meta = json.RawMessage(meta.String)
+	}
+	if ifaceVersion.Valid {
+		v := uint32(ifaceVersion.Int64)
+		d.InterfaceVersion = &v
+	}
+	if ifacePrerelease.Valid {
+		p := uint32(ifacePrerelease.Int64)
+		d.InterfacePrerelease = &p
 	}
 	d.AsOfLedger, err = readLedger(ctx, tx)
 	if err != nil {

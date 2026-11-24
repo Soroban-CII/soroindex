@@ -104,9 +104,14 @@ type WasmRow struct {
 	SEPEntryCount   int
 	MetaJSON        string // JSON array of {"key","value"}; "" for NULL
 	FunctionsJSON   string // JSON array of sepmeta.FnSig; "" for NULL
-	ParseStatus     string
-	ParseError      string
-	ParserVersion   string
+	// InterfaceVersion and InterfacePrerelease are from contractenvmetav0.
+	// nil means the section is absent or unreadable, which is stored as
+	// NULL, never as 0.
+	InterfaceVersion    *uint32
+	InterfacePrerelease *uint32
+	ParseStatus         string
+	ParseError          string
+	ParserVersion       string
 }
 
 // UpsertWasm inserts or updates a Wasm row. first_seen_ledger keeps the
@@ -115,8 +120,8 @@ type WasmRow struct {
 // (CLAUDE.md §5.9).
 func (t *Tx) UpsertWasm(ctx context.Context, w WasmRow) error {
 	return t.exec(ctx, "upsert wasm "+w.Hash, `
-INSERT INTO wasm (hash, size_bytes, first_seen_ledger, has_meta, has_spec, sep_entry_count, meta_json, functions_json, parse_status, parse_error, parser_version)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO wasm (hash, size_bytes, first_seen_ledger, has_meta, has_spec, sep_entry_count, meta_json, functions_json, interface_version, interface_prerelease, parse_status, parse_error, parser_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (hash) DO UPDATE SET
   first_seen_ledger = CASE
     WHEN wasm.first_seen_ledger IS NULL THEN excluded.first_seen_ledger
@@ -128,11 +133,14 @@ ON CONFLICT (hash) DO UPDATE SET
   sep_entry_count = CASE WHEN excluded.parse_status = 'archived' THEN wasm.sep_entry_count ELSE excluded.sep_entry_count END,
   meta_json       = CASE WHEN excluded.parse_status = 'archived' THEN wasm.meta_json       ELSE excluded.meta_json END,
   functions_json  = CASE WHEN excluded.parse_status = 'archived' THEN wasm.functions_json  ELSE excluded.functions_json END,
+  interface_version    = CASE WHEN excluded.parse_status = 'archived' THEN wasm.interface_version    ELSE excluded.interface_version END,
+  interface_prerelease = CASE WHEN excluded.parse_status = 'archived' THEN wasm.interface_prerelease ELSE excluded.interface_prerelease END,
   parse_error     = CASE WHEN excluded.parse_status = 'archived' AND wasm.parse_status <> 'archived' THEN wasm.parse_error ELSE excluded.parse_error END,
   parser_version  = CASE WHEN excluded.parse_status = 'archived' AND wasm.parse_status <> 'archived' THEN wasm.parser_version ELSE excluded.parser_version END,
   parse_status    = CASE WHEN excluded.parse_status = 'archived' AND wasm.parse_status <> 'archived' THEN wasm.parse_status ELSE excluded.parse_status END`,
 		w.Hash, nullInt(w.SizeBytes, w.ParseStatus != "archived"), nullLedger(w.FirstSeenLedger), w.HasMeta, w.HasSpec, w.SEPEntryCount,
-		nullStr(w.MetaJSON), nullStr(w.FunctionsJSON), w.ParseStatus, nullStr(w.ParseError), w.ParserVersion)
+		nullStr(w.MetaJSON), nullStr(w.FunctionsJSON), nullUint32(w.InterfaceVersion), nullUint32(w.InterfacePrerelease),
+		w.ParseStatus, nullStr(w.ParseError), w.ParserVersion)
 }
 
 // ClaimRow is one wasm_claims row.
@@ -374,6 +382,13 @@ func nullLedger(l uint32) any {
 		return nil
 	}
 	return int64(l)
+}
+
+func nullUint32(v *uint32) any {
+	if v == nil {
+		return nil
+	}
+	return int64(*v)
 }
 
 func nullInt(n int, valid bool) any {

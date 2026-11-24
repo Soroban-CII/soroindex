@@ -41,13 +41,44 @@ func TestInspectMatchesStoredEvidence(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := Evidence{Hash: stored.Hash, Meta: stored.Meta, Claims: stored.Claims, Anomalies: stored.Anomalies, Matches: stored.Matches,
-				ParseStatus: stored.ParseStatus, ParseError: stored.ParseError, ParserVersion: stored.ParserVersion}
+				ParseStatus: stored.ParseStatus, ParseError: stored.ParseError, ParserVersion: stored.ParserVersion,
+				InterfaceVersion: stored.InterfaceVersion, InterfacePrerelease: stored.InterfacePrerelease}
 			gotJSON, _ := json.Marshal(got)
 			wantJSON, _ := json.Marshal(want)
 			if !bytes.Equal(gotJSON, wantJSON) {
 				t.Fatalf("inspect drifted from the indexer\n got: %s\nwant: %s", gotJSON, wantJSON)
 			}
 		})
+	}
+}
+
+// TestAnalyzeRecordsInterfaceVersion checks that contractenvmetav0 is decoded
+// for the fixtures that have it, and that stripping it stores nothing rather
+// than protocol 0.
+func TestAnalyzeRecordsInterfaceVersion(t *testing.T) {
+	ix, _ := newIndexer(t, nil)
+	ctx := context.Background()
+
+	code, _ := wasmFixture(t, "token_full_sep.wasm")
+	withSection, err := ix.Inspect(ctx, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withSection.InterfaceVersion == nil || *withSection.InterfaceVersion != 28 {
+		t.Fatalf("interface version = %v, want 28", withSection.InterfaceVersion)
+	}
+
+	// A module with no sections at all is a valid Wasm and has no
+	// contractenvmetav0, which is the case that must stay NULL.
+	without, err := ix.Inspect(ctx, []byte{0x00, 'a', 's', 'm', 0x01, 0x00, 0x00, 0x00})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if without.InterfaceVersion != nil || without.InterfacePrerelease != nil {
+		t.Fatalf("stripped Wasm reported interface version %v / %v, want nil", without.InterfaceVersion, without.InterfacePrerelease)
+	}
+	if without.ParseStatus != ParseOK {
+		t.Fatalf("stripped Wasm parse status = %s (%v)", without.ParseStatus, without.ParseError)
 	}
 }
 

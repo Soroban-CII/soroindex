@@ -26,6 +26,9 @@ type Evidence struct {
 	ParseStatus   string              `json:"parse_status"`
 	ParseError    *string             `json:"parse_error"`
 	ParserVersion string              `json:"parser_version"`
+	// InterfaceVersion is from contractenvmetav0, as in store.WasmDetail.
+	InterfaceVersion    *uint32 `json:"interface_version"`
+	InterfacePrerelease *uint32 `json:"interface_prerelease"`
 }
 
 // Inspect analyzes code the way the indexer does and returns the rows it
@@ -40,7 +43,8 @@ func (ix *Indexer) Inspect(ctx context.Context, code []byte) (Evidence, error) {
 		return Evidence{}, err
 	}
 	e := Evidence{Hash: hash, Meta: json.RawMessage("null"), Claims: []store.WasmClaim{}, Anomalies: []store.WasmAnomaly{}, Matches: []store.WasmMatch{},
-		ParseStatus: a.wasm.ParseStatus, ParserVersion: a.wasm.ParserVersion}
+		ParseStatus: a.wasm.ParseStatus, ParserVersion: a.wasm.ParserVersion,
+		InterfaceVersion: a.wasm.InterfaceVersion, InterfacePrerelease: a.wasm.InterfacePrerelease}
 	if a.wasm.MetaJSON != "" {
 		if !json.Valid([]byte(a.wasm.MetaJSON)) {
 			return Evidence{}, errors.New("inspect: metadata did not encode as JSON")

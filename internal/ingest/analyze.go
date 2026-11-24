@@ -25,9 +25,12 @@ type WasmResult struct {
 	ParseError  string
 	HasMeta     bool
 	HasSpec     bool
-	Claims      sepmeta.SEPClaims
-	Functions   []sepmeta.FnSig // from the spec section; nil without one
-	Matches     []match.Result  // one per rule file, in rule order
+	// EnvMeta is the interface version from contractenvmetav0, or nil when
+	// the section is absent or unreadable.
+	EnvMeta   *sepmeta.EnvMeta
+	Claims    sepmeta.SEPClaims
+	Functions []sepmeta.FnSig // from the spec section; nil without one
+	Matches   []match.Result  // one per rule file, in rule order
 }
 
 // Analyze parses one Wasm and matches it against every rule file. Malformed
@@ -35,7 +38,7 @@ type WasmResult struct {
 // contract must not stop a census or a sync. It parses bytes only.
 func Analyze(hash string, code []byte, rules []match.RuleFile, m match.Matcher, lim sepmeta.Limits) WasmResult {
 	r := WasmResult{Hash: hash, Size: len(code), ParseStatus: ParseOK, Claims: sepmeta.ParseSEP47(nil, sepmeta.Lenient)}
-	secs, err := sepmeta.ReadCustomSections(code, []string{sepmeta.SectionMeta, sepmeta.SectionSpec}, lim)
+	secs, err := sepmeta.ReadCustomSections(code, []string{sepmeta.SectionMeta, sepmeta.SectionSpec, sepmeta.SectionEnvMeta}, lim)
 	if err != nil {
 		r.ParseStatus, r.ParseError = ParseError, err.Error()
 		for _, rf := range rules {
@@ -53,6 +56,13 @@ func Analyze(hash string, code []byte, rules []match.RuleFile, m match.Matcher, 
 		// Entries decoded before an error still count: the declaration is
 		// what the contract says, and the anomaly is recorded alongside.
 		r.Claims = sepmeta.ParseSEP47(entries, sepmeta.Lenient)
+	}
+	if env, ok := secs[sepmeta.SectionEnvMeta]; ok {
+		if em, err := sepmeta.DecodeEnvMeta(env, lim); err != nil {
+			errs = append(errs, err)
+		} else {
+			r.EnvMeta = &em
+		}
 	}
 	var fns []sepmeta.FnSig
 	if spec, ok := secs[sepmeta.SectionSpec]; ok {

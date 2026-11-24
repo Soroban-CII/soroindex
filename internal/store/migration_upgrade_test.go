@@ -36,7 +36,8 @@ var sampleRows = map[string][]map[string]any{
 	},
 	"wasm": {
 		{"hash": hex64("a"), "size_bytes": 2048, "first_seen_ledger": 10, "has_meta": 1, "has_spec": 1, "sep_entry_count": 2,
-			"meta_json": `[{"key":"sep","value":"41, 040"}]`, "parse_status": "ok", "parser_version": "1"},
+			"meta_json": `[{"key":"sep","value":"41, 040"}]`, "interface_version": 28, "interface_prerelease": 0,
+			"parse_status": "ok", "parser_version": "1"},
 		{"hash": hex64("b"), "size_bytes": 4096, "first_seen_ledger": 30, "has_meta": 1, "has_spec": 1, "sep_entry_count": 1,
 			"meta_json": `[{"key":"sep","value":"SEP-41"}]`, "parse_status": "partial", "parse_error": "truncated entry", "parser_version": "1"},
 		{"hash": hex64("c"), "size_bytes": 512, "first_seen_ledger": 7, "parse_status": "archived", "parser_version": "1"},
@@ -72,6 +73,10 @@ var sampleRows = map[string][]map[string]any{
 			"missing_json": "[]", "mismatched_json": `[{"fn":"transfer"}]`, "matched_variants_json": "{}", "computed_at": "2026-09-01T00:00:00Z"},
 		{"wasm_hash": hex64("d"), "sep": 41, "ruleset_version": "sep41-v0.5.2", "status": "no_spec", "ok_count": 0,
 			"missing_json": "[]", "mismatched_json": "[]", "matched_variants_json": "{}", "computed_at": "2026-10-07T00:00:00Z"},
+	},
+	"wasm_fetch_queue": {
+		{"hash": hex64("c"), "first_failed_at": "2026-10-07T00:00:00Z", "attempt_count": 2,
+			"next_retry_at": "2026-10-07T00:01:00Z", "last_error": "timeout"},
 	},
 	"verifications": {
 		{"contract_id": "CWASM", "wasm_hash": hex64("a"), "sep": 41, "tool": "soroban-guard", "tool_version": "0.4.2",

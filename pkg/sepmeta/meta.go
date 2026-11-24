@@ -15,8 +15,9 @@ const ParserVersion = "1"
 
 // Section names defined by SEP-46 (meta) and the Soroban spec format.
 const (
-	SectionMeta = "contractmetav0"
-	SectionSpec = "contractspecv0"
+	SectionMeta    = "contractmetav0"
+	SectionSpec    = "contractspecv0"
+	SectionEnvMeta = "contractenvmetav0"
 )
 
 // MetaEntry is one key/value pair from a contract's contractmetav0 section.
@@ -24,6 +25,31 @@ const (
 type MetaEntry struct {
 	Key   string
 	Value string
+}
+
+// EnvMeta is the interface version a contract was built against, from the
+// contractenvmetav0 section. It is informational: it says which protocol the
+// toolchain targeted, not what the contract does.
+type EnvMeta struct {
+	Protocol   uint32 `json:"protocol"`
+	PreRelease uint32 `json:"pre_release"`
+}
+
+// DecodeEnvMeta decodes a contractenvmetav0 payload: a back-to-back stream of
+// XDR SCEnvMetaEntry values. Only the interface-version entry is defined, so
+// a payload with no such entry is ErrMalformed rather than an empty version.
+// A trailing partial entry is reported as in DecodeMeta.
+func DecodeEnvMeta(section []byte, lim Limits) (EnvMeta, error) {
+	entries, err := decodeStream[xdr.ScEnvMetaEntry](section, lim)
+	if err != nil {
+		return EnvMeta{}, err
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		if v := entries[i].InterfaceVersion; v != nil {
+			return EnvMeta{Protocol: uint32(v.Protocol), PreRelease: uint32(v.PreRelease)}, nil
+		}
+	}
+	return EnvMeta{}, fmt.Errorf("contractenvmetav0: %w: no interface version entry", ErrMalformed)
 }
 
 // DecodeMeta decodes a contractmetav0 payload: a back-to-back stream of XDR
