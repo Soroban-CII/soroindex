@@ -1,3 +1,4 @@
+// Package main provides a mock RPC server responding to network and ledger queries for offline tests.
 package main
 
 import (
@@ -6,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
@@ -73,7 +75,12 @@ func main() {
 	})
 
 	log.Printf("Fake RPC server listening on %s", *addr)
-	if err := http.ListenAndServe(*addr, mux); err != nil {
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

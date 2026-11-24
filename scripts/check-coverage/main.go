@@ -1,3 +1,4 @@
+// Package main verifies code coverage against committed per-package thresholds.
 package main
 
 import (
@@ -7,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,7 +33,8 @@ func main() {
 }
 
 func run(profilePath, thresholdsPath string) error {
-	threshData, err := os.ReadFile(thresholdsPath)
+	cleanThresholds := filepath.Clean(thresholdsPath)
+	threshData, err := os.ReadFile(cleanThresholds) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("read thresholds %s: %w", thresholdsPath, err)
 	}
@@ -40,11 +43,12 @@ func run(profilePath, thresholdsPath string) error {
 		return fmt.Errorf("parse thresholds: %w", err)
 	}
 
-	f, err := os.Open(profilePath)
+	cleanProfile := filepath.Clean(profilePath)
+	f, err := os.Open(cleanProfile) // #nosec G304
 	if err != nil {
 		return fmt.Errorf("open profile %s: %w", profilePath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	pkgs := make(map[string]*pkgStats)
 	scanner := bufio.NewScanner(f)
@@ -147,7 +151,8 @@ func run(profilePath, thresholdsPath string) error {
 
 	if summaryFile != "" {
 		summaryLines = append(summaryLines, "", fmt.Sprintf("**Total coverage:** %d/%d (%.1f%%)", totalCovered, totalStmts, totalPct))
-		_ = os.WriteFile(summaryFile, []byte(strings.Join(summaryLines, "\n")+"\n"), 0644)
+		cleanSummary := filepath.Clean(summaryFile)
+		_ = os.WriteFile(cleanSummary, []byte(strings.Join(summaryLines, "\n")+"\n"), 0600) // #nosec G306
 	}
 
 	if len(failed) > 0 {
