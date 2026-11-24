@@ -97,7 +97,8 @@ func TestInspectOutputMatchesIndexedWasm(t *testing.T) {
 				t.Fatal(err)
 			}
 			want, _ := json.Marshal(ingest.Evidence{Hash: d.Hash, Meta: d.Meta, Claims: d.Claims, Anomalies: d.Anomalies, Matches: d.Matches,
-				ParseStatus: d.ParseStatus, ParseError: d.ParseError, ParserVersion: d.ParserVersion})
+				ParseStatus: d.ParseStatus, ParseError: d.ParseError, ParserVersion: d.ParserVersion,
+				InterfaceVersion: d.InterfaceVersion, InterfacePrerelease: d.InterfacePrerelease})
 			got, _ := json.Marshal(e)
 			if !bytes.Equal(compactJSON(t, got), compactJSON(t, want)) {
 				t.Fatalf("JSON drift\ninspect: %s\n   wasm: %s", got, want)

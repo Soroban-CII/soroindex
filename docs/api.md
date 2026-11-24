@@ -870,6 +870,8 @@ GET /v1/wasm/2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880
   "parse_status": "ok",
   "parse_error": null,
   "parser_version": "1",
+  "interface_version": 28,
+  "interface_prerelease": 0,
   "as_of_ledger": 5062910
 }
 ```

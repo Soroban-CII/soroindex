@@ -118,5 +118,5 @@ func writeInspect(w io.Writer, path string, e ingest.Evidence) error {
 	if _, err := fmt.Fprintf(w, "%s: %s (parser %s), local file %s, not indexed\n", e.Hash, e.ParseStatus, e.ParserVersion, path); err != nil {
 		return err
 	}
-	return writeEvidence(w, e.Meta, e.ParseError, e.Claims, e.Anomalies, e.Matches)
+	return writeEvidence(w, e.Meta, e.ParseError, e.InterfaceVersion, e.InterfacePrerelease, e.Claims, e.Anomalies, e.Matches)
 }

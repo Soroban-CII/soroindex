@@ -282,7 +282,7 @@ var planCases = []planCase{
 			return err
 		},
 		queries: []planQuery{
-			{match: `^SELECT meta_json,parse_status,parse_error,parser_version FROM wasm WHERE hash = \?$`, indexes: []string{idxWasmPK}},
+			{match: `^SELECT meta_json,parse_status,parse_error,parser_version,interface_version,interface_prerelease FROM wasm WHERE hash = \?$`, indexes: []string{idxWasmPK}},
 			lastLedgerQuery,
 			{match: `^SELECT sep,source,raw_token,anomaly FROM wasm_claims WHERE wasm_hash = \?`, indexes: []string{idxClaimsPK}},
 			{match: `^SELECT raw_token,anomaly FROM parse_anomalies WHERE wasm_hash = \?`, indexes: []string{idxAnomaliesPK}},

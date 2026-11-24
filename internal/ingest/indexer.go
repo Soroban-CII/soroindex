@@ -141,9 +141,16 @@ func (ix *Indexer) analyze(ctx context.Context, hash string, code []byte, seenLe
 		}
 		fnJSON = string(b)
 	}
+	var ifaceVersion, ifacePrerelease *uint32
+	if r.EnvMeta != nil {
+		v, p := r.EnvMeta.Protocol, r.EnvMeta.PreRelease
+		ifaceVersion, ifacePrerelease = &v, &p
+	}
 	a := analysis{wasm: store.WasmRow{
 		Hash: hash, SizeBytes: r.Size, FirstSeenLedger: seenLedger, HasMeta: r.HasMeta, HasSpec: r.HasSpec,
-		SEPEntryCount: r.Claims.EntryCount, MetaJSON: metaJSON, FunctionsJSON: fnJSON, ParseStatus: r.ParseStatus, ParseError: r.ParseError,
+		SEPEntryCount: r.Claims.EntryCount, MetaJSON: metaJSON, FunctionsJSON: fnJSON,
+		InterfaceVersion: ifaceVersion, InterfacePrerelease: ifacePrerelease,
+		ParseStatus: r.ParseStatus, ParseError: r.ParseError,
 		ParserVersion: sepmeta.ParserVersion,
 	}, claims: map[string][]store.ClaimRow{}}
 

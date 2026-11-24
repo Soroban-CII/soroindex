@@ -68,5 +68,7 @@
   "parse_status": "ok",
   "parse_error": null,
   "parser_version": "1",
+  "interface_version": 28,
+  "interface_prerelease": 0,
   "as_of_ledger": 5062910
 }
