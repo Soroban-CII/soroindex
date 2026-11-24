@@ -1,0 +1,82 @@
+name: fixtures
+
+on:
+  push:
+    paths:
+      - "testdata/contracts/**"
+      - ".github/workflows/fixtures.yml"
+  pull_request:
+    paths:
+      - "testdata/contracts/**"
+      - ".github/workflows/fixtures.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fixtures-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.4"
+  GOTOOLCHAIN: local
+  RUST_VERSION: "1.98.1"
+  RUST_TARGET: "wasm32v1-none"
+  STELLAR_CLI_VERSION: "28.0.0"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: install pinned rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup toolchain install "${RUST_VERSION}" --profile minimal --target "${RUST_TARGET}"
+          rustup default "${RUST_VERSION}"
+      - name: install pinned stellar-cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          curl -fsSL "$url" | tar -xz -C /usr/local/bin
+          stellar --version
+      - name: rebuild fixtures and verify reproduction
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./scripts/build-fixtures.sh
+
+          mismatches=0
+          while read -r expected file; do
+            file="${file#./}"
+            path="testdata/wasm/$file"
+            if [ ! -f "$path" ]; then
+              echo "MISSING: $file (expected $expected)"
+              mismatches=$((mismatches + 1))
+              continue
+            fi
+            actual="$(sha256sum "$path" | awk '{print $1}')"
+            if [ "$actual" != "$expected" ]; then
+              echo "MISMATCH: $file"
+              echo "  expected SHA-256: $expected"
+              echo "  actual SHA-256:   $actual"
+              mismatches=$((mismatches + 1))
+            fi
+          done < testdata/wasm/SHA256SUMS
+
+          if [ "$mismatches" -gt 0 ]; then
+            echo "Fixture verification failed: $mismatches mismatch(es) found" >&2
+            exit 1
+          fi
+
+          if ! git diff --exit-code testdata/wasm/; then
+            echo "Uncommitted changes or drift detected in testdata/wasm" >&2
+            exit 1
+          fi
+          echo "All golden Wasm fixtures reproduced identically."
