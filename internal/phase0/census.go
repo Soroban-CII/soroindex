@@ -29,6 +29,9 @@ type Contract struct {
 	// Unresolved is true for a wasm_ref whose reference entry is missing or
 	// archived. Such a contract claims nothing (CLAUDE.md §5.9).
 	Unresolved bool
+	// RefArchived is true for an Unresolved wasm_ref whose reference entry
+	// exists but is archived (TTL passed), as opposed to missing.
+	RefArchived bool
 	// Archived is true when the instance itself is missing or archived
 	// (testnet sample only; Hubble's current snapshot excludes deleted rows).
 	Archived bool
@@ -204,6 +207,7 @@ func ResolveRefs(ctx context.Context, c ingest.RPC, contracts []Contract, known 
 		}
 		need[ref] = k
 	}
+	archived := map[[2]string]bool{}
 	keyToRef := map[string][2]string{}
 	var keys []string
 	for ref, k := range need {
@@ -217,7 +221,10 @@ func ResolveRefs(ctx context.Context, c ingest.RPC, contracts []Contract, known 
 		}
 		for _, e := range res.Entries {
 			if e.LiveUntilLedgerSeq != nil && *e.LiveUntilLedgerSeq < res.LatestLedger {
-				continue // archived: stays unresolved
+				if ref, ok := keyToRef[e.Key]; ok {
+					archived[ref] = true // archived: stays unresolved, reported as archived
+				}
+				continue
 			}
 			data, err := ingest.DecodeLedgerEntryDataBase64(e.XDR, instanceLimits)
 			if err != nil || data.Type != xdr.LedgerEntryTypeContractData {
@@ -241,6 +248,7 @@ func ResolveRefs(ctx context.Context, c ingest.RPC, contracts []Contract, known 
 			ct.WasmHash = h
 		} else {
 			ct.Unresolved = true
+			ct.RefArchived = archived[[2]string{ct.RefOwner, ct.RefTag}]
 		}
 	}
 	return nil

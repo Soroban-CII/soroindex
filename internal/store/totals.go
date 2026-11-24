@@ -33,6 +33,13 @@ type Totals struct {
 	SEP41ByUsedHash                map[string]int // status -> used hashes
 	GapContracts                   int            // SEP-41 match and declares nothing
 	GapUsedHashes                  int
+	// CAP-85 references named by live wasm_ref contracts, and their owners.
+	WasmRefOwners, WasmRefDistinctRefs int
+	// References named by a live wasm_ref contract that resolve to no
+	// hash: the entry is missing or archived. The store does not keep the
+	// two apart (a missing entry is recorded as archived), so phase0's
+	// missing and archived counts are compared as one sum.
+	WasmRefUnresolvedRefs int
 }
 
 // Totals computes the numbers for one ruleset version of SEP-41. With
@@ -70,6 +77,9 @@ func totals(ctx context.Context, db reader, sep41Ruleset string, countArchivedIn
 		{&t.LiveWasm, `SELECT count(*) FROM contracts c WHERE ` + live + ` AND kind = 'wasm'`, nil},
 		{&t.LiveWasmRef, `SELECT count(*) FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref'`, nil},
 		{&t.WasmRefUnresolved, `SELECT count(*) FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref' AND current_wasm_hash IS NULL`, nil},
+		{&t.WasmRefOwners, `SELECT count(DISTINCT exec_ref_owner) FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref'`, nil},
+		{&t.WasmRefDistinctRefs, `SELECT count(*) FROM (SELECT DISTINCT exec_ref_owner, exec_ref_tag FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref')`, nil},
+		{&t.WasmRefUnresolvedRefs, `SELECT count(*) FROM (SELECT DISTINCT exec_ref_owner, exec_ref_tag FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref' AND current_wasm_hash IS NULL)`, nil},
 		{&t.MeasuredContracts, `SELECT count(*) FROM (` + measured + `)`, nil},
 		{&t.UsedHashes, `SELECT count(DISTINCT h) FROM (` + measured + `)`, nil},
 		{&t.DeclaringContracts, `SELECT count(*) FROM (` + measured + `) m WHERE ` + declares, nil},

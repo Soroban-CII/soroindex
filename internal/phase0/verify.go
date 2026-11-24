@@ -34,6 +34,9 @@ func Verify(s Summary, t store.Totals) []Check {
 		{"live wasm contracts", s.Contracts.Wasm, t.LiveWasm},
 		{"live wasm_ref contracts", s.Contracts.WasmRef, t.LiveWasmRef},
 		{"unresolved wasm_ref", s.Contracts.WasmRefUnresolved, t.WasmRefUnresolved},
+		{"wasm_ref owner contracts", execRefs(s).Owners, t.WasmRefOwners},
+		{"wasm_ref distinct references", s.Contracts.WasmRefDistinct, t.WasmRefDistinctRefs},
+		{"wasm_ref references unresolved", execRefs(s).Missing + execRefs(s).Archived, t.WasmRefUnresolvedRefs},
 		{"measured contracts", s.Contracts.Measured, t.MeasuredContracts},
 		{"hashes run by a measured contract", s.Hashes.UsedByContract, t.UsedHashes},
 		{"contracts declaring any SEP", s.DeclaresAny.ByContract.N, t.DeclaringContracts},
@@ -47,6 +50,13 @@ func Verify(s Summary, t store.Totals) []Check {
 			Check{"SEP-41 " + st + ", used hashes", s.UsedHashes.SEP41[st], t.SEP41ByUsedHash[st]})
 	}
 	return out
+}
+
+func execRefs(s Summary) ExecRefReport {
+	if s.ExecRefs == nil {
+		return ExecRefReport{}
+	}
+	return *s.ExecRefs
 }
 
 // PrintChecks writes the comparison as a table and reports whether every
