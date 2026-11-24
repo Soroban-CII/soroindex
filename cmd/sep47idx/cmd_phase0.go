@@ -51,6 +51,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	archivalDB := flags.String("record-instance-archival", "", "record instance archival measured in a database seeded from <network>-contracts.csv into the summary, then rebuild ADOPTION.md")
 	renderOnly := flags.Bool("render-only", false, "only rebuild <out>/ADOPTION.md from the *-summary.json files already there")
 	threshold := flags.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold: share of required functions for \"partial\"")
+	topHashes := flags.Int("top-hashes", phase0.DefaultTopHashes, "rank this many Wasm hashes by contract count in ADOPTION.md, 1..100")
 	if err := flags.Parse(args); err != nil {
 		return exitError
 	}
@@ -76,8 +77,8 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
 		return exitError
 	}
-	if *threshold <= 0 || *threshold > 1 || *pageSize < 1 || *pageSize > rpc.MaxLedgersLimit {
-		errorf(stderr, "sep47idx phase0: --partial-threshold must be in (0,1] and --page-size in 1..%d\n", rpc.MaxLedgersLimit)
+	if *threshold <= 0 || *threshold > 1 || *pageSize < 1 || *pageSize > rpc.MaxLedgersLimit || *topHashes < 1 || *topHashes > 100 {
+		errorf(stderr, "sep47idx phase0: --partial-threshold must be in (0,1], --page-size in 1..%d, and --top-hashes in 1..100\n", rpc.MaxLedgersLimit)
 		return exitError
 	}
 
@@ -112,7 +113,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	}
 
 	opts := phase0.Options{Rules: ruleFiles, Matcher: match.Matcher{PartialThreshold: *threshold},
-		Limits: sepmeta.DefaultLimits(), Log: log, Now: time.Now}
+		Limits: sepmeta.DefaultLimits(), TopHashes: *topHashes, Log: log, Now: time.Now}
 	var res phase0.Result
 	switch cfg.Network.Name {
 	case config.Mainnet.Name:

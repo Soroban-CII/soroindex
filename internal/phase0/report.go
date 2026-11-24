@@ -21,6 +21,10 @@ type Rate struct {
 	Pct float64 `json:"pct"`
 }
 
+// DefaultTopHashes is how many factory hashes the report ranks when the
+// operator does not choose a count.
+const DefaultTopHashes = 10
+
 func rate(n, of int) Rate {
 	r := Rate{N: n, Of: of}
 	if of > 0 {
@@ -69,6 +73,20 @@ type AnomalyCount struct {
 	Examples []string `json:"examples"` // up to 3 "raw token" (hash prefix)
 }
 
+// TopHash is one Wasm hash ranked by the number of live measured contracts
+// running it. Factories deploy one hash many times, which is why the top of
+// this list can hold most contracts while declaring almost nothing; the
+// report shows the hashes, never an off-chain project name.
+type TopHash struct {
+	Hash           string  `json:"hash"`
+	Contracts      int     `json:"contracts"`
+	SharePct       float64 `json:"share_pct_of_contracts"`
+	DeclaredSEPs   []int   `json:"declared_seps"`
+	SEP41Status    string  `json:"sep41_status"`
+	SEP41OKCount   int     `json:"sep41_ok_count"`
+	RulesetVersion string  `json:"ruleset_version"`
+}
+
 // Summary is the machine-readable Phase 0 result for one network. Stage D
 // checks the stored totals against it.
 type Summary struct {
@@ -115,6 +133,12 @@ type Summary struct {
 	PerSEP    []SEPCount     `json:"per_sep"`
 	Anomalies []AnomalyCount `json:"anomalies"`
 
+	// TopHashes ranks measured hashes by live contract count. TopHashesLimit
+	// is 0 in summaries written before the field existed; rendering then
+	// derives the section from <network>-raw.csv instead.
+	TopHashes      []TopHash `json:"top_hashes"`
+	TopHashesLimit int       `json:"top_hashes_limit,omitempty"`
+
 	SEP41 struct {
 		Status        map[string]Pair `json:"status"`         // match/partial/mismatch/no_spec
 		OKHistogram   []int           `json:"ok_histogram"`   // by hash; index = OK count
@@ -150,7 +174,7 @@ type InstanceArchival struct {
 }
 
 // Summarize computes the report numbers for a census and its analyzed Wasm.
-func Summarize(c Census, results map[string]ingest.WasmResult, population []string, rules []match.RuleFile, lim sepmeta.Limits, generatedAt string) Summary {
+func Summarize(c Census, results map[string]ingest.WasmResult, population []string, rules []match.RuleFile, lim sepmeta.Limits, topN int, generatedAt string) Summary {
 	var s Summary
 	s.Network, s.GeneratedAt, s.LatestLedger, s.Method, s.Limits = c.Network, generatedAt, c.LatestLedger, c.Method, lim
 	s.ParserVersion = sepmeta.ParserVersion
@@ -187,6 +211,11 @@ func Summarize(c Census, results map[string]ingest.WasmResult, population []stri
 		}
 	}
 	s.Contracts.WasmRefDistinct = len(refs)
+
+	// Top hashes by live measured contract count. Built after the loop so
+	// the share denominator is final.
+	s.TopHashesLimit = topN
+	s.TopHashes = topHashes(contractsByHash, results, s.Contracts.Measured, topN)
 
 	// Hashes.
 	s.Hashes.CodeEntries = len(c.CodeHashes)
@@ -430,6 +459,107 @@ func WriteContractsCSV(w io.Writer, c Census) error {
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+// topHashes ranks measured hashes by contract count, breaking ties by hash
+// so two runs over the same data produce the same order. Hashes no contract
+// runs are omitted: a factory is a many-contract hash, not a dead code entry.
+func topHashes(contractsByHash map[string]int, results map[string]ingest.WasmResult, measured, n int) []TopHash {
+	out := make([]TopHash, 0, len(contractsByHash))
+	for h, count := range contractsByHash {
+		if count == 0 {
+			continue
+		}
+		r := results[h]
+		t := TopHash{Hash: h, Contracts: count, DeclaredSEPs: []int{}, SEP41Status: "not_measured"}
+		if measured > 0 {
+			t.SharePct = 100 * float64(count) / float64(measured)
+		}
+		for _, sep := range r.Claims.SEPs {
+			t.DeclaredSEPs = append(t.DeclaredSEPs, sep)
+		}
+		sort.Ints(t.DeclaredSEPs)
+		if m, ok := r.MatchFor(41); ok {
+			t.SEP41Status = string(m.Status)
+			t.SEP41OKCount = m.OKCount
+			t.RulesetVersion = m.RulesetVersion
+		}
+		out = append(out, t)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Contracts != out[j].Contracts {
+			return out[i].Contracts > out[j].Contracts
+		}
+		return out[i].Hash < out[j].Hash
+	})
+	if n >= 0 && len(out) > n {
+		out = out[:n]
+	}
+	return out
+}
+
+// TopHashesFromCSV derives the same ranking from a committed
+// <network>-raw.csv, for summaries written before Summary.TopHashes existed.
+// Archived code is skipped: its contracts were never measured.
+func TopHashesFromCSV(r io.Reader, measured, n int) ([]TopHash, error) {
+	cr := csv.NewReader(r)
+	header, err := cr.Read()
+	if err != nil {
+		return nil, fmt.Errorf("raw csv header: %w", err)
+	}
+	cols := map[string]int{}
+	for i, h := range header {
+		cols[strings.TrimSpace(h)] = i
+	}
+	for _, name := range []string{"wasm_hash", "contracts", "parse_status", "seps", "sep41_status", "sep41_ok_count", "ruleset_version"} {
+		if _, ok := cols[name]; !ok {
+			return nil, fmt.Errorf("raw csv missing column %q", name)
+		}
+	}
+	byHash := map[string]int{}
+	results := map[string]ingest.WasmResult{}
+	for line := 2; ; line++ {
+		rec, err := cr.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("raw csv line %d: %w", line, err)
+		}
+		h := strings.TrimSpace(rec[cols["wasm_hash"]])
+		if _, err := ingest.ParseWasmHash(h); err != nil {
+			return nil, fmt.Errorf("raw csv line %d: %w", line, err)
+		}
+		status := strings.TrimSpace(rec[cols["parse_status"]])
+		if status == ingest.ParseArchived {
+			continue
+		}
+		count, err := strconv.Atoi(strings.TrimSpace(rec[cols["contracts"]]))
+		if err != nil || count < 0 {
+			return nil, fmt.Errorf("raw csv line %d: contracts %q: %w", line, rec[cols["contracts"]], err)
+		}
+		r := ingest.WasmResult{Hash: h, ParseStatus: status, Claims: sepmeta.ParseSEP47(nil, sepmeta.Lenient)}
+		if cell := strings.TrimSpace(rec[cols["seps"]]); cell != "" {
+			for _, tok := range strings.Split(cell, ";") {
+				sep, err := strconv.Atoi(strings.TrimSpace(tok))
+				if err != nil {
+					return nil, fmt.Errorf("raw csv line %d: seps %q: %w", line, cell, err)
+				}
+				r.Claims.SEPs = append(r.Claims.SEPs, sep)
+			}
+		}
+		okCount, err := strconv.Atoi(strings.TrimSpace(rec[cols["sep41_ok_count"]]))
+		if err != nil {
+			return nil, fmt.Errorf("raw csv line %d: sep41_ok_count: %w", line, err)
+		}
+		st := strings.TrimSpace(rec[cols["sep41_status"]])
+		if st != "" {
+			r.Matches = []match.Result{{SEP: 41, Status: match.Status(st), OKCount: okCount, RulesetVersion: strings.TrimSpace(rec[cols["ruleset_version"]])}}
+		}
+		byHash[h] = count
+		results[h] = r
+	}
+	return topHashes(byHash, results, measured, n), nil
 }
 
 // ContractsByHash counts measured contracts per resolved Wasm hash.

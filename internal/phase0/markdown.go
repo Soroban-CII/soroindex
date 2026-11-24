@@ -79,6 +79,34 @@ func RenderAdoption(sums []Summary) string {
 			p("\n")
 		}
 
+		p("### Top Wasm hashes by contract count\n\n")
+		p("A factory that deploys one code hash many times contributes one hash to the by-hash rate and every contract to the by-contract rate, which is why those two rates can differ by orders of magnitude. This list shows where that concentration sits.\n\n")
+		switch {
+		case s.TopHashesLimit == 0:
+			p("Not recorded for this run: no per-hash ranking is stored in the summary and no `%s-raw.csv` was found beside it.\n\n", s.Network)
+		case len(s.TopHashes) == 0:
+			p("No live measured contract runs a fetched Wasm hash.\n\n")
+		default:
+			p("Top %d of %d hashes by live measured contracts:\n\n", len(s.TopHashes), s.Hashes.Measured)
+			p("| Wasm hash | Contracts | Share of measured contracts | Declared SEPs | SEP-41 interface |\n| --- | ---: | ---: | --- | --- |\n")
+			for _, t := range s.TopHashes {
+				seps := "none"
+				if len(t.DeclaredSEPs) > 0 {
+					parts := make([]string, len(t.DeclaredSEPs))
+					for i, sep := range t.DeclaredSEPs {
+						parts[i] = fmt.Sprint(sep)
+					}
+					seps = strings.Join(parts, ", ")
+				}
+				status := "`" + t.SEP41Status + "`"
+				if t.RulesetVersion != "" {
+					status += " (" + t.RulesetVersion + ")"
+				}
+				p("| `%s` | %d | %.2f%% | %s | %s |\n", t.Hash, t.Contracts, t.SharePct, seps, status)
+			}
+			p("\nRows identify code by hash only; the index stores no off-chain project name.\n\n")
+		}
+
 		p("### Anomalies in `sep` values\n\n")
 		if len(s.Anomalies) == 0 {
 			p("None found.\n\n")

@@ -64,7 +64,9 @@ SEP-41 match, contracts                     100        100  ok
 ...
 ```
 
-Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mainnet, CAP-85 references); `--partial-threshold`; `--rules <dir>`; `--render-only`; `--record-instance-archival <db>`.
+Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mainnet, CAP-85 references); `--partial-threshold`; `--top-hashes <n>` (1..100, default 10); `--rules <dir>`; `--render-only`; `--record-instance-archival <db>`.
+
+`ADOPTION.md` ranks the `--top-hashes` Wasm hashes that the most live measured contracts run, with their declared SEPs, SEP-41 interface status and share of measured contracts. One factory hash carried 125,628 of mainnet's 141,977 measured contracts (88.48%) on 7 October 2026, which is the gap between the by-hash and by-contract declaration rates. Rows name code by hash only; the index stores no off-chain project name. For a summary written before the ranking was stored, `--render-only` derives it from the committed `<network>-raw.csv`.
 
 If testnet retention advances during sampling, the command confirms the new
 bounds with a fresh successful RPC probe and retries up to three times per

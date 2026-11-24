@@ -56,6 +56,27 @@ Factory deployments make many contracts share one hash, so the two columns can d
 | 40 | 2 | 2 |
 | 41 | 11 | 14 |
 
+### Top Wasm hashes by contract count
+
+A factory that deploys one code hash many times contributes one hash to the by-hash rate and every contract to the by-contract rate, which is why those two rates can differ by orders of magnitude. This list shows where that concentration sits.
+
+Top 10 of 2178 hashes by live measured contracts:
+
+| Wasm hash | Contracts | Share of measured contracts | Declared SEPs | SEP-41 interface |
+| --- | ---: | ---: | --- | --- |
+| `07097f83dae3b746db7dba3263d9cc334efb88a9a7d5450fb96ca19f33d284b0` | 125628 | 88.48% | none | `mismatch` (sep41-v0.5.2) |
+| `ecd990f0b45ca6817149b6175f79b32efb442f35731985a084131e8265c4cd90` | 4575 | 3.22% | none | `mismatch` (sep41-v0.5.2) |
+| `f340242d143b42e273f628f44ccb907f55f5beb256f3de17de2c005fcdbc9783` | 1324 | 0.93% | none | `mismatch` (sep41-v0.5.2) |
+| `72ae9a04124c9cdab25ecd7a58a7b7be28ecd8791dd02fefbaddfd06f521299f` | 1134 | 0.80% | none | `mismatch` (sep41-v0.5.2) |
+| `0c0a264d4cc0b3e79b8533e2a2e1f0ed21501a5a3f9f2455d2f18c232940b865` | 809 | 0.57% | none | `mismatch` (sep41-v0.5.2) |
+| `b62f62217ff256d557513793e9e44317b25b14401a8a6b6149a04d38d72d6c7c` | 774 | 0.55% | none | `mismatch` (sep41-v0.5.2) |
+| `bfab576fb405952fdeb0c502e3f662668601f3b63111bcf034c240cea4b6240d` | 655 | 0.46% | none | `mismatch` (sep41-v0.5.2) |
+| `1b5f4534a76322da2ad7c745f6900857a6802b0ca79850c35a03561df997785a` | 625 | 0.44% | none | `mismatch` (sep41-v0.5.2) |
+| `72eb5d52c532e78ccc6c8a7f8523c458e03764074717172f69c2539e754ce624` | 390 | 0.27% | none | `match` (sep41-v0.5.2) |
+| `76d2ba826c1b5a7b6cc0aaebe058cc3ffc373c2171f90d63ebb7481a28f577bd` | 347 | 0.24% | none | `mismatch` (sep41-v0.5.2) |
+
+Rows identify code by hash only; the index stores no off-chain project name.
+
 ### Anomalies in `sep` values
 
 None found.
@@ -127,6 +148,27 @@ Run: 2026-10-07T06:37:37Z, latest ledger 5066292. Parser version 1; rules sep41-
 Factory deployments make many contracts share one hash, so the two columns can differ a lot.
 
 No SEP number is declared.
+
+### Top Wasm hashes by contract count
+
+A factory that deploys one code hash many times contributes one hash to the by-hash rate and every contract to the by-contract rate, which is why those two rates can differ by orders of magnitude. This list shows where that concentration sits.
+
+Top 10 of 479 hashes by live measured contracts:
+
+| Wasm hash | Contracts | Share of measured contracts | Declared SEPs | SEP-41 interface |
+| --- | ---: | ---: | --- | --- |
+| `bfab576fb405952fdeb0c502e3f662668601f3b63111bcf034c240cea4b6240d` | 109 | 6.14% | none | `mismatch` (sep41-v0.5.2) |
+| `1b5f4534a76322da2ad7c745f6900857a6802b0ca79850c35a03561df997785a` | 108 | 6.08% | none | `mismatch` (sep41-v0.5.2) |
+| `80e1c946c3fd5f01855d892505b203e2effc63e1903e22a2a083b947b063f303` | 81 | 4.56% | none | `partial` (sep41-v0.5.2) |
+| `5bc710da20f401665f0b48ceb008c4cd313c933dbb4aeb7b54d2aacd5646e286` | 72 | 4.06% | none | `mismatch` (sep41-v0.5.2) |
+| `8e9f12ca88aa575eaa28fd959f124eeceb636a3bf28d053254ae1a3ed3f60b3d` | 50 | 2.82% | none | `partial` (sep41-v0.5.2) |
+| `935e0088054291bb14a30e844e0692feae69f133274f0b4335be7f2704ea9ea6` | 45 | 2.54% | none | `mismatch` (sep41-v0.5.2) |
+| `4c14f402df29675d4155283698c436ee588aacb39adc313845010a565c07567d` | 38 | 2.14% | none | `mismatch` (sep41-v0.5.2) |
+| `3a908af06b7746bc22cddf3e5ada6ccc369af95df26eca8ed35a653548ea700c` | 36 | 2.03% | none | `mismatch` (sep41-v0.5.2) |
+| `3c45e1ab9e0d3f166c21aef8fa05aba88d5258d9698b38e73c705710130d6175` | 36 | 2.03% | none | `match` (sep41-v0.5.2) |
+| `c1a650506f7c20c8f4d16aae73f894f302cd011d7ef33adef572f20b34f7653e` | 35 | 1.97% | none | `mismatch` (sep41-v0.5.2) |
+
+Rows identify code by hash only; the index stores no off-chain project name.
 
 ### Anomalies in `sep` values
 
