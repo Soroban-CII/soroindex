@@ -14,5 +14,27 @@
     {"fn": "name",          "inputs": [],                                                 "output": ["String"]},
     {"fn": "symbol",        "inputs": [],                                                 "output": ["String"]}
   ],
-  "optional": []
+  "optional": [],
+  "events": [
+    {
+      "name": "burn",
+      "topics": [["Address"]],
+      "data": [["i128"]]
+    },
+    {
+      "name": "mint",
+      "topics": [["Address"]],
+      "data": [["Option<u64>", "i128"], ["i128"]]
+    },
+    {
+      "name": "approve",
+      "topics": [["Address"], ["Address"]],
+      "data": [["i128"], ["u32"]]
+    },
+    {
+      "name": "transfer",
+      "topics": [["Address"], ["Address"]],
+      "data": [["Option<u64>", "i128"], ["i128"]]
+    }
+  ]
 }

@@ -49,6 +49,88 @@ func fixtureFns(t *testing.T, name string) ([]sepmeta.FnSig, bool) {
 	return sepmeta.Functions(spec), true
 }
 
+func fixtureEvents(t *testing.T, name string) ([]sepmeta.EventSig, bool) {
+	t.Helper()
+	w, err := fs.ReadFile(os.DirFS("../../testdata/wasm"), name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secs, err := sepmeta.ReadCustomSections(w, []string{sepmeta.SectionSpec}, sepmeta.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, ok := secs[sepmeta.SectionSpec]
+	if !ok {
+		return nil, false
+	}
+	spec, err := sepmeta.DecodeSpec(s, sepmeta.DefaultLimits())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sepmeta.Events(spec), true
+}
+
+func TestMatchEventsFixtures(t *testing.T) {
+	r := sep41(t)
+	m := Matcher{}
+
+	t.Run("token_full_sep.wasm has all required events", func(t *testing.T) {
+		events, ok := fixtureEvents(t, "token_full_sep.wasm")
+		if !ok {
+			t.Fatal("no spec")
+		}
+		res := m.MatchEvents(events, r)
+		if res == nil {
+			t.Fatal("expected non-nil event result")
+		}
+		if res.Status != StatusMatch || res.OKCount != 4 || len(res.Missing) != 0 || len(res.Mismatched) != 0 {
+			t.Fatalf("got status=%v ok=%d missing=%v mismatched=%v", res.Status, res.OKCount, res.Missing, res.Mismatched)
+		}
+	})
+
+	t.Run("token_partial.wasm has missing event", func(t *testing.T) {
+		events, ok := fixtureEvents(t, "token_partial.wasm")
+		if !ok {
+			t.Fatal("no spec")
+		}
+		res := m.MatchEvents(events, r)
+		if res == nil {
+			t.Fatal("expected non-nil event result")
+		}
+		if res.Status != StatusPartial || res.OKCount != 3 {
+			t.Fatalf("got status=%v ok=%d", res.Status, res.OKCount)
+		}
+		if len(res.Missing) != 1 || res.Missing[0] != "burn" {
+			t.Fatalf("expected missing [burn], got %v", res.Missing)
+		}
+	})
+
+	t.Run("nft_sep50.wasm has mismatched event types", func(t *testing.T) {
+		events, ok := fixtureEvents(t, "nft_sep50.wasm")
+		if !ok {
+			t.Fatal("no spec")
+		}
+		res := m.MatchEvents(events, r)
+		if res == nil {
+			t.Fatal("expected non-nil event result")
+		}
+		if len(res.Mismatched) == 0 {
+			t.Fatal("expected mismatched events for nft_sep50 against sep41")
+		}
+		foundTransferMismatch := false
+		for _, mm := range res.Mismatched {
+			if mm.Name == "transfer" && mm.Reason == "types" {
+				foundTransferMismatch = true
+				break
+			}
+		}
+		if !foundTransferMismatch {
+			t.Fatalf("expected transfer mismatch with reason types, got %v", res.Mismatched)
+		}
+	})
+}
+
+
 func TestMatchFixtures(t *testing.T) {
 	r := sep41(t)
 	tests := []struct {
@@ -391,6 +473,10 @@ func TestParseRuleFileRejects(t *testing.T) {
 		{"two outputs", strings.Replace(good, `"output":[]`, `"output":["u32","u32"]`, 1)},
 		{"missing inputs", strings.Replace(good, `"inputs":[["u32"]],`, ``, 1)},
 		{"duplicate function", strings.Replace(good, `"optional":[]`, `"optional":[{"fn":"x","inputs":[],"output":[]}]`, 1)},
+		{"bad event name", strings.Replace(good, `"optional":[]`, `"optional":[],"events":[{"name":"bad event!","topics":[],"data":[]}]`, 1)},
+		{"duplicate event", strings.Replace(good, `"optional":[]`, `"optional":[],"events":[{"name":"ev","topics":[],"data":[]},{"name":"ev","topics":[],"data":[]}]`, 1)},
+		{"event topic accepting nothing", strings.Replace(good, `"optional":[]`, `"optional":[],"events":[{"name":"ev","topics":[[]],"data":[]}]`, 1)},
+		{"event data invalid type", strings.Replace(good, `"optional":[]`, `"optional":[],"events":[{"name":"ev","topics":[],"data":[["bad type!"]]}]`, 1)},
 	}
 	if _, err := ParseRuleFile([]byte(good)); err != nil {
 		t.Fatalf("baseline rule rejected: %v", err)

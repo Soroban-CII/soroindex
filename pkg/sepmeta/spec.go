@@ -48,6 +48,72 @@ func Functions(spec []xdr.ScSpecEntry) []FnSig {
 	return out
 }
 
+type EventParam struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Location string `json:"location"`
+}
+
+type EventSig struct {
+	Name         string       `json:"name"`
+	PrefixTopics []string     `json:"prefix_topics"`
+	Params       []EventParam `json:"params"`
+	Format       string       `json:"format"`
+	Topics       []string     `json:"topics"`
+	Data         []string     `json:"data"`
+}
+
+func formatName(f xdr.ScSpecEventDataFormat) string {
+	switch f {
+	case xdr.ScSpecEventDataFormatScSpecEventDataFormatSingleValue:
+		return "single-value"
+	case xdr.ScSpecEventDataFormatScSpecEventDataFormatVec:
+		return "vec"
+	case xdr.ScSpecEventDataFormatScSpecEventDataFormatMap:
+		return "map"
+	default:
+		return "unknown:" + strconv.Itoa(int(f))
+	}
+}
+
+func Events(spec []xdr.ScSpecEntry) []EventSig {
+	var out []EventSig
+	for _, e := range spec {
+		if e.Kind != xdr.ScSpecEntryKindScSpecEntryEventV0 || e.EventV0 == nil {
+			continue
+		}
+		ev := e.EventV0
+		sig := EventSig{
+			Name:         ev.Name,
+			PrefixTopics: make([]string, 0, len(ev.PrefixTopics)),
+			Params:       make([]EventParam, 0, len(ev.Params)),
+			Format:       formatName(ev.DataFormat),
+			Topics:       []string{},
+			Data:         []string{},
+		}
+		for _, pt := range ev.PrefixTopics {
+			sig.PrefixTopics = append(sig.PrefixTopics, string(pt))
+		}
+		for _, p := range ev.Params {
+			tName := TypeName(p.Type)
+			loc := "data"
+			if p.Location == xdr.ScSpecEventParamLocationV0ScSpecEventParamLocationTopicList {
+				loc = "topic"
+				sig.Topics = append(sig.Topics, tName)
+			} else {
+				sig.Data = append(sig.Data, tName)
+			}
+			sig.Params = append(sig.Params, EventParam{
+				Name:     p.Name,
+				Type:     tName,
+				Location: loc,
+			})
+		}
+		out = append(out, sig)
+	}
+	return out
+}
+
 // scalarNames maps every non-parameterized spec type to its canonical name.
 // The names follow the Rust SDK's spelling, which is what SEP documents use.
 var scalarNames = map[xdr.ScSpecType]string{

@@ -133,6 +133,7 @@ func FuzzDecodeSpec(f *testing.F) {
 		if err2 != nil || !reflect.DeepEqual(Functions(again), fns) {
 			t.Fatalf("round trip changed functions (%v)", err2)
 		}
+		_ = Events(spec)
 	})
 }
 

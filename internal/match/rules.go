@@ -21,17 +21,21 @@ var ErrInvalidRules = errors.New("invalid rule file")
 
 // RuleFile is one SEP's interface rules (rules/sep-NNNN.json).
 type RuleFile struct {
-	SEP            int      `json:"sep"`
-	RulesetVersion string   `json:"ruleset_version"`
-	Source         string   `json:"source"`
-	Required       []FnRule `json:"required"`
-	Optional       []FnRule `json:"optional"`
-	Requires       []int    `json:"requires"` // other SEP numbers this SEP requires to match
+	SEP            int         `json:"sep"`
+	RulesetVersion string      `json:"ruleset_version"`
+	Source         string      `json:"source"`
+	Required       []FnRule    `json:"required"`
+	Optional       []FnRule    `json:"optional"`
+	Events         []EventRule `json:"events,omitempty"`
+	Requires       []int       `json:"requires,omitempty"`
 }
 
-// FnRule describes one function. Inputs has one element per parameter, each
-// listing the types accepted at that position; Output is empty for a
-// function that returns nothing.
+type EventRule struct {
+	Name   string     `json:"name"`
+	Topics [][]string `json:"topics"`
+	Data   [][]string `json:"data"`
+}
+
 type FnRule struct {
 	Fn     string     `json:"fn"`
 	Inputs [][]string `json:"inputs"`
@@ -111,6 +115,43 @@ func (r RuleFile) validate() error {
 		for _, t := range f.Output {
 			if !typeRe.MatchString(t) {
 				return fmt.Errorf("%s: output type %q invalid", f.Fn, t)
+			}
+		}
+	}
+	seenEvents := map[string]bool{}
+	for _, ev := range r.Events {
+		if !fnNameRe.MatchString(ev.Name) {
+			return fmt.Errorf("event name %q invalid", ev.Name)
+		}
+		if seenEvents[ev.Name] {
+			return fmt.Errorf("event %q listed twice", ev.Name)
+		}
+		seenEvents[ev.Name] = true
+		if ev.Topics == nil || ev.Data == nil {
+			return fmt.Errorf("event %s: topics and data must be present", ev.Name)
+		}
+		for i, alts := range ev.Topics {
+			if len(alts) == 0 {
+				return fmt.Errorf("event %s: topic %d accepts no type", ev.Name, i)
+			}
+			dup := map[string]bool{}
+			for _, t := range alts {
+				if !typeRe.MatchString(t) || dup[t] {
+					return fmt.Errorf("event %s: topic %d type %q invalid or repeated", ev.Name, i, t)
+				}
+				dup[t] = true
+			}
+		}
+		for i, alts := range ev.Data {
+			if len(alts) == 0 {
+				return fmt.Errorf("event %s: data %d accepts no type", ev.Name, i)
+			}
+			dup := map[string]bool{}
+			for _, t := range alts {
+				if !typeRe.MatchString(t) || dup[t] {
+					return fmt.Errorf("event %s: data %d type %q invalid or repeated", ev.Name, i, t)
+				}
+				dup[t] = true
 			}
 		}
 	}
