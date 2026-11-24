@@ -34,6 +34,29 @@ commands:
 | `--rpc-timeout` | `30s` | Timeout per RPC attempt. |
 | `--rpc-concurrency` | `4` | RPC requests in flight. |
 
+## Errors and exit codes
+
+Every failure has a stable code. In text mode a command prints
+`sep47idx <command>: <message>`; with `--json` (or `SEP47IDX_JSON=true`) it
+writes one JSON line to stderr instead, in the same shape the API uses:
+
+```text
+$ sep47idx gap --sep 0 --json
+{"error":{"code":"bad_request","message":"unexpected argument, invalid SEP or limit (want 1..500)"}}
+$ echo $?
+1
+$ sep47idx gap --sep 50 --json
+{"error":{"code":"not_found","message":"no rule file for SEP-50, so no interface can be inferred"}}
+$ echo $?
+2
+```
+
+Exit status is 0 on success, 1 on error and 2 when the requested object does
+not exist. The full list of codes, the sentinel each maps from, and the exit
+status is the [CLI error catalog](errors.md). It is generated from
+`internal/clierr` by `scripts/gen-error-catalog.sh`, and a test fails when the
+committed page is stale.
+
 ## phase0
 
 Measures adoption across a network and writes `report/ADOPTION.md`, `<network>-summary.json`, `<network>-raw.csv` and `<network>-contracts.csv`.
@@ -64,7 +87,11 @@ SEP-41 match, contracts                     100        100  ok
 ...
 ```
 
-Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mainnet, CAP-85 references); `--partial-threshold`; `--rules <dir>`; `--render-only`; `--record-instance-archival <db>`.
+Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mainnet, CAP-85 references); `--partial-threshold`; `--top-hashes <n>` (1..100, default 10); `--rules <dir>`; `--render-only`; `--record-instance-archival <db>`; `--record-toolchains <db>`.
+
+`--record-toolchains` adds the `rsver`, `rssdkver` and `cliver` distribution to `ADOPTION.md` from the stored metadata of a database seeded from the same `<network>-contracts.csv`. Each version is weighted by unique hash and by contract, and a missing or ambiguous value is its own `unknown` or `multiple` bucket. With no database in the repository, the committed 7 October 2026 report records that this section was not measured rather than estimating it.
+
+`ADOPTION.md` ranks the `--top-hashes` Wasm hashes that the most live measured contracts run, with their declared SEPs, SEP-41 interface status and share of measured contracts. One factory hash carried 125,628 of mainnet's 141,977 measured contracts (88.48%) on 7 October 2026, which is the gap between the by-hash and by-contract declaration rates. Rows name code by hash only; the index stores no off-chain project name. For a summary written before the ranking was stored, `--render-only` derives it from the committed `<network>-raw.csv`.
 
 If testnet retention advances during sampling, the command confirms the new
 bounds with a fresh successful RPC probe and retries up to three times per
@@ -118,6 +145,8 @@ sep47idx gap --sep 41 --limit 100 --json
 sep47idx gap --sep 41 --limit 100 --cursor '<next_cursor>' --json
 ```
 
+`--outreach` returns the same gap grouped by Wasm hash instead of by contract: the contracts running each hash, the exact `contractmeta!(key = "sep", val = "41")` line to add, and the reviewed pull-request body from `internal/outreach/pr_template.md`, as Markdown or `--json`. Groups are ordered by contract count, largest first. `--limit` becomes the maximum number of hashes (1..500), and `--cursor` is rejected because the whole gap is grouped in one read. Every label says inferred: no group is a declaration and no row names a project.
+
 ```text
 $ sep47idx gap --sep 41 --network testnet --db smoke.db
 Undeclared gap for SEP-41 (inferred: interface matches sep41-v0.5.2, no SEP declared): 1 contracts
@@ -130,6 +159,33 @@ A SEP without a rule file exits 2:
 $ sep47idx gap --sep 50 --network testnet --db smoke.db
 sep47idx gap: no rule file for SEP-50, so no interface can be inferred
 ```
+
+`--outreach` output from the committed fixture index (the test fixture has two gap hashes, one with two contracts):
+
+````text
+$ sep47idx gap --sep 41 --outreach --db fixture.db
+# SEP-41 outreach for undeclared interfaces
+
+**Inferred, not declared.** Every group below matches the SEP-41 interface (sep41-v0.5.2) in the index's rule file and declares no SEP. ...
+
+2 Wasm hashes / 3 live contracts.
+
+## Wasm `bbbb…` — 2 contract(s)
+
+- `CBNA…`
+- `CBNQ…`
+
+Add this line to the contract crate:
+
+```rust
+contractmeta!(key = "sep", val = "41");
+```
+
+<details>
+<summary>Pull-request body</summary>
+...
+</details>
+````
 
 ## version
 

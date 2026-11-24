@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/api"
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
 	"github.com/Soroban-CII/soroindex/internal/store"
@@ -24,8 +24,8 @@ func init() {
 }
 
 func runServe(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("serve", stderr, jsonMode)
 	resolve := config.RegisterCommon(fs)
 	addr := fs.String("addr", ":8080", "HTTP listen address")
 	rate := fs.Int("rate-limit", 0, "requests per minute per peer IP; 0 disables limiting")
@@ -34,21 +34,21 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	writeTimeout := fs.Duration("write-timeout", 20*time.Second, "maximum time to write response")
 	idleTimeout := fs.Duration("idle-timeout", 60*time.Second, "maximum time to wait for next request on keep-alive connection")
 	maxHeaderBytes := fs.Int("max-header-bytes", 16<<10, "maximum size of request headers in bytes")
-	if err := fs.Parse(args); err != nil {
-		return readExit("serve", err, stderr)
+	if err := parse(fs, args); err != nil {
+		return readExit("serve", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		return readExit("serve", err, stderr)
+		return readExit("serve", err, stderr, jsonMode)
 	}
 	if fs.NArg() != 0 || *rate < 0 {
-		return readExit("serve", fmt.Errorf("invalid rate-limit or positional arguments"), stderr)
+		return readExit("serve", clierr.Newf("bad_request", "invalid rate-limit or positional arguments"), stderr, jsonMode)
 	}
 	if *readHeaderTimeout < 0 || *readTimeout < 0 || *writeTimeout < 0 || *idleTimeout < 0 {
-		return readExit("serve", fmt.Errorf("timeouts must not be negative"), stderr)
+		return readExit("serve", clierr.Newf("bad_request", "timeouts must not be negative"), stderr, jsonMode)
 	}
 	if *maxHeaderBytes < 0 {
-		return readExit("serve", fmt.Errorf("max-header-bytes must not be negative"), stderr)
+		return readExit("serve", clierr.Newf("bad_request", "max-header-bytes must not be negative"), stderr, jsonMode)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -58,7 +58,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	var cleanup func()
 	if config.IsNetworkMap(cfg.DB) {
 		if wasSet(fs, "network") {
-			return readExit("serve", fmt.Errorf("--network cannot be combined with a multi-network --db"), stderr)
+			return readExit("serve", clierr.Newf("bad_request", "--network cannot be combined with a multi-network --db"), stderr, jsonMode)
 		}
 		handler, cleanup, err = multiNetworkHandler(ctx, cfg, *rate)
 		label = cfg.DB
@@ -66,18 +66,18 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 		handler, cleanup, err = singleNetworkHandler(ctx, cfg, *rate)
 	}
 	if err != nil {
-		return readExit("serve", err, stderr)
+		return readExit("serve", err, stderr, jsonMode)
 	}
 	defer cleanup()
 	listener, err := net.Listen("tcp", *addr) // #nosec G102 -- operator explicitly chooses the listen address
 	if err != nil {
-		return readExit("serve", err, stderr)
+		return readExit("serve", err, stderr, jsonMode)
 	}
 	defer func() { _ = listener.Close() }()
 	if _, err = fmt.Fprintf(stdout, "serving %s read-only on %s\n", label, listener.Addr()); err != nil {
-		return readExit("serve", err, stderr)
+		return readExit("serve", err, stderr, jsonMode)
 	}
-	return readExit("serve", serveHTTP(ctx, listener, handler, *readHeaderTimeout, *readTimeout, *writeTimeout, *idleTimeout, *maxHeaderBytes), stderr)
+	return readExit("serve", serveHTTP(ctx, listener, handler, *readHeaderTimeout, *readTimeout, *writeTimeout, *idleTimeout, *maxHeaderBytes), stderr, jsonMode)
 }
 
 func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http.Handler, func(), error) {
@@ -102,7 +102,7 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (htt
 	}
 	if network.Passphrase != cfg.Network.Passphrase {
 		cleanup()
-		return nil, nil, fmt.Errorf("RPC network does not match %s", cfg.Network.Name)
+		return nil, nil, clierr.Newf("network_mismatch", "RPC network does not match %s", cfg.Network.Name)
 	}
 	h, err := api.New(api.Options{Store: s, Network: cfg.Network.Name, RPC: client, RateLimit: rate})
 	if err != nil {
@@ -118,20 +118,20 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (htt
 func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http.Handler, func(), error) {
 	dbs, err := config.ParseNetworkMap(cfg.DB)
 	if err != nil {
-		return nil, nil, fmt.Errorf("--db: %w", err)
+		return nil, nil, clierr.Newf("bad_request", "--db: %v", err)
 	}
 	if len(dbs) < 2 {
-		return nil, nil, fmt.Errorf("multi-network serve needs at least two --db entries")
+		return nil, nil, clierr.Newf("bad_request", "multi-network serve needs at least two --db entries")
 	}
 	if !config.IsNetworkMap(cfg.RPCURL) {
-		return nil, nil, fmt.Errorf("multi-network serve needs --rpc-url mainnet=<url>,testnet=<url>")
+		return nil, nil, clierr.Newf("bad_request", "multi-network serve needs --rpc-url mainnet=<url>,testnet=<url>")
 	}
 	rpcURLs, err := config.ParseNetworkMap(cfg.RPCURL)
 	if err != nil {
-		return nil, nil, fmt.Errorf("--rpc-url: %w", err)
+		return nil, nil, clierr.Newf("bad_request", "--rpc-url: %v", err)
 	}
 	if len(rpcURLs) != len(dbs) {
-		return nil, nil, fmt.Errorf("--db and --rpc-url must name the same networks")
+		return nil, nil, clierr.Newf("bad_request", "--db and --rpc-url must name the same networks")
 	}
 	backends := make(map[string]api.Backend, len(dbs))
 	var opened []*store.Store
@@ -144,7 +144,7 @@ func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http
 		url, ok := rpcURLs[name]
 		if !ok {
 			cleanup()
-			return nil, nil, fmt.Errorf("--rpc-url is missing %s", name)
+			return nil, nil, clierr.Newf("bad_request", "--rpc-url is missing %s", name)
 		}
 		n, err := config.NetworkByName(name)
 		if err != nil {
@@ -169,7 +169,7 @@ func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http
 		}
 		if network.Passphrase != n.Passphrase {
 			cleanup()
-			return nil, nil, fmt.Errorf("%s: RPC serves %q", name, network.Passphrase)
+			return nil, nil, clierr.Newf("network_mismatch", "%s: RPC serves %q", name, network.Passphrase)
 		}
 		backends[name] = api.Backend{Store: s, Network: name, RPC: client}
 	}

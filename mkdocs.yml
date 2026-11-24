@@ -35,6 +35,7 @@ nav:
   - Trust tiers: trust-tiers.md
   - How it works: how-it-works.md
   - CLI reference: cli.md
+  - CLI error catalog: errors.md
   - HTTP API: api.md
   - For contract authors: contract-authors.md
   - Writing a rule file: rule-files.md

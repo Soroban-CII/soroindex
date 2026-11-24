@@ -11,7 +11,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)
 
 export CGO_ENABLED := 0
 
-.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check rules-check bench bench-10m clean
+.PHONY: all test lint fuzz fuzz-smoke build fixtures docs error-catalog tidy-check rules-check bench bench-10m clean
 
 all: lint test build
 
@@ -61,6 +61,10 @@ fixtures:
 ## docs: build the MkDocs site into ./site (needs docs/requirements.txt)
 docs:
 	mkdocs build --strict
+
+## error-catalog: regenerate docs/errors.md from internal/clierr
+error-catalog:
+	./scripts/gen-error-catalog.sh
 
 ## rules-check: validate every rules/sep-*.json and rules/history/*.json against rules/schema.json
 CHECK_JSONSCHEMA_VERSION ?= 0.38.2

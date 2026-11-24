@@ -22,8 +22,10 @@ type Options struct {
 	Rules   []match.RuleFile
 	Matcher match.Matcher
 	Limits  sepmeta.Limits
-	Log     *slog.Logger
-	Now     func() time.Time
+	// TopHashes is how many hashes the report ranks by contract count.
+	TopHashes int
+	Log       *slog.Logger
+	Now       func() time.Time
 }
 
 // Result is a finished run, ready to write.
@@ -145,7 +147,7 @@ func finish(ctx context.Context, c ingest.RPC, census Census, population []strin
 			results[h] = ingest.Analyze(h, cd.Bytes, o.Rules, o.Matcher, o.Limits)
 		}
 	}
-	s := Summarize(census, results, population, o.Rules, o.Limits, o.Now().UTC().Format(time.RFC3339))
+	s := Summarize(census, results, population, o.Rules, o.Limits, o.TopHashes, o.Now().UTC().Format(time.RFC3339))
 	if st != nil {
 		s.Sample = st
 		w := Wilson(s.DeclaresAny.ByContract.N, s.DeclaresAny.ByContract.Of)
@@ -221,6 +223,23 @@ func RegenerateAdoption(dir string) error {
 		var s Summary
 		if err := json.Unmarshal(b, &s); err != nil {
 			return fmt.Errorf("%s: %w", f, err)
+		}
+		// Summaries written before TopHashes existed carry no ranking. The
+		// committed raw CSV has the same per-hash counts, so derive it there
+		// instead of asking for a census re-run that needs RPC and BigQuery.
+		if s.TopHashesLimit == 0 {
+			rawPath := filepath.Join(dir, s.Network+"-raw.csv")
+			if raw, err := os.Open(rawPath); err == nil { // #nosec G304 -- operator-chosen report directory
+				s.TopHashes, err = TopHashesFromCSV(raw, s.Contracts.Measured, DefaultTopHashes)
+				closeErr := raw.Close()
+				if err != nil {
+					return fmt.Errorf("%s: %w", rawPath, err)
+				}
+				if closeErr != nil {
+					return closeErr
+				}
+				s.TopHashesLimit = DefaultTopHashes
+			}
 		}
 		sums = append(sums, s)
 	}

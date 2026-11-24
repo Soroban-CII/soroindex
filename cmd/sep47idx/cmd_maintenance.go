@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"time"
 
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/store"
 )
@@ -24,23 +23,23 @@ func init() {
 // It exits 1 when another process holds the write lock or the integrity
 // check finds problems, and prints the report in both cases.
 func runMaintenance(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("maintenance", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("maintenance", stderr, jsonMode)
 	resolve := config.RegisterCommon(fs)
 	enable := fs.Bool("enable-incremental-vacuum", false, "switch auto_vacuum to INCREMENTAL with a one-time full VACUUM (needs free disk about the database size)")
 	timeout := fs.Duration("timeout", time.Hour, "give up after this long; nothing is left half-done (env SEP47IDX_TIMEOUT)")
-	if err := fs.Parse(args); err != nil {
-		return readExit("maintenance", err, stderr)
+	if err := parse(fs, args); err != nil {
+		return readExit("maintenance", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		return readExit("maintenance", err, stderr)
+		return readExit("maintenance", err, stderr, jsonMode)
 	}
 	if fs.NArg() != 0 {
-		return readExit("maintenance", errors.New("takes no positional arguments"), stderr)
+		return readExit("maintenance", clierr.Newf("bad_request", "takes no positional arguments"), stderr, jsonMode)
 	}
 	if *timeout <= 0 {
-		return readExit("maintenance", errors.New("--timeout must be positive"), stderr)
+		return readExit("maintenance", clierr.Newf("bad_request", "--timeout must be positive"), stderr, jsonMode)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
@@ -58,7 +57,7 @@ func runMaintenance(args []string, stdout, stderr io.Writer) int {
 			err = werr
 		}
 	}
-	return readExit("maintenance", err, stderr)
+	return readExit("maintenance", err, stderr, jsonMode)
 }
 
 func printMaintenance(w io.Writer, r store.MaintenanceReport) error {

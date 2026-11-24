@@ -11,14 +11,16 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 )
 
 // Exit codes are part of the CLI contract (CLAUDE.md §5.12) so scripts
 // can tell "not found" apart from a real failure.
 const (
-	exitOK       = 0
-	exitError    = 1
-	exitNotFound = 2
+	exitOK       = clierr.ExitOK
+	exitError    = clierr.ExitError
+	exitNotFound = clierr.ExitNotFound
 )
 
 // version is overwritten at link time with -X main.version=... so that
@@ -55,7 +57,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	cmd, ok := commands[name]
 	if !ok {
-		errorf(stderr, "sep47idx: unknown command %q\n\n%s", name, usage())
+		err := clierr.Newf("bad_request", "unknown command %q", name)
+		if jsonRequested(args) {
+			return fail(stderr, true, "sep47idx", err)
+		}
+		errorf(stderr, "sep47idx: %v\n\n%s", err, usage())
 		return exitError
 	}
 	return cmd.run(args[1:], stdout, stderr)

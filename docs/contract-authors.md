@@ -62,6 +62,47 @@ $ echo $?
 contracts and indexed ledger. After deployment and indexing, `sep47idx wasm <hash>`
 shows the same evidence for the stored code. See the [CLI reference](cli.md#inspect).
 
+## If the index lists your contract as an undeclared match
+
+Some contracts match a SEP's function types but declare nothing. `sep47idx gap
+--sep 41 --outreach` groups those contracts by Wasm hash and writes the exact
+line to add plus a pull-request body you can use in your repository. It never
+opens a pull request, and it names code by hash only: the index stores no
+project name.
+
+Grouped output from the committed fixture index, captured by the command's test
+on 24 November 2026:
+
+````text
+$ sep47idx gap --sep 41 --outreach --db fixture.db
+# SEP-41 outreach for undeclared interfaces
+
+**Inferred, not declared.** Every group below matches the SEP-41 interface (sep41-v0.5.2) in the index's rule file and declares no SEP. ...
+
+2 Wasm hashes / 3 live contracts.
+
+## Wasm `bbbb…` — 2 contract(s)
+
+- `CBNA…`
+- `CBNQ…`
+
+Add this line to the contract crate:
+
+```rust
+contractmeta!(key = "sep", val = "41");
+```
+
+<details>
+<summary>Pull-request body</summary>
+...
+</details>
+````
+
+The body inside `<details>` is the reviewed template at
+`internal/outreach/pr_template.md`, filled with the hash, SEP and contracts. It
+asks for the declaration and a redeploy; it does not claim the contract is safe
+to use.
+
 ## Declaring is a claim, not proof
 
 The `declared` tier records what you say. The `inferred` tier checks your function types against the SEP's rule file. If you declare SEP-41 without its 10 functions, the index shows both facts side by side.

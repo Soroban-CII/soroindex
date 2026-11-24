@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/ingest"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
@@ -26,52 +26,52 @@ func init() {
 // sample of contracts from RPC and reports fields that disagree with the
 // index. It never writes, so it is safe against a production database.
 func runCheck(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("check", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("check", stderr, jsonMode)
 	resolve := config.RegisterCommon(fs)
 	sample := fs.Int("sample", 100, "number of contracts to compare (1..100000)")
 	seed := fs.Int64("seed", 1, "sampling seed; the same seed and database pick the same contracts")
-	if err := fs.Parse(args); err != nil {
-		return readExit("check", err, stderr)
+	if err := parse(fs, args); err != nil {
+		return readExit("check", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		return readExit("check", err, stderr)
+		return readExit("check", err, stderr, jsonMode)
 	}
 	if fs.NArg() != 0 || *sample < 1 || *sample > 100000 {
-		return readExit("check", fmt.Errorf("sample must be 1..100000 and positional arguments are not accepted"), stderr)
+		return readExit("check", clierr.Newf("bad_request", "sample must be 1..100000 and positional arguments are not accepted"), stderr, jsonMode)
 	}
 	if err = cfg.RequireRPC(); err != nil {
-		return readExit("check", err, stderr)
+		return readExit("check", err, stderr, jsonMode)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	s, err := store.Open(ctx, cfg.DB, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
 	if err != nil {
-		return readExit("check", err, stderr)
+		return readExit("check", err, stderr, jsonMode)
 	}
 	defer func() { _ = s.Close() }()
 	client, err := rpc.New(rpc.Config{URL: cfg.RPCURL, Timeout: cfg.RPCTimeout, Concurrency: cfg.Concurrency})
 	if err != nil {
-		return readExit("check", err, stderr)
+		return readExit("check", err, stderr, jsonMode)
 	}
 	network, err := client.GetNetwork(ctx)
 	if err != nil {
-		return readExit("check", err, stderr)
+		return readExit("check", err, stderr, jsonMode)
 	}
 	if network.Passphrase != cfg.Network.Passphrase {
-		return readExit("check", fmt.Errorf("RPC network does not match %s", cfg.Network.Name), stderr)
+		return readExit("check", clierr.Newf("network_mismatch", "RPC network does not match %s", cfg.Network.Name), stderr, jsonMode)
 	}
 	res, err := (&ingest.Checker{Store: s, RPC: client}).Check(ctx, ingest.CheckOptions{Sample: *sample, Seed: *seed})
 	if err != nil {
-		return readExit("check", err, stderr)
+		return readExit("check", err, stderr, jsonMode)
 	}
 	if cfg.JSON {
 		if err := jsonOutput(stdout, res); err != nil {
-			return readExit("check", err, stderr)
+			return readExit("check", err, stderr, jsonMode)
 		}
 	} else if err := printCheck(stdout, cfg.Network.Name, res); err != nil {
-		return readExit("check", err, stderr)
+		return readExit("check", err, stderr, jsonMode)
 	}
 	if len(res.Differences) > 0 {
 		return exitError

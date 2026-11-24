@@ -52,15 +52,11 @@ func readIndex(cfg config.Common, action func(context.Context, *store.Store, map
 	return action(ctx, s, versions)
 }
 
-func readExit(name string, err error, stderr io.Writer) int {
+func readExit(name string, err error, stderr io.Writer, jsonMode bool) int {
 	if err == nil || errors.Is(err, flag.ErrHelp) {
 		return exitOK
 	}
-	errorf(stderr, "sep47idx %s: %v\n", name, err)
-	if errors.Is(err, store.ErrNotFound) {
-		return exitNotFound
-	}
-	return exitError
+	return fail(stderr, jsonMode, name, err)
 }
 
 func jsonOutput(out io.Writer, value any) error {
@@ -73,7 +69,7 @@ func jsonOutput(out io.Writer, value any) error {
 func parseObject(fs *flag.FlagSet, args []string) (string, error) {
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		id := args[0]
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := parse(fs, args[1:]); err != nil {
 			return "", err
 		}
 		if fs.NArg() != 0 {
@@ -81,7 +77,7 @@ func parseObject(fs *flag.FlagSet, args []string) (string, error) {
 		}
 		return id, nil
 	}
-	if err := fs.Parse(args); err != nil {
+	if err := parse(fs, args); err != nil {
 		return "", err
 	}
 	if fs.NArg() != 1 {

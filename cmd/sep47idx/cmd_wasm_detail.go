@@ -3,10 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/match"
@@ -104,24 +105,24 @@ func init() {
 }
 
 func runWasm(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("wasm", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("wasm", stderr, jsonMode)
 	resolve := config.RegisterCommon(fs)
 	limit := fs.Int("limit", 50, "page size of live users, 1..500")
 	cursor := fs.String("cursor", "", "opaque continuation cursor")
 	hash, err := parseObject(fs, args)
 	if err != nil {
-		return readExit("wasm", err, stderr)
+		return readExit("wasm", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		return readExit("wasm", err, stderr)
+		return readExit("wasm", err, stderr, jsonMode)
 	}
 	if err = store.ValidateWasmHash(hash); err != nil {
-		return readExit("wasm", err, stderr)
+		return readExit("wasm", err, stderr, jsonMode)
 	}
 	if *limit < 1 || *limit > 500 {
-		return readExit("wasm", store.ErrBadQuery, stderr)
+		return readExit("wasm", clierr.Newf("bad_request", "limit must be 1..500"), stderr, jsonMode)
 	}
 	err = readIndex(cfg, func(ctx context.Context, s *store.Store, rulesets map[int]string) error {
 		d, err := s.Wasm(ctx, hash, *limit, *cursor, rulesets)
@@ -157,5 +158,5 @@ func runWasm(args []string, stdout, stderr io.Writer) int {
 		}
 		return err
 	})
-	return readExit("wasm", err, stderr)
+	return readExit("wasm", err, stderr, jsonMode)
 }

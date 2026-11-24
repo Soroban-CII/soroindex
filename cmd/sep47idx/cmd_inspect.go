@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/claims"
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/ingest"
 	"github.com/Soroban-CII/soroindex/internal/match"
@@ -22,16 +21,12 @@ func init() {
 	commands["inspect"] = command{summary: "analyze a local Wasm file offline, as the indexer would", run: runInspect}
 }
 
-// errNoMatch means --require-match named a SEP whose interface status is
-// not "match". It exits 1 like any error, so CI can gate a build on it.
-var errNoMatch = errors.New("required interface does not match")
-
 // runInspect runs the indexer's own analysis over a local file. It opens no
 // database and makes no RPC call, so authors can check a build before
 // deploying it. The file is parsed, never executed.
 func runInspect(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("inspect", stderr, jsonMode)
 	asJSON := fs.Bool("json", false, "print JSON (env SEP47IDX_JSON)")
 	require := fs.Int("require-match", 0, "exit 1 unless the inferred status for this SEP is match (env SEP47IDX_REQUIRE_MATCH)")
 	threshold := fs.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold, as for sync")
@@ -40,26 +35,26 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 		err = config.ApplyEnv(fs, os.LookupEnv)
 	}
 	if err != nil {
-		return readExit("inspect", err, stderr)
+		return readExit("inspect", err, stderr, jsonMode)
 	}
 	if *require < 0 {
-		return readExit("inspect", errors.New("--require-match must be a positive SEP number"), stderr)
+		return readExit("inspect", clierr.Newf("bad_request", "--require-match must be a positive SEP number"), stderr, jsonMode)
 	}
 	lim := sepmeta.DefaultLimits()
 	code, err := readWasmFile(path, lim.MaxWasmBytes)
 	if err != nil {
-		return readExit("inspect", err, stderr)
+		return readExit("inspect", err, stderr, jsonMode)
 	}
 	ruleFiles, err := match.LoadRules(rules.FS)
 	if err != nil {
-		return readExit("inspect", err, stderr)
+		return readExit("inspect", err, stderr, jsonMode)
 	}
 	if *require > 0 && !hasRule(ruleFiles, *require) {
-		return readExit("inspect", fmt.Errorf("--require-match %d: no rule file for SEP-%d", *require, *require), stderr)
+		return readExit("inspect", clierr.Newf("bad_request", "--require-match %d: no rule file for SEP-%d", *require, *require), stderr, jsonMode)
 	}
 	versions, err := match.LoadVersions(rules.FS, ruleFiles)
 	if err != nil {
-		return readExit("inspect", err, stderr)
+		return readExit("inspect", err, stderr, jsonMode)
 	}
 	ix := &ingest.Indexer{Rules: ruleFiles, Matcher: match.Matcher{PartialThreshold: *threshold}, Limits: lim,
 		Claims: claims.Default(lim), Log: slog.New(slog.NewJSONHandler(stderr, nil)), Now: time.Now, Versions: versions.Highest}
@@ -67,7 +62,7 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	defer cancel()
 	e, err := ix.Inspect(ctx, code)
 	if err != nil {
-		return readExit("inspect", err, stderr)
+		return readExit("inspect", err, stderr, jsonMode)
 	}
 	if *asJSON {
 		err = jsonOutput(stdout, e)
@@ -75,12 +70,12 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 		err = writeInspect(stdout, path, e)
 	}
 	if err != nil {
-		return readExit("inspect", err, stderr)
+		return readExit("inspect", err, stderr, jsonMode)
 	}
 	if *require > 0 {
 		for _, m := range e.Matches {
 			if m.SEP == *require && m.Status != string(match.StatusMatch) {
-				return readExit("inspect", fmt.Errorf("%w: SEP-%d is %s", errNoMatch, m.SEP, m.Status), stderr)
+				return readExit("inspect", clierr.Newf("not_matched", "required interface does not match: SEP-%d is %s", m.SEP, m.Status), stderr, jsonMode)
 			}
 		}
 	}

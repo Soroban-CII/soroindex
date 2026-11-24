@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Give every CLI failure a stable code, an exit status and a JSON form
+  (`{"error":{"code":...,"message":...}}` on stderr) matching the API. The
+  generated [error catalog](docs/errors.md) lists every code and sentinel, and a
+  test fails when a new sentinel has no mapping (#121).
+- Add `sep47idx gap --outreach`, which groups the inferred undeclared gap by
+  Wasm hash and prints the contracts, the exact `contractmeta!` line and a
+  reviewed pull-request body as Markdown or JSON (#122).
+- Rank the Wasm hashes that the most contracts run in `ADOPTION.md`, with their
+  declared SEPs, SEP-41 interface status and share of measured contracts. This
+  explains the gap between the by-hash and by-contract rates: one mainnet hash
+  runs 125,628 of 141,977 measured contracts (#125).
+- Record the `rsver`, `rssdkver` and `cliver` distribution in `ADOPTION.md` from
+  stored metadata, weighted by unique hash and by contract, through the new
+  `phase0 --record-toolchains <db>` step (#124).
+
 - Report which SEP-41 version a Wasm's interface implements. `rules/history/` adds
   SEP-41 v0.1.0 and v0.3.0, each citing its stellar-protocol commit. Matches carry
   `matched_version` in the API and in the `wasm`, `contract` and `inspect` output.

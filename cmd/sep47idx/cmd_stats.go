@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 
+	"github.com/Soroban-CII/soroindex/internal/clierr"
 	"github.com/Soroban-CII/soroindex/internal/config"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
 	"github.com/Soroban-CII/soroindex/internal/store"
@@ -49,19 +49,19 @@ func init() {
 }
 
 func runStats(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("stats", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	jsonMode := jsonRequested(args)
+	fs := newFlagSet("stats", stderr, jsonMode)
 	resolve := config.RegisterCommon(fs)
 	withLag := fs.Bool("lag", false, "also read the RPC's latest ledger and report sync lag (network call)")
-	if err := fs.Parse(args); err != nil {
-		return readExit("stats", err, stderr)
+	if err := parse(fs, args); err != nil {
+		return readExit("stats", err, stderr, jsonMode)
 	}
 	cfg, err := resolve()
 	if err != nil {
-		return readExit("stats", err, stderr)
+		return readExit("stats", err, stderr, jsonMode)
 	}
 	if fs.NArg() != 0 {
-		return readExit("stats", fmt.Errorf("takes no positional arguments"), stderr)
+		return readExit("stats", clierr.Newf("bad_request", "takes no positional arguments"), stderr, jsonMode)
 	}
 	err = readIndex(cfg, func(ctx context.Context, s *store.Store, rulesets map[int]string) error {
 		d, err := s.Stats(ctx, cfg.Network.Name, rulesets)
@@ -93,5 +93,5 @@ func runStats(args []string, stdout, stderr io.Writer) int {
 		}
 		return err
 	})
-	return readExit("stats", err, stderr)
+	return readExit("stats", err, stderr, jsonMode)
 }

@@ -159,7 +159,7 @@ func testOptions(t *testing.T) Options {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Options{Rules: rf, Limits: sepmeta.DefaultLimits(), Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	return Options{Rules: rf, Limits: sepmeta.DefaultLimits(), TopHashes: DefaultTopHashes, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Now: func() time.Time { return time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC) }}
 }
 
@@ -307,6 +307,67 @@ func TestRunMainnetCensus(t *testing.T) {
 		if !strings.Contains(string(md), want) {
 			t.Errorf("ADOPTION.md lacks %q", want)
 		}
+	}
+}
+
+func TestTopHashesRankFactoriesAndRender(t *testing.T) {
+	f, in, hs := mainnetFixture(t)
+	res, err := RunMainnet(context.Background(), f, in, testOptions(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	top := res.Summary.TopHashes
+	if len(top) != 5 || res.Summary.TopHashesLimit != DefaultTopHashes {
+		t.Fatalf("top hashes limit = %d, entries = %d; want 5 hashes run by contracts", res.Summary.TopHashesLimit, len(top))
+	}
+	// Three contracts run token_full_sep; every other measured hash has one.
+	first := top[0]
+	if first.Hash != hs["full"] || first.Contracts != 3 || len(first.DeclaredSEPs) != 1 || first.DeclaredSEPs[0] != 41 || first.SEP41Status != "match" || math.Abs(first.SharePct-100*3.0/7.0) > 1e-9 {
+		t.Fatalf("first top hash = %+v", first)
+	}
+	for i := 1; i < len(top); i++ {
+		if top[i].Contracts > top[i-1].Contracts || (top[i].Contracts == top[i-1].Contracts && top[i].Hash < top[i-1].Hash) {
+			t.Fatalf("top hashes not ordered: %+v", top)
+		}
+	}
+	dir := t.TempDir()
+	if err := Write(dir, res); err != nil {
+		t.Fatal(err)
+	}
+	md, err := fs.ReadFile(os.DirFS(dir), "ADOPTION.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("| `%s` | 3 | 42.86%% | 41 | `match` (sep41-v0.5.2) |", hs["full"])
+	for _, fragment := range []string{"### Top Wasm hashes by contract count", want, "Rows identify code by hash only; the index stores no off-chain project name."} {
+		if !strings.Contains(string(md), fragment) {
+			t.Errorf("ADOPTION.md lacks %q", fragment)
+		}
+	}
+	saved, err := ReadSummary(dir, "mainnet")
+	if err != nil || len(saved.TopHashes) != len(top) || saved.TopHashes[0].Hash != hs["full"] {
+		t.Fatalf("saved summary top hashes = %+v, %v", saved.TopHashes, err)
+	}
+}
+
+func TestTopHashesFromCSVForEarlierSummaries(t *testing.T) {
+	high, low := strings.Repeat("aa", 32), strings.Repeat("bb", 32)
+	csv := "wasm_hash,size_bytes,contracts,parse_status,seps,sep41_status,sep41_ok_count,ruleset_version\n" +
+		high + ",10,5,ok,41;40,match,10,sep41-v0.5.2\n" +
+		low + ",10,1,archived,,no_spec,0,sep41-v0.5.2\n" +
+		strings.Repeat("cc", 32) + ",10,2,ok,,partial,8,sep41-v0.5.2\n"
+	top, err := TopHashesFromCSV(strings.NewReader(csv), 7, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(top) != 2 || top[0].Hash != high || top[0].Contracts != 5 || top[0].SharePct != 100*5.0/7.0 || len(top[0].DeclaredSEPs) != 2 || top[0].DeclaredSEPs[1] != 41 || top[0].SEP41Status != "match" {
+		t.Fatalf("top = %+v", top)
+	}
+	if top[1].Contracts != 2 || top[1].SEP41Status != "partial" {
+		t.Fatalf("archived row should be skipped and partial ranked second: %+v", top)
+	}
+	if _, err := TopHashesFromCSV(strings.NewReader("wasm_hash\n"+high+"\n"), 7, 2); err == nil {
+		t.Fatal("missing columns accepted")
 	}
 }
 
