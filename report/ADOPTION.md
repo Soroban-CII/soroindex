@@ -77,6 +77,12 @@ Top 10 of 2178 hashes by live measured contracts:
 
 Rows identify code by hash only; the index stores no off-chain project name.
 
+### Toolchain versions
+
+Counts come from the stored metadata of the toolchain keys the Soroban compiler writes: `rsver`, `rssdkver` and `cliver`. Each key is weighted by unique Wasm hash and by contract. `unknown` covers a missing, empty, invalid or oversized value; `multiple` marks a Wasm that gives the key more than one distinct value.
+
+Not recorded for this run. Seed a database from `mainnet-contracts.csv`, then run `sep47idx phase0 --network mainnet --out report/ --record-toolchains <db>`.
+
 ### Anomalies in `sep` values
 
 None found.
@@ -169,6 +175,12 @@ Top 10 of 479 hashes by live measured contracts:
 | `c1a650506f7c20c8f4d16aae73f894f302cd011d7ef33adef572f20b34f7653e` | 35 | 1.97% | none | `mismatch` (sep41-v0.5.2) |
 
 Rows identify code by hash only; the index stores no off-chain project name.
+
+### Toolchain versions
+
+Counts come from the stored metadata of the toolchain keys the Soroban compiler writes: `rsver`, `rssdkver` and `cliver`. Each key is weighted by unique Wasm hash and by contract. `unknown` covers a missing, empty, invalid or oversized value; `multiple` marks a Wasm that gives the key more than one distinct value.
+
+Not recorded for this run. Seed a database from `testnet-contracts.csv`, then run `sep47idx phase0 --network testnet --out report/ --record-toolchains <db>`.
 
 ### Anomalies in `sep` values
 

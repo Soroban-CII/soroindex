@@ -5,6 +5,10 @@ files here; do not edit it by hand (`sep47idx phase0 --render-only` rebuilds it)
 For summaries written before the top-hash ranking was stored, the rebuild
 reads `<network>-raw.csv` for that section rather than asking for a re-run.
 
+The toolchain section needs stored metadata, so it is recorded separately
+from a database seeded with `<network>-contracts.csv`:
+`sep47idx phase0 --network <n> --out report/ --record-toolchains <db>`.
+
 | File | What | In git |
 | --- | --- | --- |
 | `ADOPTION.md` | The adoption report (CLAUDE.md §5.10) | yes |

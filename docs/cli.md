@@ -64,7 +64,9 @@ SEP-41 match, contracts                     100        100  ok
 ...
 ```
 
-Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mainnet, CAP-85 references); `--partial-threshold`; `--top-hashes <n>` (1..100, default 10); `--rules <dir>`; `--render-only`; `--record-instance-archival <db>`.
+Other flags: `--sample`, `--strata`, `--page-size` (testnet); `--exec-refs` (mainnet, CAP-85 references); `--partial-threshold`; `--top-hashes <n>` (1..100, default 10); `--rules <dir>`; `--render-only`; `--record-instance-archival <db>`; `--record-toolchains <db>`.
+
+`--record-toolchains` adds the `rsver`, `rssdkver` and `cliver` distribution to `ADOPTION.md` from the stored metadata of a database seeded from the same `<network>-contracts.csv`. Each version is weighted by unique hash and by contract, and a missing or ambiguous value is its own `unknown` or `multiple` bucket. With no database in the repository, the committed 7 October 2026 report records that this section was not measured rather than estimating it.
 
 `ADOPTION.md` ranks the `--top-hashes` Wasm hashes that the most live measured contracts run, with their declared SEPs, SEP-41 interface status and share of measured contracts. One factory hash carried 125,628 of mainnet's 141,977 measured contracts (88.48%) on 7 October 2026, which is the gap between the by-hash and by-contract declaration rates. Rows name code by hash only; the index stores no off-chain project name. For a summary written before the ranking was stored, `--render-only` derives it from the committed `<network>-raw.csv`.
 

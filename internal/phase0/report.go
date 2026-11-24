@@ -139,6 +139,11 @@ type Summary struct {
 	TopHashes      []TopHash `json:"top_hashes"`
 	TopHashesLimit int       `json:"top_hashes_limit,omitempty"`
 
+	// Toolchains is recorded from a database seeded from the census; it is
+	// nil for a census whose summary has not been through
+	// `phase0 --record-toolchains`.
+	Toolchains *ToolchainCensus `json:"toolchains,omitempty"`
+
 	SEP41 struct {
 		Status        map[string]Pair `json:"status"`         // match/partial/mismatch/no_spec
 		OKHistogram   []int           `json:"ok_histogram"`   // by hash; index = OK count

@@ -49,6 +49,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	rulesDir := flags.String("rules", "", "load rule files from this directory instead of the embedded set")
 	verifyDB := flags.String("verify-db", "", "compare <out>/<network>-summary.json with a database seeded from <network>-contracts.csv; exit 1 on any difference")
 	archivalDB := flags.String("record-instance-archival", "", "record instance archival measured in a database seeded from <network>-contracts.csv into the summary, then rebuild ADOPTION.md")
+	toolchainsDB := flags.String("record-toolchains", "", "record the rsver/rssdkver/cliver census from a database seeded from <network>-contracts.csv into the summary, then rebuild ADOPTION.md")
 	renderOnly := flags.Bool("render-only", false, "only rebuild <out>/ADOPTION.md from the *-summary.json files already there")
 	threshold := flags.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold: share of required functions for \"partial\"")
 	topHashes := flags.Int("top-hashes", phase0.DefaultTopHashes, "rank this many Wasm hashes by contract count in ADOPTION.md, 1..100")
@@ -72,6 +73,9 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	}
 	if *archivalDB != "" {
 		return recordInstanceArchival(cfg, *out, *archivalDB, stdout, stderr)
+	}
+	if *toolchainsDB != "" {
+		return recordToolchains(cfg, *out, *toolchainsDB, stdout, stderr)
 	}
 	if err := cfg.RequireRPC(); err != nil {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
@@ -199,6 +203,51 @@ func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Wri
 	}
 	ok, err := phase0.PrintChecks(stdout, phase0.Verify(s, t))
 	if err != nil || !ok {
+		return exitError
+	}
+	return exitOK
+}
+
+// recordToolchains implements --record-toolchains: read the stored meta of a
+// database seeded from the census population and add the toolchain
+// distribution to the summary, then rebuild ADOPTION.md.
+func recordToolchains(cfg config.Common, out, dbPath string, stdout, stderr io.Writer) int {
+	s, err := phase0.ReadSummary(out, cfg.Network.Name)
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	if s.Toolchains != nil {
+		errorf(stderr, "sep47idx phase0: the %s summary already records a toolchain census\n", cfg.Network.Name)
+		return exitError
+	}
+	rulesets, err := loadedRulesets()
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: rules: %v\n", err)
+		return exitError
+	}
+	ctx := context.Background()
+	st, err := store.Open(ctx, dbPath, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	defer func() { _ = st.Close() }() // read-only
+	stats, err := st.Toolchains(ctx, cfg.Network.Name, rulesets)
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	if stats.MeasuredHashes == 0 {
+		errorf(stderr, "sep47idx phase0: database holds no measured Wasm; seed it from %s-contracts.csv first\n", cfg.Network.Name)
+		return exitError
+	}
+	if err := phase0.RecordToolchains(out, s, stats); err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	if _, err := fmt.Fprintf(stdout, "%s: %d hashes / %d contracts carry toolchain meta as of ledger %d; ADOPTION.md rebuilt\n",
+		cfg.Network.Name, stats.MeasuredHashes, stats.MeasuredContracts, stats.AsOfLedger); err != nil {
 		return exitError
 	}
 	return exitOK
