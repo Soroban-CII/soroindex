@@ -32,6 +32,15 @@
       ],
       "mismatched": [],
       "matched_variants": {},
+      "extra": [
+        "emit_once",
+        "__constructor"
+      ],
+      "coverage": {
+        "required_ok": 0,
+        "optional_ok": 0,
+        "extra": 2
+      },
       "matched_version": null
     }
   ],

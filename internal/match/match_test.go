@@ -431,3 +431,64 @@ func TestLoadRules(t *testing.T) {
 		}
 	})
 }
+
+func TestExtraFunctionsAndCoverageOnFixtures(t *testing.T) {
+	rule := sep41(t)
+
+	t.Run("token_full_sep extra and coverage", func(t *testing.T) {
+		fns, ok := fixtureFns(t, "token_full_sep.wasm")
+		if !ok {
+			t.Fatal("expected spec in token_full_sep.wasm")
+		}
+		res := Match(fns, rule)
+		if res.Status != StatusMatch {
+			t.Fatalf("status = %v, want %v", res.Status, StatusMatch)
+		}
+		wantExtra := []string{"mint", "upgrade", "__constructor"}
+		if !reflect.DeepEqual(res.Extra, wantExtra) {
+			t.Fatalf("extra = %v, want %v", res.Extra, wantExtra)
+		}
+		wantCoverage := Coverage{RequiredOK: 10, OptionalOK: 0, Extra: 3}
+		if res.Coverage != wantCoverage {
+			t.Fatalf("coverage = %+v, want %+v", res.Coverage, wantCoverage)
+		}
+	})
+
+	t.Run("token_partial extra and coverage", func(t *testing.T) {
+		fns, ok := fixtureFns(t, "token_partial.wasm")
+		if !ok {
+			t.Fatal("expected spec in token_partial.wasm")
+		}
+		res := Match(fns, rule)
+		if res.Status != StatusPartial {
+			t.Fatalf("status = %v, want %v", res.Status, StatusPartial)
+		}
+		wantExtra := []string{"mint", "upgrade", "__constructor"}
+		if !reflect.DeepEqual(res.Extra, wantExtra) {
+			t.Fatalf("extra = %v, want %v", res.Extra, wantExtra)
+		}
+		wantCoverage := Coverage{RequiredOK: 8, OptionalOK: 0, Extra: 3}
+		if res.Coverage != wantCoverage {
+			t.Fatalf("coverage = %+v, want %+v", res.Coverage, wantCoverage)
+		}
+	})
+
+	t.Run("not_token extra and coverage", func(t *testing.T) {
+		fns, ok := fixtureFns(t, "not_token.wasm")
+		if !ok {
+			t.Fatal("expected spec in not_token.wasm")
+		}
+		res := Match(fns, rule)
+		if res.Status != StatusMismatch {
+			t.Fatalf("status = %v, want %v", res.Status, StatusMismatch)
+		}
+		wantExtra := []string{"add", "hello", "version"}
+		if !reflect.DeepEqual(res.Extra, wantExtra) {
+			t.Fatalf("extra = %v, want %v", res.Extra, wantExtra)
+		}
+		wantCoverage := Coverage{RequiredOK: 0, OptionalOK: 0, Extra: 3}
+		if res.Coverage != wantCoverage {
+			t.Fatalf("coverage = %+v, want %+v", res.Coverage, wantCoverage)
+		}
+	})
+}

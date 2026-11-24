@@ -34,15 +34,23 @@ type WasmAnomaly struct {
 	Anomaly  string `json:"anomaly"`
 }
 
+type CoverageSummary struct {
+	RequiredOK int `json:"required_ok"`
+	OptionalOK int `json:"optional_ok"`
+	Extra      int `json:"extra"`
+}
+
 // WasmMatch includes the ruleset and full interface evidence.
 type WasmMatch struct {
-	SEP             int             `json:"sep"`
-	RulesetVersion  string          `json:"ruleset_version"`
-	Status          string          `json:"status"`
-	OKCount         int             `json:"ok_count"`
-	Missing         json.RawMessage `json:"missing"`
-	Mismatched      json.RawMessage `json:"mismatched"`
-	MatchedVariants json.RawMessage `json:"matched_variants"`
+	SEP             int              `json:"sep"`
+	RulesetVersion  string           `json:"ruleset_version"`
+	Status          string           `json:"status"`
+	OKCount         int              `json:"ok_count"`
+	Missing         json.RawMessage  `json:"missing"`
+	Mismatched      json.RawMessage  `json:"mismatched"`
+	MatchedVariants json.RawMessage  `json:"matched_variants"`
+	Extra           []string         `json:"extra,omitempty"`
+	Coverage        *CoverageSummary `json:"coverage,omitempty"`
 	// MatchedVersion: see InferredDetail.MatchedVersion.
 	MatchedVersion *string `json:"matched_version"`
 }

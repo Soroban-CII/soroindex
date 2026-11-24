@@ -120,6 +120,16 @@ func (v Versions) Known(sep int) []string {
 
 // strict keeps only the first accepted type at each input position and
 // drops requires, so a version check is about this SEP's own interface.
+func (v Versions) MatchCoverage(sep int, fns []sepmeta.FnSig) (Coverage, []string, bool) {
+	rules, ok := v.bySEP[sep]
+	if !ok || len(rules) == 0 {
+		return Coverage{}, nil, false
+	}
+	r := rules[0]
+	res := (Matcher{}).Match(fns, r)
+	return res.Coverage, res.Extra, true
+}
+
 func strict(r RuleFile) RuleFile {
 	narrow := func(fs []FnRule) []FnRule {
 		out := make([]FnRule, len(fs))

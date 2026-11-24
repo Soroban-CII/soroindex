@@ -145,11 +145,12 @@ func TestMatchEvidenceFromRealMatcher(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err = writeMatchEvidence(&out, store.WasmMatch{SEP: 41, Missing: missing, Mismatched: mism}); err != nil {
+	if err = writeMatchEvidence(&out, store.WasmMatch{SEP: 41, Missing: missing, Mismatched: mism, Extra: res.Extra, Coverage: &store.CoverageSummary{RequiredOK: res.Coverage.RequiredOK, OptionalOK: res.Coverage.OptionalOK, Extra: res.Coverage.Extra}}); err != nil {
 		t.Fatal(err)
 	}
-	if out.String() != "  Missing: burn, burn_from\n" {
-		t.Fatalf("status %s, evidence:\n%s", res.Status, out.String())
+	wantEvidence := "  Missing: burn, burn_from\n  Extra: mint, upgrade, __constructor\n  Coverage: 8 required OK, 0 optional OK, 3 extra\n"
+	if out.String() != wantEvidence {
+		t.Fatalf("status %s, evidence:\n%s\nwant:\n%s", res.Status, out.String(), wantEvidence)
 	}
 }
 

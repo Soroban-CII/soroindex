@@ -37,6 +37,12 @@ type Mismatch struct {
 	Actual   Signature `json:"actual"`
 }
 
+type Coverage struct {
+	RequiredOK int `json:"required_ok"`
+	OptionalOK int `json:"optional_ok"`
+	Extra      int `json:"extra"`
+}
+
 // Result is the outcome of matching one Wasm against one rule file.
 type Result struct {
 	SEP             int               `json:"sep"`
@@ -47,6 +53,8 @@ type Result struct {
 	Missing         []string          `json:"missing"`
 	Mismatched      []Mismatch        `json:"mismatched"`
 	MatchedVariants map[string]string `json:"matched_variants"`
+	Extra           []string          `json:"extra"`
+	Coverage        Coverage          `json:"coverage"`
 }
 
 // Matcher holds the tunable cutoff between partial and mismatch.
@@ -75,6 +83,8 @@ func NoSpec(r RuleFile) Result {
 		Missing:         []string{},
 		Mismatched:      []Mismatch{},
 		MatchedVariants: map[string]string{},
+		Extra:           []string{},
+		Coverage:        Coverage{},
 	}
 }
 
@@ -110,8 +120,30 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 		Missing:         []string{},
 		Mismatched:      []Mismatch{},
 		MatchedVariants: map[string]string{},
+		Extra:           []string{},
 	}
 
+	inRules := map[string]bool{}
+	for _, rule := range r.Required {
+		inRules[rule.Fn] = true
+	}
+	for _, rule := range r.Optional {
+		inRules[rule.Fn] = true
+	}
+	if len(r.Requires) > 0 && m.Rulesets != nil {
+		for _, requiredSep := range r.Requires {
+			if reqRule, ok := m.Rulesets[requiredSep]; ok {
+				for _, rule := range reqRule.Required {
+					inRules[rule.Fn] = true
+				}
+				for _, rule := range reqRule.Optional {
+					inRules[rule.Fn] = true
+				}
+			}
+		}
+	}
+
+	optionalOK := 0
 	// check reports whether a function of the given name matches the rule,
 	// recording missing/mismatched evidence as side effects.
 	check := func(rule FnRule, optional bool) bool {
@@ -145,7 +177,9 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 	}
 	// Match optional functions from the rule file (as before).
 	for _, rule := range r.Optional {
-		check(rule, true)
+		if check(rule, true) {
+			optionalOK++
+		}
 	}
 
 	// Match required SEPs from the requires list, if Rulesets are available.
@@ -164,6 +198,20 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 				}
 			}
 		}
+	}
+
+	seenExtra := map[string]bool{}
+	for _, f := range fns {
+		if !inRules[f.Name] && !seenExtra[f.Name] {
+			res.Extra = append(res.Extra, f.Name)
+			seenExtra[f.Name] = true
+		}
+	}
+
+	res.Coverage = Coverage{
+		RequiredOK: res.OKCount,
+		OptionalOK: optionalOK,
+		Extra:      len(res.Extra),
 	}
 
 	sort.Strings(res.Missing)
