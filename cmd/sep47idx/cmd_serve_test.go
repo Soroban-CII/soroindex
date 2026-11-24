@@ -86,7 +86,7 @@ func TestMultiNetworkHandlerServesBothIndexes(t *testing.T) {
 		RPCTimeout:  time.Second,
 		Concurrency: 1,
 	}
-	h, cleanup, err := multiNetworkHandler(context.Background(), cfg, 0)
+	h, cleanup, err := multiNetworkHandler(context.Background(), cfg, 0, observability{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,12 +109,12 @@ func TestMultiNetworkHandlerServesBothIndexes(t *testing.T) {
 	}
 
 	cfg.RPCURL = "testnet=" + testnetRPC.URL
-	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0); err == nil {
+	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0, observability{}); err == nil {
 		t.Fatal("mismatched network maps accepted")
 	}
 	cfg.RPCURL = "mainnet=" + mainnetRPC.URL + ",testnet=" + testnetRPC.URL
 	cfg.DB = "mainnet=" + mainnetDB
-	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0); err == nil {
+	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0, observability{}); err == nil {
 		t.Fatal("single network map accepted")
 	}
 }

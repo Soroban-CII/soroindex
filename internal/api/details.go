@@ -7,11 +7,19 @@ import (
 	"github.com/Soroban-CII/soroindex/internal/store"
 )
 
+// staleCursorMessage tells a client holding a cursor from an older format,
+// schema or ruleset to start again; the cursor itself cannot be reused.
+const staleCursorMessage = "cursor is from another schema or ruleset version; restart paging without a cursor"
+
 func detailError(w http.ResponseWriter, err error) bool {
 	if err == nil {
 		return false
 	}
 	switch {
+	case errors.Is(err, store.ErrStaleCursor):
+		writeError(w, 400, "bad_request", staleCursorMessage)
+	case errors.Is(err, store.ErrInvalidCursor):
+		writeError(w, 400, "bad_request", "invalid cursor")
 	case errors.Is(err, store.ErrBadQuery):
 		writeError(w, 400, "bad_request", "invalid identifier, filter or cursor")
 	case errors.Is(err, store.ErrNotFound):

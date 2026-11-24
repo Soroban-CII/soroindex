@@ -1,5 +1,9 @@
 # Go image index checked on 16 November 2026 (go1.27.4, GO-2026-6859); runtime pin checked on 9 October.
-FROM golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS build
+# Both pinned digests are OCI image indexes that include linux/amd64 and linux/arm64
+# (their manifest lists were read from the registries on 24 November 2026). The build
+# stage runs on the build host's own architecture and cross-compiles: the binary is
+# static pure Go, so arm64 images do not need to compile under emulation.
+FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local
 COPY go.mod go.sum ./
@@ -11,11 +15,13 @@ RUN --mount=type=secret,id=ca-certificates \
     go mod download && go mod verify
 COPY . .
 ARG VERSION=dev
-RUN go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/sep47idx ./cmd/sep47idx \
+ARG TARGETOS
+ARG TARGETARCH
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/sep47idx ./cmd/sep47idx \
     && mkdir -p /out/data && chown 65532:65532 /out/data
 RUN set -eu; mkdir -p /out/licenses; cp LICENSE /out/licenses/PROJECT-LICENSE; \
     cp "$(go env GOROOT)/LICENSE" /out/licenses/Go-LICENSE; \
-    go list -deps -f '{{if .Module}}{{.Module.Path}} {{.Module.Version}} {{.Module.Dir}}{{end}}' ./cmd/sep47idx | sort -u | \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} go list -deps -f '{{if .Module}}{{.Module.Path}} {{.Module.Version}} {{.Module.Dir}}{{end}}' ./cmd/sep47idx | sort -u | \
     while read -r module version directory; do \
       if [ -n "$directory" ]; then \
         target="/out/licenses/$module@$version"; mkdir -p "$target"; \

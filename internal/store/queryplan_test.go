@@ -224,7 +224,7 @@ var planCases = []planCase{
 	{
 		name: "catalog declared kind=wasm_ref with a cursor",
 		run: func(ctx context.Context, s *Store, in fixtureInfo) error {
-			_, err := s.Contracts(ctx, Filter{Implements: []int{41}, Kind: "wasm_ref", Limit: 50, Cursor: encodeContractCursor(in.IDs[len(in.IDs)/3])})
+			_, err := s.Contracts(ctx, Filter{Implements: []int{41}, Kind: "wasm_ref", Limit: 50, Cursor: encodeContractCursor(in.IDs[len(in.IDs)/3], nil)})
 			return err
 		},
 		queries: []planQuery{{match: catalogQuery, indexes: []string{idxContractsPK, "idx_claims_sep"}}},

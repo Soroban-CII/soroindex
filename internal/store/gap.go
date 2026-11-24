@@ -25,8 +25,11 @@ type GapPage struct {
 // "inferred".
 func (s *Store) Gap(ctx context.Context, sep int, rulesetVersion string, limit int, cursor string) (GapPage, error) {
 	page := GapPage{Contracts: []GapRow{}}
-	limit, after, err := contractPageInput(limit, cursor)
-	if err != nil || sep < 1 || sep > 999999 || rulesetVersion == "" {
+	limit, after, err := contractPageInput(limit, cursor, map[int]string{sep: rulesetVersion})
+	if err != nil {
+		return page, err
+	}
+	if sep < 1 || sep > 999999 || rulesetVersion == "" {
 		return page, ErrBadQuery
 	}
 	rows, err := s.DB.QueryContext(ctx, `
@@ -55,7 +58,7 @@ ORDER BY c.contract_id LIMIT ?`, sep, rulesetVersion, after, limit+1)
 	}
 	if len(page.Contracts) > limit {
 		page.Contracts = page.Contracts[:limit]
-		cursor := encodeContractCursor(page.Contracts[limit-1].ContractID)
+		cursor := encodeContractCursor(page.Contracts[limit-1].ContractID, map[int]string{sep: rulesetVersion})
 		page.NextCursor = &cursor
 	}
 	return page, nil

@@ -11,9 +11,9 @@ if [[ "${1:-}" != --publish ]]; then
   [[ $# == 0 ]] || { echo 'usage: publish-release.sh [--publish]' >&2; exit 1; }
   printf 'Operator publication plan for %s at the reviewed main commit:\n' "$release_repo"
   printf '1. Require clean main; rebuild four static archives and verify SHA256SUMS.\n'
-  printf '2. Build and smoke-test %s (requires configured registry login).\n' "$release_image"
+  printf '2. Build and smoke-test %s on linux/amd64 and linux/arm64 (needs buildx, QEMU for arm64 and a registry login).\n' "$release_image"
   printf '3. Create/push annotated %s tag without overwriting any existing tag.\n' "$release_version"
-  printf '4. Push image and create the GitHub release with archives, checksums and docs/wave/RELEASE.md.\n'
+  printf '4. Push the multi-arch image index, record its digest, and create the GitHub release with archives, checksums and docs/wave/RELEASE.md.\n'
   exit 0
 fi
 [[ "$release_repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo 'REPO must be owner/name' >&2; exit 1; }
@@ -25,15 +25,23 @@ command -v gh >/dev/null
 command -v docker >/dev/null
 ./scripts/build-release.sh "$release_version"
 (cd "dist/$release_version" && sha256sum --check SHA256SUMS)
-docker build --build-arg "VERSION=$release_version" -t "$release_image" .
-docker run --rm --read-only "$release_image" version
+docker buildx version >/dev/null
+for platform in linux/amd64 linux/arm64; do
+  smoke_image="soroindex-smoke:${platform#linux/}"
+  docker buildx build --platform "$platform" --load --build-arg "VERSION=$release_version" -t "$smoke_image" .
+  ./scripts/smoke-image.sh "$smoke_image" "$platform"
+done
 if git rev-parse --verify "refs/tags/$release_version" >/dev/null 2>&1; then
   [[ "$(git rev-parse "$release_version^{commit}")" == "$(git rev-parse HEAD)" ]] || { echo 'existing tag points elsewhere; refusing overwrite' >&2; exit 1; }
 else
   git tag -a "$release_version" -m 'soroindex v0.1.0' HEAD
 fi
 git push origin "refs/tags/$release_version"
-docker push "$release_image"
+docker buildx build --platform linux/amd64,linux/arm64 --build-arg "VERSION=$release_version" -t "$release_image" \
+  --push --metadata-file "dist/$release_version/image-metadata.json" .
+image_digest="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["containerimage.digest"])' "dist/$release_version/image-metadata.json")"
+[[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo 'no image digest in build metadata' >&2; exit 1; }
+echo "${release_image%:*}@$image_digest" | tee "dist/$release_version/image-digest.txt"
 if gh release view "$release_version" --repo "$release_repo" >/dev/null 2>&1; then
   echo 'release already exists; do not overwrite reviewed release assets'
 else

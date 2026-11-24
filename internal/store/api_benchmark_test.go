@@ -47,7 +47,7 @@ type apiQuery struct {
 // cursorAt walks deterministic positions through the first 80% of the sorted
 // contract IDs, so catalog pages start mid-keyspace like a paging client.
 func cursorAt(in fixtureInfo, i int) string {
-	return encodeContractCursor(in.IDs[(i*7919)%(len(in.IDs)*8/10)])
+	return encodeContractCursor(in.IDs[(i*7919)%(len(in.IDs)*8/10)], nil)
 }
 
 var apiQueries = []apiQuery{

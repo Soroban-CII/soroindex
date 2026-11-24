@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Publish the container image as a linux/amd64 and linux/arm64 index, smoke-tested
+  per platform before push, with the index digest recorded (#50).
+- Version contract cursors and stamp them with the schema version, a ruleset
+  digest and a checksum. A cursor from another version returns a 400 telling the
+  client to restart paging; a tampered one returns `invalid cursor` (#107).
+- Add a strong `ETag` to every successful `/v1` GET and answer a matching
+  `If-None-Match` with 304 (#104).
+- Assign each API request an `X-Request-ID`, write one structured access log line
+  per request, and add `serve --metrics` for a Prometheus-text `/metrics` (#105).
 - Report which SEP-41 version a Wasm's interface implements. `rules/history/` adds
   SEP-41 v0.1.0 and v0.3.0, each citing its stellar-protocol commit. Matches carry
   `matched_version` in the API and in the `wasm`, `contract` and `inspect` output.

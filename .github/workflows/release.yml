@@ -9,7 +9,11 @@
 #   archives, reports whether they match the published SHA256SUMS, and then
 #   pushes only the image.
 # - Run it manually (Actions -> release -> Run workflow) with a tag to build
-#   and push the image for an existing release.
+#   and push the image for an existing release. The image is a multi-arch index
+#   (linux/amd64 and linux/arm64): each platform is built and smoke-tested before
+#   anything is pushed, and the index digest is recorded in the job summary and
+#   the image-digest artifact. A manual run only pushes when "publish" is ticked;
+#   leave it off to build and test both platforms without publishing.
 #
 # A new GHCR package is private. Make it public once, under the package's
 # settings.
@@ -23,6 +27,10 @@ on:
       tag:
         description: "Existing tag to build, e.g. v0.1.0"
         required: true
+      publish:
+        description: "Push the multi-arch image to GHCR (off: build and smoke-test only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -61,16 +69,24 @@ jobs:
           set -euo pipefail
           ./scripts/build-release.sh "$RELEASE_TAG"
           (cd "dist/$RELEASE_TAG" && sha256sum --check SHA256SUMS)
-      - name: build and smoke-test the image
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: build and smoke-test the image on each platform
         shell: bash
         run: |
           set -euo pipefail
           image="ghcr.io/${GITHUB_REPOSITORY,,}:$RELEASE_TAG"
           echo "IMAGE=$image" >> "$GITHUB_ENV"
-          docker build --build-arg "VERSION=$RELEASE_TAG" -t "$image" .
-          docker run --rm --read-only "$image" version | tee version.txt
-          grep -q "sep47idx $RELEASE_TAG " version.txt
-          docker image inspect "$image" --format 'image size: {{.Size}} bytes, user {{.Config.User}}'
+          for platform in linux/amd64 linux/arm64; do
+            test_image="soroindex-smoke:${platform#linux/}"
+            docker buildx build --platform "$platform" --load \
+              --build-arg "VERSION=$RELEASE_TAG" -t "$test_image" .
+            ./scripts/smoke-image.sh "$test_image" "$platform" | tee "smoke-${platform#linux/}.txt"
+            grep -q "sep47idx $RELEASE_TAG " "smoke-${platform#linux/}.txt"
+            docker image inspect "$test_image" --format 'image size: {{.Size}} bytes, user {{.Config.User}}'
+          done
       - name: release assets (draft for a new tag; verify an existing one)
         shell: bash
         env:
@@ -96,11 +112,30 @@ jobs:
               --title "soroindex $RELEASE_TAG" --notes-file "$notes" \
               "$out"/*.tar.gz "$out/SHA256SUMS" "$out/BUILD.json"
           fi
-      - name: push the image
+      - name: push the multi-arch image and record its digest
+        if: github.event_name == 'push' || inputs.publish
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push "$IMAGE"
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            --build-arg "VERSION=$RELEASE_TAG" -t "$IMAGE" \
+            --push --metadata-file image-metadata.json .
+          digest="$(python3 -c 'import json; print(json.load(open("image-metadata.json"))["containerimage.digest"])')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "no image digest in build metadata" >&2; exit 1; }
+          docker buildx imagetools inspect "${IMAGE%:*}@$digest" | tee index.txt
+          grep -q 'linux/amd64' index.txt && grep -q 'linux/arm64' index.txt
+          echo "${IMAGE%:*}@$digest" | tee image-digest.txt
+          {
+            echo "### Multi-arch image"
+            echo
+            echo "\`${IMAGE%:*}@$digest\` (linux/amd64, linux/arm64)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: keep the image digest
+        if: github.event_name == 'push' || inputs.publish
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-digest-${{ env.RELEASE_TAG }}
+          path: image-digest.txt

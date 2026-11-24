@@ -104,6 +104,36 @@ requires an explicit RPC URL and the RPC network must match the database.
 The [CLI reference](cli.md) records the tested start command. The [API reference](api.md)
 contains requests and responses from the real testnet seed.
 
+## Request logs and metrics
+
+`serve` gives every request an `X-Request-ID` response header (a random value;
+a client-supplied header is ignored) and writes one JSON access line to stderr
+with the request ID, method, route pattern, status and duration. The line never
+contains the query string (cursors can appear there) or a request body. Requests
+rejected before routing (unknown network, rate limit, wrong method) log the route
+`unmatched`.
+
+`--metrics` (off by default) serves request counts by route and status, and a
+latency histogram per route with fixed buckets (5 ms to 10 s), at `/metrics` in
+Prometheus text format. Routes are patterns such as `GET /v1/contracts/{id}`, so
+the label set stays bounded. `/metrics` is not rate limited and has no
+authentication: bind it to a private address or keep it behind your proxy.
+
+Captured from the fixture server in the test suite, not from a testnet run:
+
+```text
+{"level":"INFO","msg":"request","request_id":"8a6083e7092426c5","method":"GET","route":"GET /v1/stats","status":200,"duration_ms":1.411}
+# TYPE soroindex_http_requests_total counter
+soroindex_http_requests_total{route="GET /v1/stats",code="200"} 1
+soroindex_http_requests_total{route="GET /v1/stats",code="400"} 1
+# TYPE soroindex_http_request_duration_seconds histogram
+soroindex_http_request_duration_seconds_bucket{route="GET /v1/stats",le="0.005"} 2
+...
+soroindex_http_request_duration_seconds_bucket{route="GET /v1/stats",le="+Inf"} 2
+soroindex_http_request_duration_seconds_sum{route="GET /v1/stats"} 0.00163385
+soroindex_http_request_duration_seconds_count{route="GET /v1/stats"} 2
+```
+
 ## Docker validation
 
 The local image `soroindex:stage-gh` was built on 9 October 2026. In this cloud
@@ -157,16 +187,43 @@ That is 27,772,533 bytes, about 26.5 MiB. Outside `/app/licenses`, the image
 holds only `/app/sep47idx` and an empty `/app/data`. It contains no database,
 no proxy settings and no CA bundle; `docker history` shows neither.
 
+## Multi-architecture images
+
+The `Dockerfile` builds for `linux/amd64` and `linux/arm64`. The build stage runs
+on the build host and cross-compiles the static binary with `GOOS`/`GOARCH` from
+BuildKit's `TARGETOS`/`TARGETARCH`, so arm64 does not compile under emulation.
+Both pinned base images (`golang:1.27.4-bookworm` and distroless
+`static-debian13:nonroot`) are digests of OCI image indexes. On 24 November 2026
+their manifest lists, read from the registries, included `linux/amd64` and
+`linux/arm64`.
+
+`scripts/smoke-image.sh IMAGE linux/arm64` checks one loaded platform: the image
+reports that OS and architecture and the user `65532:65532`, `version` names the
+platform, an empty index is created through a writable mount with
+`sync --recompute` (no RPC), and `stats --json` then reads it with a read-only
+root filesystem and a read-only database mount.
+
+The release workflow runs it for both platforms before it pushes anything. It
+then builds one index for both platforms, pushes it, checks that the index lists
+both, and records `ghcr.io/<owner>/soroindex@sha256:...` in the job summary and
+the `image-digest-<tag>` artifact. Local builds need `docker buildx` and, for
+arm64 on an amd64 host, QEMU binfmt support.
+
+Status: the smoke script and the workflow are written but no multi-arch image has
+been built or pushed from this change; the first run of the release workflow is
+the test. No digest is claimed here.
+
 ## Published images
 
 `.github/workflows/release.yml` builds and pushes `ghcr.io/soroban-cii/soroindex:<tag>`:
 
-- Pushing a `vN.N.N` tag builds the archives and the image, creates a **draft**
-  GitHub release for a maintainer to review, and pushes the image.
+- Pushing a `vN.N.N` tag builds the archives and the multi-arch image, creates a
+  **draft** GitHub release for a maintainer to review, and pushes the image.
 - For a release that already exists, such as v0.1.0, run it from
   **Actions → release → Run workflow** with the tag. It never replaces published
   assets. It reports whether the rebuilt archives match the published
-  `SHA256SUMS`, then pushes the image. v0.1.0's archives were built before the
+  `SHA256SUMS`, then pushes the image only if **publish** is ticked (unticked, it
+  builds and smoke-tests both platforms and publishes nothing). v0.1.0's archives were built before the
   tag existed, so Go stamped them with a pseudo-version
   (`v0.0.0-20261109093629-3abe5a30038d`), and a rebuild at the tag cannot match
   them byte for byte. `sep47idx version` reports `v0.1.0` in both.

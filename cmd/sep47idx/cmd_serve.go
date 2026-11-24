@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	resolve := config.RegisterCommon(fs)
 	addr := fs.String("addr", ":8080", "HTTP listen address")
 	rate := fs.Int("rate-limit", 0, "requests per minute per peer IP; 0 disables limiting")
+	metrics := fs.Bool("metrics", false, "serve Prometheus-text request counts and latency histograms at /metrics")
 	readHeaderTimeout := fs.Duration("read-header-timeout", 5*time.Second, "maximum time to read request headers")
 	readTimeout := fs.Duration("read-timeout", 20*time.Second, "maximum time to read request body")
 	writeTimeout := fs.Duration("write-timeout", 20*time.Second, "maximum time to write response")
@@ -53,6 +55,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	observe := observability{metrics: *metrics, logger: slog.New(slog.NewJSONHandler(stderr, nil))}
 	var handler http.Handler
 	label := cfg.Network.Name
 	var cleanup func()
@@ -60,10 +63,10 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 		if wasSet(fs, "network") {
 			return readExit("serve", fmt.Errorf("--network cannot be combined with a multi-network --db"), stderr)
 		}
-		handler, cleanup, err = multiNetworkHandler(ctx, cfg, *rate)
+		handler, cleanup, err = multiNetworkHandler(ctx, cfg, *rate, observe)
 		label = cfg.DB
 	} else {
-		handler, cleanup, err = singleNetworkHandler(ctx, cfg, *rate)
+		handler, cleanup, err = singleNetworkHandler(ctx, cfg, *rate, observe)
 	}
 	if err != nil {
 		return readExit("serve", err, stderr)
@@ -80,7 +83,13 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	return readExit("serve", serveHTTP(ctx, listener, handler, *readHeaderTimeout, *readTimeout, *writeTimeout, *idleTimeout, *maxHeaderBytes), stderr)
 }
 
-func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http.Handler, func(), error) {
+// observability is the access-log and metrics setting shared by both handlers.
+type observability struct {
+	metrics bool
+	logger  *slog.Logger
+}
+
+func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int, obs observability) (http.Handler, func(), error) {
 	if err := cfg.RequireRPC(); err != nil {
 		return nil, nil, err
 	}
@@ -104,7 +113,7 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (htt
 		cleanup()
 		return nil, nil, fmt.Errorf("RPC network does not match %s", cfg.Network.Name)
 	}
-	h, err := api.New(api.Options{Store: s, Network: cfg.Network.Name, RPC: client, RateLimit: rate})
+	h, err := api.New(api.Options{Store: s, Network: cfg.Network.Name, RPC: client, RateLimit: rate, Metrics: obs.metrics, Logger: obs.logger})
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -115,7 +124,7 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (htt
 // multiNetworkHandler opens one read-only store and RPC client per network.
 // The caller keeps it alive until the server returns; stores opened before a
 // later error are closed here.
-func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http.Handler, func(), error) {
+func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int, obs observability) (http.Handler, func(), error) {
 	dbs, err := config.ParseNetworkMap(cfg.DB)
 	if err != nil {
 		return nil, nil, fmt.Errorf("--db: %w", err)
@@ -173,7 +182,7 @@ func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http
 		}
 		backends[name] = api.Backend{Store: s, Network: name, RPC: client}
 	}
-	h, err := api.New(api.Options{Networks: backends, RateLimit: rate})
+	h, err := api.New(api.Options{Networks: backends, RateLimit: rate, Metrics: obs.metrics, Logger: obs.logger})
 	if err != nil {
 		cleanup()
 		return nil, nil, err

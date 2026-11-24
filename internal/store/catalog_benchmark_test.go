@@ -83,7 +83,7 @@ func BenchmarkContractsMillionClaims(b *testing.B) {
 	b.Logf("fixture: %d claims, %d live contracts, %d SEP-41 hashes; production indexes, read-only query, limit 50", claims, contracts, sep41)
 	sort.Strings(ids)
 	for i := range 5 {
-		if _, err = ro.Contracts(ctx, Filter{Implements: []int{41}, Limit: 50, Cursor: encodeContractCursor(ids[i*15000])}); err != nil {
+		if _, err = ro.Contracts(ctx, Filter{Implements: []int{41}, Limit: 50, Cursor: encodeContractCursor(ids[i*15000], nil)}); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -92,7 +92,7 @@ func BenchmarkContractsMillionClaims(b *testing.B) {
 	for b.Loop() {
 		// Traverse deterministic cursor positions in the first 80% of the ID
 		// space, keeping enough results for a full page at every position.
-		cursor := encodeContractCursor(ids[(iteration*7919)%80000])
+		cursor := encodeContractCursor(ids[(iteration*7919)%80000], nil)
 		start := time.Now()
 		page, err := ro.Contracts(ctx, Filter{Implements: []int{41}, Limit: 50, Cursor: cursor})
 		durations = append(durations, time.Since(start))

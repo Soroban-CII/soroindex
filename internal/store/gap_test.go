@@ -107,7 +107,7 @@ func TestGapPagination(t *testing.T) {
 			t.Fatalf("limit %d: got %d contracts, want %d without duplicates or omissions", limit, len(got), len(ids))
 		}
 	}
-	last, err := s.Gap(ctx, 41, "current", 500, encodeContractCursor(ids[len(ids)-1]))
+	last, err := s.Gap(ctx, 41, "current", 500, encodeContractCursor(ids[len(ids)-1], map[int]string{41: "current"}))
 	if err != nil || last.Contracts == nil || len(last.Contracts) != 0 || last.NextCursor != nil {
 		t.Fatal(last, err)
 	}
@@ -124,7 +124,7 @@ func TestGapRejectsInvalidPaginationAndCancellation(t *testing.T) {
 		{41, "current", -1, ""}, {41, "current", 501, ""},
 		{0, "current", 50, ""}, {1000000, "current", 50, ""}, {41, "", 50, ""},
 		{41, "current", 50, "not-a-cursor"}, {41, "current", 50, strings.Repeat("a", 257)},
-		{41, "current", 50, encodeContractCursor("C1")},
+		{41, "current", 50, encodeContractCursor("C1", nil)},
 		{41, "current", 50, "eyJ2IjoyLCJpZCI6IkMxIn0"},
 	} {
 		if _, err := s.Gap(context.Background(), input.sep, input.ruleset, input.limit, input.cursor); !errors.Is(err, ErrBadQuery) {

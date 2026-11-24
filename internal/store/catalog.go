@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -123,21 +122,10 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 	}
 	after := ""
 	if f.Cursor != "" {
-		if len(f.Cursor) > 256 {
-			return page, ErrBadQuery
+		var err error
+		if after, err = decodeContractCursor(f.Cursor, f.Rulesets); err != nil {
+			return page, err
 		}
-		data, err := base64.RawURLEncoding.DecodeString(f.Cursor)
-		if err != nil {
-			return page, ErrBadQuery
-		}
-		var cursor struct {
-			Version int    `json:"v"`
-			ID      string `json:"id"`
-		}
-		if err := json.Unmarshal(data, &cursor); err != nil || cursor.Version != 1 || ValidateContractID(cursor.ID) != nil {
-			return page, ErrBadQuery
-		}
-		after = cursor.ID
 	}
 	where := []string{"c.contract_id > ?"}
 	args := []any{after}
@@ -253,14 +241,7 @@ func (s *Store) Contracts(ctx context.Context, f Filter) (Page, error) {
 	}
 	if len(page.Contracts) > f.Limit {
 		page.Contracts = page.Contracts[:f.Limit]
-		b, err := json.Marshal(struct {
-			Version int    `json:"v"`
-			ID      string `json:"id"`
-		}{1, page.Contracts[f.Limit-1].ID})
-		if err != nil {
-			return page, err
-		}
-		cursor := base64.RawURLEncoding.EncodeToString(b)
+		cursor := encodeContractCursor(page.Contracts[f.Limit-1].ID, f.Rulesets)
 		page.NextCursor = &cursor
 	}
 	return page, nil

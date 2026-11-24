@@ -39,6 +39,11 @@ type Options struct {
 	Networks  map[string]Backend
 	RateLimit int
 	Rulesets  map[int]string
+	// Metrics serves request counts and latency histograms at /metrics.
+	// It is off by default: the path is not part of the fixed /v1 surface.
+	Metrics bool
+	// Logger receives one access line per request; nil uses slog.Default.
+	Logger *slog.Logger
 }
 
 // Server is an HTTP handler with bounded request contexts.
@@ -48,6 +53,7 @@ type Server struct {
 	mux      *http.ServeMux
 	limiter  ipLimiter
 	backends map[string]Backend
+	metrics  metrics
 }
 
 type backendKey struct{}
@@ -118,31 +124,31 @@ func validateBackend(name string, b Backend) error {
 	return nil
 }
 
-// ServeHTTP adds GET CORS, selects the network and bounds the request context
+// dispatch adds GET CORS, selects the network and bounds the request context
 // before dispatching. A network query parameter is removed before handlers
 // see it, so handlers that reject unknown query parameters still work.
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *Server) dispatch(w http.ResponseWriter, r *http.Request) string {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
-		return
+		return ""
 	}
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET, OPTIONS")
 		writeError(w, http.StatusMethodNotAllowed, "bad_request", "only GET is supported")
-		return
+		return ""
 	}
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", "invalid query")
-		return
+		return ""
 	}
 	network := ""
 	if values, ok := q["network"]; ok {
 		if len(values) != 1 || values[0] == "" {
 			writeError(w, http.StatusBadRequest, "bad_request", "network must be given once")
-			return
+			return ""
 		}
 		network = values[0]
 		q.Del("network")
@@ -151,17 +157,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	b, err := s.selectBackend(network)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
-		return
+		return ""
 	}
 	if !s.limiter.allowN(r.RemoteAddr, s.options.RateLimit, lookupCost(r.URL.Path, q), time.Now()) {
 		w.Header().Set("Retry-After", "60")
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "request limit exceeded")
-		return
+		return ""
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 	ctx = context.WithValue(ctx, backendKey{}, b)
-	s.mux.ServeHTTP(w, r.WithContext(ctx))
+	r = r.WithContext(ctx)
+	if etagEligible(r.URL.Path) {
+		s.serveTagged(w, r, b, s.mux)
+		return r.Pattern
+	}
+	s.mux.ServeHTTP(w, r)
+	return r.Pattern
 }
 
 func (s *Server) selectBackend(network string) (Backend, error) {

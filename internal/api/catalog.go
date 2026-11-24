@@ -61,6 +61,10 @@ func (s *Server) contracts(w http.ResponseWriter, r *http.Request) {
 	b := backendFrom(r.Context())
 	result, err := b.Store.Contracts(r.Context(), store.Filter{Implements: all, ImplementsAny: anySEPs, Tier: q.Get("tier"), Kind: q.Get("kind"), Archived: archived, ExecRefOwner: execRefOwner, Limit: limit, Cursor: q.Get("cursor"), Rulesets: s.options.Rulesets})
 	if errors.Is(err, store.ErrBadQuery) {
+		if errors.Is(err, store.ErrStaleCursor) || errors.Is(err, store.ErrInvalidCursor) {
+			detailError(w, err)
+			return
+		}
 		writeError(w, 400, "bad_request", "invalid filter or cursor")
 		return
 	}

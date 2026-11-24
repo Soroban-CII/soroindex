@@ -36,6 +36,24 @@ same filters; null means the end. Cursors are opaque base64url values. History
 cursors are scoped to the contract. Pagination observes current data on each
 request; it does not hold a snapshot across separate requests.
 
+### Cursor lifetime
+
+A `/v1/contracts`, `/v1/wasm/{hash}` and gap cursor is a keyset position (the
+last contract ID returned) stamped with the cursor format version, the database
+schema version of the binary that issued it, a digest of the loaded ruleset
+versions, and a checksum. It has no expiry time. While the index syncs, rows
+committed between requests never make a page repeat or skip a row that already
+existed when paging started: new contracts sort into place and appear only if
+they sort after the cursor.
+
+A cursor stops working when the binary is upgraded to a new schema or cursor
+format, or when a ruleset version changes. The server then answers `400` with
+code `bad_request` and the message `cursor is from another schema or ruleset
+version; restart paging without a cursor`. Drop the cursor and start again. An
+edited or malformed cursor, including one whose checksum fails, answers `400`
+with only `invalid cursor`. The checksum catches edits and corruption; it is not a
+secret, and a cursor holds nothing but a public contract ID. Contract history
+cursors have their own format and are not covered by this stamp.
 `last_protocol` (in `/v1/health` and `/v1/stats`) is the protocol version the
 last indexed ledger closed under. It is `null` until a sync batch records one, so
 a seed-only index reports `null`. The other health fields keep their meaning.
@@ -55,6 +73,30 @@ never satisfy declared or inferred filters. Verified filtering requires a curren
 hash, a declaration and the latest passing result. Old-code results remain in
 history with `stale: true`. Never-run results are null. A pass means the suite's
 checks passed; it is not a security audit. No verifier execution ships in this build.
+
+## Conditional requests
+
+Every successful `GET` under `/v1` (and the `/contracts` alias) carries a strong
+`ETag`. It is a hash of the network, path, query string, the index's last synced
+ledger, the parser version and every loaded ruleset version, so it changes
+whenever the index advances or its rules change, and it is computed without
+hashing the body. Send it back as `If-None-Match`; a match returns `304 Not
+Modified` with no body. A weak form (`W/"..."`), a list of tags and `*` also match
+(the weak comparison RFC 9110 requires for `If-None-Match`); a stale, unquoted or
+malformed value gets a normal `200`.
+
+Error responses carry no `ETag`. `/v1/health` (it reports the live RPC tip) and
+`/v1/events/upgrades` (a stream) are not tagged.
+
+Captured from the test fixture server (`/v1/seps`, last ledger 100), not from
+testnet:
+
+```text
+GET /v1/seps
+200 OK  ETag: "1d50c2e12c44c5dea3ac67030014b428"  Content-Type: application/json  (232 bytes)
+GET /v1/seps  If-None-Match: "1d50c2e12c44c5dea3ac67030014b428"
+304 Not Modified  ETag: "1d50c2e12c44c5dea3ac67030014b428"  (0 bytes)
+```
 
 ## Bulk lookup
 

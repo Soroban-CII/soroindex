@@ -68,7 +68,7 @@ func (s *Store) Wasm(ctx context.Context, hash string, limit int, cursor string,
 	if err := ValidateWasmHash(hash); err != nil {
 		return d, err
 	}
-	limit, after, err := contractPageInput(limit, cursor)
+	limit, after, err := contractPageInput(limit, cursor, rulesets)
 	if err != nil {
 		return d, err
 	}
@@ -185,7 +185,7 @@ func (s *Store) Wasm(ctx context.Context, hash string, limit int, cursor string,
 	}
 	if len(d.Contracts) > limit {
 		d.Contracts = d.Contracts[:limit]
-		c := encodeContractCursor(d.Contracts[limit-1].ID)
+		c := encodeContractCursor(d.Contracts[limit-1].ID, rulesets)
 		d.NextCursor = &c
 	}
 	return d, tx.Commit()
