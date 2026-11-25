@@ -71,4 +71,4 @@ What to do: keep the old file if you want its history, and start a new index in 
 
 These paths have offline tests. The 30-minute testnet follow check passed on 9 October 2026 with a final lag of one ledger. The operator waived the deployed-fixture upgrade check.
 
-See the [Stage F validation evidence](stage-f-progress.md) for the completed offline and live-follow checks and the explicit fixture waiver.
+See the [Stage F validation evidence](archive/stage-f-progress.md) for the completed offline and live-follow checks and the explicit fixture waiver.

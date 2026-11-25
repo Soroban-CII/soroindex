@@ -105,7 +105,7 @@ PASS
 ok  	github.com/Soroban-CII/soroindex/internal/store	14.867s
 ```
 
-The [benchmark report](query-benchmark.md) records fixture construction,
+The [benchmark report](../query-benchmark.md) records fixture construction,
 cursor distribution, initial results and the concurrent-build rerun. p95 did
 not exceed 200 ms; no schema change or materialization was made.
 
@@ -120,7 +120,7 @@ The default live database request failed with `Forbidden` in this cloud network.
 The completed scan used unmodified official golang/vulndb OSV files from snapshot
 `f5aaa67f6ede4dff5b467dd6beba251f3c706b05`. Go 1.27.2 and the transitive
 compression update to 1.18.7 removed the reported findings. The
-[dependency review](dependency-review.md) records the initial findings and module
+[dependency review](../dependency-review.md) records the initial findings and module
 licenses. CI uses the live database; no hosted run is claimed.
 
 ### Static targets
@@ -188,8 +188,8 @@ TLS was not bypassed. The extracted container binary was statically linked.
 Read-only container stats returned 200 stored contracts, and HTTP health read a
 fresh real tip. SIGTERM produced exit 0. The container was then removed.
 
-The [API reference](api.md) includes executed curl requests and actual responses
-for every endpoint, alias and continuation. The [CLI reference](cli.md) includes
+The [API reference](../api.md) includes executed curl requests and actual responses
+for every endpoint, alias and continuation. The [CLI reference](../cli.md) includes
 real output for the new commands. This is a static sample; health lag grows
 without a sync writer. No hosted API, image publication or release is claimed.
 
