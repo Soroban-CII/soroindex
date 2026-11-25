@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/match"
@@ -33,12 +34,13 @@ type Backend struct {
 // Options binds one or more read-only networks to a server. Set Networks to
 // serve several; Store, Network and RPC are the single-network shorthand.
 type Options struct {
-	Store     *store.Store
-	Network   string
-	RPC       LatestLedger
-	Networks  map[string]Backend
-	RateLimit int
-	Rulesets  map[int]string
+	Store              *store.Store
+	Network            string
+	RPC                LatestLedger
+	Networks           map[string]Backend
+	RateLimit          int
+	Rulesets           map[int]string
+	CORSAllowedOrigins []string
 }
 
 // Server is an HTTP handler with bounded request contexts.
@@ -61,6 +63,11 @@ func backendFrom(ctx context.Context) Backend {
 func New(o Options) (*Server, error) {
 	if o.RateLimit < 0 {
 		return nil, errors.New("api: rate-limit must not be negative")
+	}
+	for _, origin := range o.CORSAllowedOrigins {
+		if err := validateCORSOrigin(origin); err != nil {
+			return nil, err
+		}
 	}
 	if len(o.Networks) == 0 {
 		o.Networks = map[string]Backend{o.Network: {Store: o.Store, Network: o.Network, RPC: o.RPC}}
@@ -122,9 +129,17 @@ func validateBackend(name string, b Backend) error {
 // before dispatching. A network query parameter is removed before handlers
 // see it, so handlers that reject unknown query parameters still work.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	corsAllowed := s.setCORSHeaders(w, r)
 	if r.Method == http.MethodOptions {
+		if len(s.options.CORSAllowedOrigins) > 0 {
+			w.Header().Add("Vary", "Access-Control-Request-Method")
+			w.Header().Add("Vary", "Access-Control-Request-Headers")
+			if corsAllowed {
+				if requestedHeaders := r.Header.Get("Access-Control-Request-Headers"); requestedHeaders != "" {
+					w.Header().Set("Access-Control-Allow-Headers", requestedHeaders)
+				}
+			}
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -162,6 +177,37 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	ctx = context.WithValue(ctx, backendKey{}, b)
 	s.mux.ServeHTTP(w, r.WithContext(ctx))
+}
+
+func (s *Server) setCORSHeaders(w http.ResponseWriter, r *http.Request) bool {
+	if len(s.options.CORSAllowedOrigins) == 0 {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		return true
+	}
+	w.Header().Add("Vary", "Origin")
+	origins := r.Header.Values("Origin")
+	if len(origins) != 1 {
+		return false
+	}
+	for _, allowed := range s.options.CORSAllowedOrigins {
+		if origins[0] == allowed {
+			w.Header().Set("Access-Control-Allow-Origin", origins[0])
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			return true
+		}
+	}
+	return false
+}
+
+func validateCORSOrigin(origin string) error {
+	u, err := url.Parse(origin)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		u.Hostname() == "" || strings.TrimSpace(origin) != origin || u.User != nil ||
+		u.Opaque != "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
+		return fmt.Errorf("api: invalid CORS origin %q: expected an http(s) origin without a path", origin)
+	}
+	return nil
 }
 
 func (s *Server) selectBackend(network string) (Backend, error) {

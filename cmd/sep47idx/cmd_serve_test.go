@@ -63,6 +63,7 @@ func TestServeHTTPReadsIndexAndShutsDown(t *testing.T) {
 func TestServeCLIRejectsInvalidConfiguration(t *testing.T) {
 	for _, args := range [][]string{
 		{"serve", "--rate-limit", "-1"},
+		{"serve", "--cors-allowed-origins", "https://good.example,,https://bad.example"},
 		{"serve", "extra"},
 		{"serve", "--db", "/missing/index.db"},
 		{"serve", "--network", "mainnet"},
@@ -72,6 +73,34 @@ func TestServeCLIRejectsInvalidConfiguration(t *testing.T) {
 		if code := run(args, &bytes.Buffer{}, &bytes.Buffer{}); code != 1 {
 			t.Fatal(args, code)
 		}
+	}
+}
+
+func TestParseCORSAllowedOrigins(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value string
+		want  []string
+		err   bool
+	}{
+		{name: "empty keeps public default"},
+		{name: "trims and splits", value: " https://one.example,https://two.example ", want: []string{"https://one.example", "https://two.example"}},
+		{name: "rejects empty list entry", value: "https://one.example,,https://two.example", err: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := parseCORSAllowedOrigins(test.value)
+			if (err != nil) != test.err {
+				t.Fatalf("error = %v, want error %v", err, test.err)
+			}
+			if len(got) != len(test.want) {
+				t.Fatalf("origins = %v, want %v", got, test.want)
+			}
+			for i := range got {
+				if got[i] != test.want[i] {
+					t.Fatalf("origins = %v, want %v", got, test.want)
+				}
+			}
+		})
 	}
 }
 
@@ -86,20 +115,26 @@ func TestMultiNetworkHandlerServesBothIndexes(t *testing.T) {
 		RPCTimeout:  time.Second,
 		Concurrency: 1,
 	}
-	h, cleanup, err := multiNetworkHandler(context.Background(), cfg, 0)
+	const allowedOrigin = "https://app.example"
+	h, cleanup, err := multiNetworkHandler(context.Background(), cfg, 0, []string{allowedOrigin})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanup()
 	for network, want := range map[string]uint32{"testnet": 10, "mainnet": 20} {
 		w := httptest.NewRecorder()
-		h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/v1/health?network="+network, nil))
+		req := httptest.NewRequest(http.MethodGet, "/v1/health?network="+network, nil)
+		req.Header.Set("Origin", allowedOrigin)
+		h.ServeHTTP(w, req)
 		var got struct {
 			Network    string `json:"network"`
 			LastLedger uint32 `json:"last_ledger"`
 		}
 		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || w.Code != 200 || got.Network != network || got.LastLedger != want {
 			t.Fatalf("%s: %d %s (%v)", network, w.Code, w.Body.String(), err)
+		}
+		if got := w.Header().Get("Access-Control-Allow-Origin"); got != allowedOrigin {
+			t.Fatalf("%s origin header = %q", network, got)
 		}
 	}
 	w := httptest.NewRecorder()
@@ -109,12 +144,12 @@ func TestMultiNetworkHandlerServesBothIndexes(t *testing.T) {
 	}
 
 	cfg.RPCURL = "testnet=" + testnetRPC.URL
-	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0); err == nil {
+	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0, nil); err == nil {
 		t.Fatal("mismatched network maps accepted")
 	}
 	cfg.RPCURL = "mainnet=" + mainnetRPC.URL + ",testnet=" + testnetRPC.URL
 	cfg.DB = "mainnet=" + mainnetDB
-	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0); err == nil {
+	if _, _, err := multiNetworkHandler(context.Background(), cfg, 0, nil); err == nil {
 		t.Fatal("single network map accepted")
 	}
 }

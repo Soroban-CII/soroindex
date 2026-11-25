@@ -490,6 +490,9 @@ $ /workspace/scratch/stage-g/sep47idx stats --db /workspace/scratch/stage-g/test
 Requires an existing index and opens it read-only. RPC network validation runs
 at startup; mainnet needs `--rpc-url`. `--addr` defaults to `:8080` and
 `--rate-limit` defaults to 0 (off). GET requests have deadlines and CORS.
+`--cors-allowed-origins` takes a comma-separated allow-list of exact origins;
+it defaults to `*` when unset. `SEP47IDX_CORS_ALLOWED_ORIGINS` provides the
+same setting.
 SIGINT and SIGTERM shut down gracefully. The server does not sync the index.
 
 Captured local start on 9 October 2026:

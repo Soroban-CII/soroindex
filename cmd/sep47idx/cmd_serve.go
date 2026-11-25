@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	resolve := config.RegisterCommon(fs)
 	addr := fs.String("addr", ":8080", "HTTP listen address")
 	rate := fs.Int("rate-limit", 0, "requests per minute per peer IP; 0 disables limiting")
+	corsOrigins := fs.String("cors-allowed-origins", "", "comma-separated allowed browser origins; empty allows all (env SEP47IDX_CORS_ALLOWED_ORIGINS)")
 	readHeaderTimeout := fs.Duration("read-header-timeout", 5*time.Second, "maximum time to read request headers")
 	readTimeout := fs.Duration("read-timeout", 20*time.Second, "maximum time to read request body")
 	writeTimeout := fs.Duration("write-timeout", 20*time.Second, "maximum time to write response")
@@ -43,6 +45,10 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	}
 	if fs.NArg() != 0 || *rate < 0 {
 		return readExit("serve", fmt.Errorf("invalid rate-limit or positional arguments"), stderr)
+	}
+	allowedOrigins, err := parseCORSAllowedOrigins(*corsOrigins)
+	if err != nil {
+		return readExit("serve", err, stderr)
 	}
 	if *readHeaderTimeout < 0 || *readTimeout < 0 || *writeTimeout < 0 || *idleTimeout < 0 {
 		return readExit("serve", fmt.Errorf("timeouts must not be negative"), stderr)
@@ -60,10 +66,10 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 		if wasSet(fs, "network") {
 			return readExit("serve", fmt.Errorf("--network cannot be combined with a multi-network --db"), stderr)
 		}
-		handler, cleanup, err = multiNetworkHandler(ctx, cfg, *rate)
+		handler, cleanup, err = multiNetworkHandler(ctx, cfg, *rate, allowedOrigins)
 		label = cfg.DB
 	} else {
-		handler, cleanup, err = singleNetworkHandler(ctx, cfg, *rate)
+		handler, cleanup, err = singleNetworkHandler(ctx, cfg, *rate, allowedOrigins)
 	}
 	if err != nil {
 		return readExit("serve", err, stderr)
@@ -80,7 +86,7 @@ func runServe(args []string, stdout, stderr io.Writer) int {
 	return readExit("serve", serveHTTP(ctx, listener, handler, *readHeaderTimeout, *readTimeout, *writeTimeout, *idleTimeout, *maxHeaderBytes), stderr)
 }
 
-func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http.Handler, func(), error) {
+func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int, corsAllowedOrigins []string) (http.Handler, func(), error) {
 	if err := cfg.RequireRPC(); err != nil {
 		return nil, nil, err
 	}
@@ -104,7 +110,7 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (htt
 		cleanup()
 		return nil, nil, fmt.Errorf("RPC network does not match %s", cfg.Network.Name)
 	}
-	h, err := api.New(api.Options{Store: s, Network: cfg.Network.Name, RPC: client, RateLimit: rate})
+	h, err := api.New(api.Options{Store: s, Network: cfg.Network.Name, RPC: client, RateLimit: rate, CORSAllowedOrigins: corsAllowedOrigins})
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -115,7 +121,7 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int) (htt
 // multiNetworkHandler opens one read-only store and RPC client per network.
 // The caller keeps it alive until the server returns; stores opened before a
 // later error are closed here.
-func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http.Handler, func(), error) {
+func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int, corsAllowedOrigins []string) (http.Handler, func(), error) {
 	dbs, err := config.ParseNetworkMap(cfg.DB)
 	if err != nil {
 		return nil, nil, fmt.Errorf("--db: %w", err)
@@ -173,12 +179,28 @@ func multiNetworkHandler(ctx context.Context, cfg config.Common, rate int) (http
 		}
 		backends[name] = api.Backend{Store: s, Network: name, RPC: client}
 	}
-	h, err := api.New(api.Options{Networks: backends, RateLimit: rate})
+	h, err := api.New(api.Options{Networks: backends, RateLimit: rate, CORSAllowedOrigins: corsAllowedOrigins})
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
 	return h, cleanup, nil
+}
+
+func parseCORSAllowedOrigins(value string) ([]string, error) {
+	if value == "" {
+		return nil, nil
+	}
+	parts := strings.Split(value, ",")
+	origins := make([]string, 0, len(parts))
+	for _, part := range parts {
+		origin := strings.TrimSpace(part)
+		if origin == "" {
+			return nil, fmt.Errorf("--cors-allowed-origins must not contain an empty origin")
+		}
+		origins = append(origins, origin)
+	}
+	return origins, nil
 }
 
 func serveHTTP(ctx context.Context, listener net.Listener, handler http.Handler, readHeaderTimeout, readTimeout, writeTimeout, idleTimeout time.Duration, maxHeaderBytes int) error {

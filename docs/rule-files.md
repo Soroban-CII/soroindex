@@ -48,6 +48,10 @@ A historical file must describe a SEP that has a current file. It must name exac
 
 ## Status thresholds
 
+The threshold remains configurable. The mainnet census calculation and the
+decision to retain 0.5 are recorded in
+[SEP-41 partial-threshold calibration](threshold-calibration.md).
+
 | Status | Condition |
 | --- | --- |
 | `match` | Every required function present with accepted types |

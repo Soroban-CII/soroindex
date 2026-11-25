@@ -6,6 +6,10 @@ Thanks for helping. This page covers setup, the checks your change must pass, ho
 
 You need Go 1.27.4. `go.mod` pins it with `toolchain go1.27.4`, so an older supported Go can download it automatically. Nothing else is needed for normal work: no CGO, no Rust, no database server.
 
+[Architecture diagrams](https://github.com/Soroban-CII/soroindex/blob/main/docs/architecture.md)
+show the RPC-to-index data flow, batch transaction boundary and CAP-85
+executable-reference fan-out.
+
 ```sh
 git clone https://github.com/Soroban-CII/soroindex
 cd soroindex

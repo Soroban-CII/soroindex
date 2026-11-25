@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 390" role="img" aria-labelledby="title desc">
+  <title id="title">CAP-85 executable-reference fan-out</title>
+  <desc id="desc">When an owner and tag maps to a new Wasm hash, the index updates the reference, resolves the Wasm, and upgrades every contract using that exact owner and tag. Other references are untouched.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#43536b"/>
+    </marker>
+    <style>
+      .box { fill: #f4f7fb; stroke: #43536b; stroke-width: 2; rx: 12; }
+      .contract { fill: #edf7f0; stroke: #34734a; stroke-width: 2; rx: 12; }
+      .other { fill: #f7f7f7; stroke: #8793a3; stroke-width: 2; rx: 12; }
+      .title { fill: #182433; font: 700 18px sans-serif; text-anchor: middle; }
+      .label { fill: #35445a; font: 14px sans-serif; text-anchor: middle; }
+      .arrow { fill: none; stroke: #43536b; stroke-width: 2.5; marker-end: url(#arrow); }
+      .note { fill: #56657a; font: italic 14px sans-serif; text-anchor: middle; }
+    </style>
+  </defs>
+  <rect class="box" x="35" y="125" width="220" height="115"/>
+  <text class="title" x="145" y="160">Owner storage entry</text>
+  <text class="label" x="145" y="190">SCV_EXECUTABLE_TAG(tag)</text>
+  <text class="label" x="145" y="214">new Wasm hash</text>
+
+  <rect class="box" x="335" y="125" width="220" height="115"/>
+  <text class="title" x="445" y="160">Update exec_refs</text>
+  <text class="label" x="445" y="190">owner + tag -> hash</text>
+  <text class="label" x="445" y="214">resolve analyzed Wasm</text>
+
+  <rect class="box" x="635" y="125" width="220" height="115"/>
+  <text class="title" x="745" y="160">Find references</text>
+  <text class="label" x="745" y="190">match this owner</text>
+  <text class="label" x="745" y="214">and tag only</text>
+
+  <rect class="contract" x="935" y="35" width="230" height="105"/>
+  <text class="title" x="1050" y="72">Contract A</text>
+  <text class="label" x="1050" y="101">close old version;</text>
+  <text class="label" x="1050" y="123">open new at ledger</text>
+
+  <rect class="contract" x="935" y="165" width="230" height="105"/>
+  <text class="title" x="1050" y="202">Contract B</text>
+  <text class="label" x="1050" y="231">same owner + tag;</text>
+  <text class="label" x="1050" y="253">upgrade at ledger</text>
+
+  <rect class="other" x="935" y="295" width="230" height="75"/>
+  <text class="title" x="1050" y="326">Other references</text>
+  <text class="label" x="1050" y="350">not upgraded</text>
+
+  <path class="arrow" d="M255 182 H323"/>
+  <path class="arrow" d="M555 182 H623"/>
+  <path class="arrow" d="M855 182 H895 V87 H923"/>
+  <path class="arrow" d="M895 182 H923"/>
+  <text class="note" x="1050" y="285">only current matching references fan out</text>
+</svg>
