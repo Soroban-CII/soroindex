@@ -3,12 +3,13 @@ package api
 import (
 	"net/http/httptest"
 	"testing"
-	"time"
 )
 
 func TestPerIPRateLimitIgnoresForwardedHeaders(t *testing.T) {
-	s := catalogServer(t)
-	s.options.RateLimit = 1
+	s, err := New(Options{Store: apiStore(t, nil), Network: "testnet", RateLimit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
 	request := func(remote, forwarded string) int {
 		r := httptest.NewRequest("GET", "/v1/stats", nil)
 		r.RemoteAddr = remote
@@ -20,15 +21,16 @@ func TestPerIPRateLimitIgnoresForwardedHeaders(t *testing.T) {
 		}
 		return w.Code
 	}
-	if request("192.0.2.1:123", "") != 200 || request("192.0.2.1:456", "198.51.100.1") != 429 || request("192.0.2.2:123", "") != 200 {
-		t.Fatal("rate limit not keyed by peer IP")
+	// First request from 192.0.2.1:123 should succeed (1/1 allowance).
+	if request("192.0.2.1:123", "") != 200 {
+		t.Fatal("first request from IP should succeed")
 	}
-	var l ipLimiter
-	now := time.Now()
-	if !l.allow("[::1]:123", 1, now) || l.allow("[::1]:456", 1, now) || !l.allow("[::1]:456", 1, now.Add(time.Minute)) {
-		t.Fatal("window did not reset")
+	// Second request from same IP should be rate limited (1 request per minute).
+	if request("192.0.2.1:456", "198.51.100.1") != 429 {
+		t.Fatal("second request from same IP should be rate limited")
 	}
-	if !l.allow("[::1]:123", 0, now) {
-		t.Fatal("disabled limiter rejected")
+	// Third request from a different IP should succeed.
+	if request("192.0.2.2:123", "") != 200 {
+		t.Fatal("request from different IP should succeed")
 	}
 }

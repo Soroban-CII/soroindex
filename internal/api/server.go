@@ -46,11 +46,17 @@ type Server struct {
 	options  Options
 	versions match.Versions // current and historical rule files, for matched_version
 	mux      *http.ServeMux
-	limiter  ipLimiter
+	limiter  *ipLimiter
 	backends map[string]Backend
 }
 
 type backendKey struct{}
+
+type gzipKey struct{}
+
+type testTickerIntervalKeyType struct{}
+
+var TestTickerIntervalKey = testTickerIntervalKeyType{}
 
 func backendFrom(ctx context.Context) Backend {
 	b, _ := ctx.Value(backendKey{}).(Backend)
@@ -88,7 +94,8 @@ func New(o Options) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{options: o, versions: versions, mux: http.NewServeMux(), backends: o.Networks}
+	limiter := newIPLimiter(o.RateLimit)
+	s := &Server{options: o, versions: versions, mux: http.NewServeMux(), backends: o.Networks, limiter: limiter}
 	s.mux.HandleFunc("GET /v1/health", s.health)
 	s.mux.HandleFunc("GET /v1/contracts", s.contracts)
 	s.mux.HandleFunc("GET /contracts", s.contracts)
@@ -153,7 +160,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
-	if !s.limiter.allowN(r.RemoteAddr, s.options.RateLimit, lookupCost(r.URL.Path, q), time.Now()) {
+	rateLimitAllowed, rateLimitRemaining, rateLimitReset := s.limiter.allowN(r.RemoteAddr, s.options.RateLimit, lookupCost(r.URL.Path, q), time.Now())
+	if !rateLimitAllowed {
 		w.Header().Set("Retry-After", "60")
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "request limit exceeded")
 		return
@@ -162,6 +170,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	ctx = context.WithValue(ctx, backendKey{}, b)
 	s.mux.ServeHTTP(w, r.WithContext(ctx))
+
+	// Add rate limit headers when --rate-limit is set (limit > 0).
+	if s.options.RateLimit > 0 {
+		w.Header().Set("RateLimit-Limit", strconv.Itoa(s.options.RateLimit))
+		// remaining is the count after the request was charged; if it went
+		// negative (should not happen since we allowed the request), clamp to 0.
+		remaining := rateLimitRemaining
+		if remaining < 0 {
+			remaining = 0
+		}
+		w.Header().Set("RateLimit-Remaining", string(rune('0'+remaining)))
+		// Reset is the time until the window resets, expressed as a
+		// duration string (e.g. "60s"). The ipLimiter resets per minute.
+		resetDur := time.Duration(rateLimitReset) * time.Second
+		w.Header().Set("RateLimit-Reset", resetDur.Round(time.Second).String())
+	}
 }
 
 func (s *Server) selectBackend(network string) (Backend, error) {
@@ -267,11 +291,6 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 // Last-Event-ID header is also supported for automatic resume.
 // The stream sends events with id=<ledger> and data=<JSON VersionChange>.
 // Connection limits and idle timeouts are enforced by the HTTP server settings.
-type testTickerIntervalKeyType struct{}
-
-// TestTickerIntervalKey is a context key for overriding the SSE ticker interval in tests.
-var TestTickerIntervalKey = testTickerIntervalKeyType{}
-
 func (s *Server) upgradesSSE(w http.ResponseWriter, r *http.Request) {
 	// Only allow GET.
 	if r.Method != http.MethodGet {

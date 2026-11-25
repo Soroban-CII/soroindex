@@ -2,18 +2,6 @@
 
 ## Unreleased
 
-- Add a conformance suite against stellar-cli 30.0.1 and the Python
-  stellar-sdk 17.0.1. `scripts/record-conformance.sh` records both tools'
-  output for every fixture and vector under `testdata/conformance/`, and
-  `TestConformanceWithStellarCLIAndPythonSDK` checks `pkg/sepmeta` against
-  it. The eight intentional differences are listed in `docs/how-it-works.md` (#63).
-- Add structure-aware fuzz targets `FuzzDecodeSpecStructured` and
-  `FuzzDecodeMetaStructured`, which build valid spec and meta streams from
-  fuzzer choices and check decode, re-encode, `Functions` and truncation
-  invariants. `DecodeMeta` and `DecodeSpec` now report nesting past
-  `MaxXDRDepth` as `ErrLimit` rather than `ErrMalformed`, and no longer
-  misreport a cut entry as malformed under a small `MaxXDRDepth`, a bug the
-  new spec target found (#64).
 - Add `sepmeta.ReadCustomSectionsAt`, which reads custom sections from an
   `io.ReaderAt` without loading the module. It returns exactly what
   `ReadCustomSections` returns for the same bytes, checked by a differential
@@ -35,6 +23,19 @@
   seed batches in parallel. Commits stay in order, one transaction per batch.
   Seeding 2,000 contracts through a fake RPC with 100 ms per call went from
   1.55 s to 0.46 s (#81).
+- `stats --lag` reads the RPC's network and latest ledger, refuses a provider
+  on another network, and reports latest_ledger and lag in JSON plus a "Sync:"
+  line in text. An RPC behind the index is an error, not a negative or wrapped
+  lag. (#153)
+- Under each "Inferred SEP-N" line, `sep47idx wasm` now prints function names
+  and signatures for missing and mismatched functions, so a contract author
+  can see what to fix without rerunning with --json. (#153)
+- `.github/workflows/release.yml` adds a tag-triggered release workflow that
+  builds static archives, verifies checksums, builds a GHCR image and creates a
+  draft release for maintainer review. (#153)
+- New CLI and API tests cover sync retention-gap detection, wasm human output
+  fix lines, contract history across several upgrades, and snapshot every API
+  endpoint against fixture data. (#153)
 
 - Add `GET /v1/contracts?ids=...`, a bulk lookup of up to 100 contract IDs that
   reports unknown IDs in `not_found` and charges the rate limit per 10 IDs (#114).
