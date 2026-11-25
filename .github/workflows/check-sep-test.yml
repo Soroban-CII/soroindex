@@ -1,0 +1,78 @@
+# Tests the inspect-sep composite action's core behavior against the
+# Wasm fixtures in this repository.  Builds sep47idx locally and passes
+# it to the action via bin-path so no release download is needed.
+#
+# Two scenarios are verified:
+#   pass  – token_full_sep.wasm declares and matches SEP-41 → exits 0.
+#   fail  – token_partial.wasm declares SEP-41 but is partial → exits 1
+#           (the step is expected to fail; we invert the exit code to
+#            report success to the job).
+name: check-sep action tests
+
+on:
+  push:
+    paths:
+      - '.github/actions/inspect-sep/**'
+      - 'cmd/sep47idx/**'
+      - 'testdata/wasm/**'
+      - '.github/workflows/check-sep-test.yml'
+  pull_request:
+    paths:
+      - '.github/actions/inspect-sep/**'
+      - 'cmd/sep47idx/**'
+      - 'testdata/wasm/**'
+      - '.github/workflows/check-sep-test.yml'
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.27.4"
+  GOTOOLCHAIN: local
+
+jobs:
+  action-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build sep47idx
+        run: CGO_ENABLED=0 go build -o "$RUNNER_TEMP/sep47idx" ./cmd/sep47idx
+
+      # ── pass: full SEP-41 implementation ─────────────────────────────────
+      - name: 'pass: token_full_sep.wasm matches SEP-41'
+        id: full
+        uses: ./.github/actions/inspect-sep
+        with:
+          wasm: testdata/wasm/token_full_sep.wasm
+          require-sep: 41
+          bin-path: ${{ runner.temp }}/sep47idx
+
+      - name: 'pass: check outputs'
+        run: |
+          echo "hash=${{ steps.full.outputs.hash }}"
+          echo "parse_status=${{ steps.full.outputs.parse_status }}"
+          [ -n "${{ steps.full.outputs.hash }}" ] || { echo "::error::hash output is empty"; exit 1; }
+          [ "${{ steps.full.outputs.parse_status }}" = "ok" ] || { echo "::error::expected parse_status=ok, got ${{ steps.full.outputs.parse_status }}"; exit 1; }
+
+      # ── fail: partial implementation exits 1 ─────────────────────────────
+      - name: 'fail: token_partial.wasm does not match SEP-41 (expected exit 1)'
+        id: partial
+        continue-on-error: true
+        uses: ./.github/actions/inspect-sep
+        with:
+          wasm: testdata/wasm/token_partial.wasm
+          require-sep: 41
+          bin-path: ${{ runner.temp }}/sep47idx
+
+      - name: 'fail: verify the step did exit 1'
+        run: |
+          if [ "${{ steps.partial.outcome }}" != "failure" ]; then
+            echo "::error::Expected the inspect step to fail for token_partial.wasm but it succeeded"
+            exit 1
+          fi
+          echo "Confirmed: partial Wasm correctly exits non-zero."

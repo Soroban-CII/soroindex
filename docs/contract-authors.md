@@ -62,6 +62,45 @@ $ echo $?
 contracts and indexed ledger. After deployment and indexing, `sep47idx wasm <hash>`
 shows the same evidence for the stored code. See the [CLI reference](cli.md#inspect).
 
+## Add to CI with the GitHub Action
+
+The `Soroban-CII/soroindex` repository ships a composite action that downloads a pinned `sep47idx` release, verifies its `SHA256SUMS`, and runs `inspect --require-match` for you:
+
+```yaml
+# .github/workflows/check-sep.yml
+name: check SEP declarations
+on: [push, pull_request]
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: stellar/stellar-contract-action@v1   # builds your contract
+      - uses: Soroban-CII/soroindex/.github/actions/inspect-sep@main
+        with:
+          wasm: target/wasm32-unknown-unknown/release/my_contract.wasm
+          require-sep: 41          # fail if SEP-41 interface does not match
+```
+
+The action exposes two outputs you can use in later steps:
+
+| Output | Description |
+| --- | --- |
+| `hash` | SHA-256 hash of the Wasm, as the network will record it |
+| `parse-status` | `ok`, `partial`, or `error` |
+
+**Inputs**
+
+| Input | Default | Description |
+| --- | --- | --- |
+| `wasm` | _(required)_ | Path to the compiled `.wasm` file |
+| `require-sep` | `41` | SEP whose inferred interface must be `match` |
+| `release-tag` | _(latest)_ | Pin to a specific release, e.g. `v0.1.0` |
+| `verify-checksums` | `true` | Verify `SHA256SUMS` after download |
+| `bin-path` | _(auto)_ | Use a pre-built binary; skips download |
+
+The action fails (exit 1) when the binary's inferred interface status is not `match`, so the CI job reports failure before the contract is deployed. It succeeds silently when the interface matches.
+
 ## Declaring is a claim, not proof
 
 The `declared` tier records what you say. The `inferred` tier checks your function types against the SEP's rule file. If you declare SEP-41 without its 10 functions, the index shows both facts side by side.

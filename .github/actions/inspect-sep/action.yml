@@ -1,0 +1,152 @@
+# Composite action: download sep47idx, verify its SHA256SUMS, and run
+# `sep47idx inspect --require-match` on a Wasm file.
+#
+# Usage in a contract repository's CI workflow:
+#
+#   - uses: Soroban-CII/soroindex/.github/actions/inspect-sep@main
+#     with:
+#       wasm: target/wasm32-unknown-unknown/release/my_contract.wasm
+#       require-sep: 41
+#
+# The step exits 0 when the binary's inferred interface matches the SEP
+# and exits 1 otherwise, failing the job.  Set verify-checksums: false
+# only if you supply your own pre-downloaded binary at bin-path.
+name: 'Check SEP declarations'
+description: >
+  Download sep47idx from a release, verify its SHA256SUMS, and run
+  `sep47idx inspect --require-match` on a local Wasm file.
+  Fails the step (exit 1) when the inferred interface does not match.
+
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+
+inputs:
+  wasm:
+    description: 'Path to the compiled Wasm file to inspect (relative to the workspace).'
+    required: true
+  require-sep:
+    description: 'SEP number whose inferred interface must be "match". Default: 41.'
+    required: false
+    default: '41'
+  release-tag:
+    description: >
+      sep47idx release tag to download, e.g. v0.1.0.
+      Omit or leave empty to use the latest published release.
+    required: false
+    default: ''
+  verify-checksums:
+    description: >
+      Set to "false" to skip SHA256SUMS verification. Verification is on by
+      default; disable it only in environments without network access to the
+      release download URL (rare).
+    required: false
+    default: 'true'
+  bin-path:
+    description: >
+      Absolute path to a sep47idx binary to use instead of downloading one.
+      When set, release-tag and verify-checksums are ignored.
+    required: false
+    default: ''
+
+outputs:
+  hash:
+    description: 'SHA-256 hash of the inspected Wasm, as reported by sep47idx.'
+    value: ${{ steps.inspect.outputs.hash }}
+  parse-status:
+    description: 'Parse status reported by sep47idx (ok, partial, error).'
+    value: ${{ steps.inspect.outputs.parse_status }}
+
+runs:
+  using: 'composite'
+  steps:
+    # ── 1. Resolve the binary path ────────────────────────────────────────────
+    - name: Download sep47idx release
+      id: download
+      if: inputs.bin-path == ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        INPUT_TAG: ${{ inputs.release-tag }}
+        INPUT_VERIFY: ${{ inputs.verify-checksums }}
+      run: |
+        set -euo pipefail
+
+        # Resolve the release tag.
+        if [ -z "$INPUT_TAG" ]; then
+          TAG=$(gh release view --repo Soroban-CII/soroindex --json tagName --jq .tagName)
+        else
+          TAG="$INPUT_TAG"
+        fi
+
+        # Map runner platform to release archive name.
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          aarch64|arm64) ARCH=arm64 ;;
+          x86_64|amd64)  ARCH=amd64 ;;
+          *) echo "::error::Unsupported architecture: $ARCH" && exit 1 ;;
+        esac
+        ASSET="sep47idx_${TAG}_${OS}_${ARCH}.tar.gz"
+
+        WORK="$RUNNER_TEMP/sep47idx-action"
+        mkdir -p "$WORK"
+
+        # Download the archive and its SHA256SUMS.
+        gh release download "$TAG" \
+          --repo Soroban-CII/soroindex \
+          --pattern "$ASSET" \
+          --pattern 'SHA256SUMS' \
+          --dir "$WORK"
+
+        # Verify the archive against SHA256SUMS when requested.
+        if [ "$INPUT_VERIFY" != 'false' ]; then
+          cd "$WORK"
+          grep "^[0-9a-f]*  $ASSET$" SHA256SUMS | sha256sum --check
+          cd -
+        fi
+
+        # Extract the binary and make it executable.
+        tar -xzf "$WORK/$ASSET" -C "$WORK" sep47idx
+        chmod +x "$WORK/sep47idx"
+
+        echo "bin=$WORK/sep47idx" >> "$GITHUB_OUTPUT"
+        echo "sep47idx $TAG downloaded and verified." >&2
+
+    - name: Resolve binary path
+      id: bin
+      shell: bash
+      env:
+        DOWNLOAD_BIN: ${{ steps.download.outputs.bin }}
+        CUSTOM_BIN: ${{ inputs.bin-path }}
+      run: |
+        if [ -n "$CUSTOM_BIN" ]; then
+          echo "path=$CUSTOM_BIN" >> "$GITHUB_OUTPUT"
+        else
+          echo "path=$DOWNLOAD_BIN" >> "$GITHUB_OUTPUT"
+        fi
+
+    # ── 2. Inspect ────────────────────────────────────────────────────────────
+    - name: Inspect Wasm
+      id: inspect
+      shell: bash
+      env:
+        BIN: ${{ steps.bin.outputs.path }}
+        WASM: ${{ inputs.wasm }}
+        SEP: ${{ inputs.require-sep }}
+      run: |
+        set -euo pipefail
+
+        OUTPUT=$("$BIN" inspect "$WASM" --require-match "$SEP" 2>&1) || {
+          echo "$OUTPUT"
+          echo "::error::sep47idx inspect failed: inferred SEP-${SEP} interface is not 'match', or the file could not be read."
+          exit 1
+        }
+        echo "$OUTPUT"
+
+        # Extract hash and parse status from the first line, e.g.:
+        #   <hash>: ok (parser N), local file <path>, not indexed
+        HASH=$(echo "$OUTPUT" | head -1 | cut -d: -f1)
+        PARSE=$(echo "$OUTPUT" | head -1 | sed 's/.*: \([a-z]*\) (.*/\1/')
+        echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+        echo "parse_status=$PARSE" >> "$GITHUB_OUTPUT"
