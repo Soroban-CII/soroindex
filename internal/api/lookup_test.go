@@ -130,7 +130,7 @@ func TestBulkLookupChargesRateLimitPerTenIDs(t *testing.T) {
 	// A cost above the whole budget is charged as the whole budget, so the
 	// request is possible once per window rather than never.
 	s.options.RateLimit = 5
-	s.limiter = ipLimiter{}
+	s.limiter = &ipLimiter{}
 	full := make([]string, 100)
 	for i := range full {
 		full[i] = catalogID(t, 1)
