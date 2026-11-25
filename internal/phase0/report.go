@@ -116,10 +116,14 @@ type Summary struct {
 	Anomalies []AnomalyCount `json:"anomalies"`
 
 	SEP41 struct {
-		Status        map[string]Pair `json:"status"`         // match/partial/mismatch/no_spec
-		OKHistogram   []int           `json:"ok_histogram"`   // by hash; index = OK count
-		UndeclaredGap Pair            `json:"undeclared_gap"` // match and declares nothing
-		Declared41    map[string]Pair `json:"declared_41_by_status"`
+		Status        map[string]Pair     `json:"status"`         // match/partial/mismatch/no_spec
+		OKHistogram   []int               `json:"ok_histogram"`   // by hash; index = OK count
+		UndeclaredGap Pair                `json:"undeclared_gap"` // match and declares nothing
+		Declared41    map[string]Pair     `json:"declared_41_by_status"`
+		// DisagreementExamples holds up to 3 example hash prefixes per
+		// non-match status for hashes that declare SEP-41 but whose inferred
+		// interface status is partial, mismatch, or no_spec.
+		DisagreementExamples map[string][]string `json:"disagreement_examples,omitempty"`
 	} `json:"sep41"`
 
 	// UsedHashes repeats the by-hash numbers over only the hashes some
@@ -456,6 +460,26 @@ func Summarize(c Census, results map[string]ingest.WasmResult, population []stri
 				s.UsedHashes.Gap++
 			}
 		}
+	}
+
+	// Collect example hashes for the declared-vs-inferred disagreement section:
+	// hashes that declare SEP-41 but whose inferred status is not match.
+	disagreeExamples := map[string][]string{}
+	for _, r := range measured {
+		if !r.Declares(41) {
+			continue
+		}
+		m, ok := r.MatchFor(41)
+		if !ok || m.Status == match.StatusMatch {
+			continue
+		}
+		st := string(m.Status)
+		if len(disagreeExamples[st]) < 3 {
+			disagreeExamples[st] = append(disagreeExamples[st], r.Hash[:12])
+		}
+	}
+	if len(disagreeExamples) > 0 {
+		s.SEP41.DisagreementExamples = disagreeExamples
 	}
 
 	// Contracts running hashes outside the population still count by contract.

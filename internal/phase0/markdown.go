@@ -105,6 +105,40 @@ func RenderAdoption(sums []Summary) string {
 		p("| OK | %s |\n|%s\n| Hashes | %s |\n\n", joinInts(seq(len(s.SEP41.OKHistogram))), strings.Repeat(" ---: |", len(s.SEP41.OKHistogram)+1), joinInts(s.SEP41.OKHistogram))
 		p("**Undeclared gap** (inferred): %d hashes / %d contracts match SEP-41's interface and declare nothing.\n\n", s.SEP41.UndeclaredGap.Hashes, s.SEP41.UndeclaredGap.Contracts)
 
+		// Declared-vs-inferred disagreement section.
+		disagreeStatuses := []string{"partial", "mismatch", "no_spec"}
+		var disagreeTotal Pair
+		for _, st := range disagreeStatuses {
+			d := s.SEP41.Declared41[st]
+			disagreeTotal.Hashes += d.Hashes
+			disagreeTotal.Contracts += d.Contracts
+		}
+		p("#### Declared-vs-inferred disagreement\n\n")
+		if disagreeTotal.Hashes == 0 {
+			p("No hashes declare SEP-41 while the inferred interface status is `partial`, `mismatch`, or `no_spec`.\n\n")
+		} else {
+			p("These hashes declare SEP-41 in their `sep` meta but do not fully satisfy the inferred interface check. ")
+			p("A `partial` or `mismatch` status means the `contractspecv0` section is present but some required functions are missing or typed differently. ")
+			p("`no_spec` means the binary has no `contractspecv0` section at all despite the declaration.\n\n")
+			p("| Status | Hashes | Contracts | Example hashes |\n| --- | ---: | ---: | --- |\n")
+			for _, st := range disagreeStatuses {
+				d := s.SEP41.Declared41[st]
+				if d.Hashes == 0 {
+					continue
+				}
+				examples := "–"
+				if ex, ok := s.SEP41.DisagreementExamples[st]; ok && len(ex) > 0 {
+					exParts := make([]string, len(ex))
+					for i, e := range ex {
+						exParts[i] = "`" + e + "…`"
+					}
+					examples = strings.Join(exParts, ", ")
+				}
+				p("| `%s` | %d | %d | %s |\n", st, d.Hashes, d.Contracts, examples)
+			}
+			p("\nTotal: %d hashes / %d contracts declare SEP-41 but do not match its inferred interface.\n\n", disagreeTotal.Hashes, disagreeTotal.Contracts)
+		}
+
 		p("### Limits\n\nWasm ≤ %d bytes; requested section ≤ %d bytes; ≤ %d sections; XDR depth ≤ %d.\n\n",
 			s.Limits.MaxWasmBytes, s.Limits.MaxSectionBytes, s.Limits.MaxSections, s.Limits.MaxXDRDepth)
 		if s.Sample != nil {

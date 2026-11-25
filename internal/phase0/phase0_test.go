@@ -303,10 +303,18 @@ func TestRunMainnetCensus(t *testing.T) {
 	md, _ := fs.ReadFile(out, "ADOPTION.md")
 	for _, want := range []string{"## Decision", "| Wasm contracts whose code is archived or missing | 1 | |",
 		"| Code entries in census | 9 |", "| Archived or missing (not fetched) | 2 |", "that RPC returned live",
-		"| Instances archived | not measured: the census source carries no instance TTLs | |", "4 / 6 (66.67%)", "6 / 7 (85.71%)", "**Undeclared gap** (inferred): 1 hashes / 1 contracts"} {
+		"| Instances archived | not measured: the census source carries no instance TTLs | |", "4 / 6 (66.67%)", "6 / 7 (85.71%)", "**Undeclared gap** (inferred): 1 hashes / 1 contracts",
+		// Declared-vs-inferred disagreement section (#126).
+		"#### Declared-vs-inferred disagreement",
+		"declare SEP-41 in their `sep` meta but do not fully satisfy",
+	} {
 		if !strings.Contains(string(md), want) {
 			t.Errorf("ADOPTION.md lacks %q", want)
 		}
+	}
+	// Disagreement section must report mismatch hashes (2 hashes declare 41 but mismatch).
+	if !strings.Contains(string(md), "| `mismatch` | 2 |") {
+		t.Errorf("ADOPTION.md disagreement table missing mismatch row with 2 hashes:\n%s", string(md))
 	}
 }
 
