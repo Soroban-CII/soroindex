@@ -50,6 +50,32 @@ All timeouts accept Go duration strings (e.g. `30s`, `1m`). Set to `0` to disabl
 
 An index starts from a seed: a CSV with a `contract_id` column. For mainnet, export Q2 of [`scripts/hubble-export.sql`](https://github.com/Soroban-CII/soroindex/blob/main/scripts/hubble-export.sql) from BigQuery, or run `phase0` and use its `mainnet-contracts.csv`.
 
+### Validate before syncing
+
+Use `sep47idx seed --check <file>` to do a **dry run** against the RPC before writing to the database. It reads every instance entry in the same batches that `sync --seed` uses and reports totals without touching the database:
+
+```sh
+sep47idx seed --network mainnet --rpc-url <url> --check mainnet-contracts.csv
+```
+
+Example output:
+
+```text
+rows: 156173 unique (0 duplicate); latest_ledger: 54823110
+found: 154801  not_found: 1372
+kinds: wasm: 148922  wasm_ref: 4521  sac: 1358
+```
+
+If the file contains invalid contract IDs the command lists them, exits non-zero, and makes **no** network calls:
+
+```text
+invalid: row 3: "GABCD123" is not a contract ID
+```
+
+If you supplied a `wasm_hash` column and an instance's on-chain hash differs from the hint, that row is counted as `hint_mismatch` rather than `found`. Correct the hash or remove the column before seeding.
+
+The exit code is 0 when no invalid IDs are found, 1 otherwise. Use `--json` to get a machine-readable `SeedCheckResult` object.
+
 ```sh
 sep47idx sync --network mainnet --rpc-url <url> --seed mainnet-contracts.csv
 ```

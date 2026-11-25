@@ -70,10 +70,15 @@ type commonRaw struct {
 }
 
 // RegisterCommon adds the shared flags to fs and returns a function that
-// resolves them after fs.Parse, applying environment variables to any flag
-// not set on the command line.
+// resolves them after fs.Parse, applying a config file and environment
+// variables to any flag not set on the command line.
+//
+// Precedence (highest to lowest): command-line flag > env var > config file > default.
+// Secrets are never read from the config file; see ApplyFile.
 func RegisterCommon(fs *flag.FlagSet) func() (Common, error) {
 	var r commonRaw
+	var configFile string
+	fs.StringVar(&configFile, "config", "", "path to a JSON config file (env SEP47IDX_CONFIG); flags > env > file > defaults; secrets are not accepted from the file")
 	fs.StringVar(&r.network, "network", "testnet", "network: mainnet, testnet, or futurenet (env SEP47IDX_NETWORK)")
 	fs.StringVar(&r.rpcURL, "rpc-url", "", "Stellar RPC URL (env SEP47IDX_RPC_URL; testnet default "+Testnet.DefaultRPCURL+", futurenet default "+Futurenet.DefaultRPCURL+")")
 	fs.StringVar(&r.db, "db", "", "SQLite database path (env SEP47IDX_DB; default ./data/<network>.db)")
@@ -81,7 +86,14 @@ func RegisterCommon(fs *flag.FlagSet) func() (Common, error) {
 	fs.DurationVar(&r.rpcTimeout, "rpc-timeout", 30*time.Second, "timeout per RPC attempt (env SEP47IDX_RPC_TIMEOUT)")
 	fs.IntVar(&r.concurrency, "rpc-concurrency", 4, "RPC requests in flight (env SEP47IDX_RPC_CONCURRENCY)")
 	return func() (Common, error) {
+		// Apply env vars first (flags > env > file > defaults): once env
+		// fills any unset flags, ApplyFile only touches what is still at its
+		// default. The config flag itself may be set by SEP47IDX_CONFIG here.
 		if err := ApplyEnv(fs, os.LookupEnv); err != nil {
+			return Common{}, err
+		}
+		// configFile now reflects the CLI or env value.
+		if err := ApplyFile(fs, configFile); err != nil {
 			return Common{}, err
 		}
 		n, err := NetworkByName(r.network)
