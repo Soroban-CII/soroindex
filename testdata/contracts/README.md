@@ -25,6 +25,28 @@ changes the bytes, so the script refuses to run with any other version.
 Building twice with these versions gives identical bytes; `../wasm/SHA256SUMS`
 lists the expected hashes.
 
+## Conformance recordings
+
+`scripts/record-conformance.sh` runs two other SEP-47 readers on every
+fixture here and on every meta vector, and writes their output to
+`../conformance/`. `pkg/sepmeta`'s `TestConformanceWithStellarCLIAndPythonSDK`
+compares against those files, so `go test` never needs either tool. The
+script refuses any other version of these tools:
+
+| Tool | Version | Pinned in |
+| --- | --- | --- |
+| stellar-cli | 30.0.1 (`f2a7b741`), passed as `$STELLAR_CLI` | `scripts/record-conformance.sh` |
+| stellar-sdk (Python) | 17.0.1, installed by `uv` for the run | `scripts/record-conformance.sh` |
+| Python | 3.13 (3.13.14 when recorded) | `scripts/record-conformance.sh` |
+
+These were the latest releases on 2026-11-25, when the recordings were
+made. stellar-cli 30.0.1 is passed by path because the fixture build needs
+28.0.0 on `PATH`. Both CLI versions gave byte-identical recordings. The
+macOS arm64 release archive's sha256
+(`53e126c7be4ec096809a44cececdc7dee5131f261f3c8b85bdafb98053556d55`)
+matched the digest GitHub publishes for the v30.0.1 asset.
+`../conformance/VERSIONS.json` records the versions of the last run.
+
 ## Fixtures
 
 | Wasm | Source | Contents |

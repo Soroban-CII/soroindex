@@ -1,0 +1,38 @@
+{
+  "input": {
+    "kind": "fixture",
+    "name": "no_meta",
+    "wasm_sha256": "315d83c29445656542b9bac8f4967ea7b810d08361ff9be9c5feba82233487b1"
+  },
+  "py_stellar_sdk": {
+    "items": [],
+    "ok": true,
+    "parts": [],
+    "supported_seps": {
+      "ok": true,
+      "seps": []
+    },
+    "supported_seps_strict": {
+      "ok": true,
+      "seps": []
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "functions": [
+        {
+          "inputs": [],
+          "name": "ping",
+          "outputs": [
+            "u32"
+          ]
+        }
+      ],
+      "ok": true
+    },
+    "meta": {
+      "error": "❌ error: no meta present in provided WASM file",
+      "ok": false
+    }
+  }
+}

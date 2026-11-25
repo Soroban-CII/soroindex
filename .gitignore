@@ -44,3 +44,4 @@ testdata/contracts/**/Cargo.lock.bak
 # of storing tens of MB in history.
 /report/mainnet_instances.csv
 /report/mainnet-contracts.csv
+sepmeta-bench.txt

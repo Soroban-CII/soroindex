@@ -3,6 +3,7 @@ package sepmeta
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"path/filepath"
 	"reflect"
@@ -43,6 +44,11 @@ func isClassified(err error) bool {
 		errors.Is(err, ErrMalformed) || errors.Is(err, ErrLimit)
 }
 
+// FuzzReadCustomSections checks the byte-slice reader's own invariants and
+// holds ReadCustomSectionsAt to it: for every input both must return the
+// same sections and the same error. It also reads through a ReaderAt that
+// ends early, which must give ErrTruncated or, if the lost bytes were never
+// needed, the full result.
 func FuzzReadCustomSections(f *testing.F) {
 	seedFixtures(f, func(b []byte) []byte { return b })
 	f.Add([]byte{})
@@ -51,6 +57,25 @@ func FuzzReadCustomSections(f *testing.F) {
 	names := []string{SectionMeta, SectionSpec}
 	f.Fuzz(func(t *testing.T, wasm []byte) {
 		for _, lim := range []Limits{DefaultLimits(), small} {
+			if d := compareReaders(wasm, names, lim); d != "" {
+				t.Fatalf("ReadCustomSectionsAt differs from ReadCustomSections: %s", d)
+			}
+			if len(wasm) > 0 {
+				cut := int(wasm[len(wasm)-1]) % len(wasm) // input-derived, so the fuzzer can steer it
+				short, err := ReadCustomSectionsAt(shortReaderAt{r: wasm, limit: cut, err: io.EOF}, int64(len(wasm)), names, lim)
+				if err != nil && !isClassified(err) {
+					t.Fatalf("short read: unclassified error: %v", err)
+				}
+				full, fullErr := ReadCustomSections(wasm, names, lim)
+				if err == nil && (fullErr != nil || len(short) != len(full)) {
+					t.Fatalf("short read succeeded where the full read gave %v", fullErr)
+				}
+				for k, v := range short {
+					if !bytes.Equal(v, full[k]) {
+						t.Fatalf("short read returned different %q bytes", k)
+					}
+				}
+			}
 			orig := append([]byte(nil), wasm...)
 			got, err := ReadCustomSections(wasm, names, lim)
 			if !bytes.Equal(wasm, orig) {

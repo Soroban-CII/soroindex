@@ -33,6 +33,8 @@ GOPROXY=https://proxy.golang.org,direct make test
 | `make docs` | `mkdocs build --strict` | `docs` workflow |
 | `make bench` | p50/p95 for every API query and the materialized alternative, 1M-claim fixture | — |
 | `make bench-10m` | The same at 10M claims and 1M contracts (about 4 GB of disk, about an hour; see `docs/query-benchmark.md`) | — |
+| `make bench-budget` | `pkg/sepmeta` benchmarks over every fixture; fails if allocs/op or B/op exceeds `pkg/sepmeta/testdata/alloc-budgets.txt` | `bench-budget` (not required) |
+| `make bench-budget-update` | Rewrites the budgets from a fresh run; say why in the commit body | — |
 
 The required checks are `lint`, `test`, `fuzz-smoke` and `build`. Security and docs workflows provide additional review evidence.
 
