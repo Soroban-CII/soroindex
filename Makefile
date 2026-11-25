@@ -11,7 +11,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)
 
 export CGO_ENABLED := 0
 
-.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check rules-check bench bench-10m clean
+.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check rules-check check gofmt bench bench-10m clean
 
 all: lint test build
 
@@ -66,6 +66,17 @@ docs:
 CHECK_JSONSCHEMA_VERSION ?= 0.38.2
 rules-check:
 	pipx run --spec check-jsonschema==$(CHECK_JSONSCHEMA_VERSION) check-jsonschema --schemafile rules/schema.json rules/sep-*.json rules/history/*.json
+
+## gofmt: fail if go source files are not gofmt'd
+gofmt:
+	@test -z "$$(gofmt -l .)"
+
+## check: run tidy-check, gofmt, vet, lint and test in the same order as CI
+check: tidy-check gofmt vet lint test
+
+## vet: run go vet
+vet:
+	$(GO) vet ./...
 
 ## tidy-check: fail if go.mod/go.sum are not tidy
 tidy-check:

@@ -26,6 +26,8 @@ GOPROXY=https://proxy.golang.org,direct make test
 | `make lint` | `golangci-lint run ./...` (govet, staticcheck, errcheck, gosec, revive) | `lint` |
 | `make rules-check` | Validates `rules/sep-*.json` against `rules/schema.json` | `lint` |
 | `make tidy-check` | Fails if `go.mod`/`go.sum` are not tidy | `lint` |
+| `make gofmt` | Fails if go source files are not gofmt'd | — |
+| `make check` | Runs `tidy-check`, `gofmt`, `vet`, `lint` and `test` in order | — |
 | `make fuzz-smoke` | Each fuzz target for 30 s | `fuzz-smoke` |
 | `make fuzz FUZZTIME=10m` | Each fuzz target for 10 minutes | — |
 | `make build` | Static binary, `CGO_ENABLED=0` | `build` (linux/darwin × amd64/arm64) |
