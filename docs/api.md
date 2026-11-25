@@ -5,6 +5,27 @@ with `sep47idx serve`. It serves JSON and enables GET CORS. POST and other write
 methods return a JSON error. `--rate-limit` sets requests per minute per peer IP;
 0 disables it. Forwarding headers do not override the peer address.
 
+By default, the server sends `Access-Control-Allow-Origin: *` and allows
+`GET, OPTIONS`, preserving public read-only access. To restrict browser access,
+pass a comma-separated exact origin list:
+
+```sh
+sep47idx serve --cors-allowed-origins 'https://app.example,https://admin.example'
+```
+
+The same value can be set with `SEP47IDX_CORS_ALLOWED_ORIGINS`; a command-line
+flag takes precedence. Origins include the scheme and any non-default port, and
+must not include a path. With an allow-list, only a listed `Origin` receives
+`Access-Control-Allow-Origin`, and responses include `Vary: Origin`. Other
+origins receive no CORS grant.
+
+Preflight `OPTIONS` requests return `204 No Content` with an empty body. For a
+listed origin, the response allows `GET, OPTIONS` and echoes requested header
+names in `Access-Control-Allow-Headers`, including headers such as
+`If-None-Match`. The preflight response also varies on
+`Access-Control-Request-Method` and `Access-Control-Request-Headers`. The API
+does not enable credentialed CORS.
+
 Contract IDs must be full `C...` strkeys. Wasm hashes must be 64 lowercase hex
 characters. Invalid input returns 400; absent resources return 404. Unknown
 paths return 404. Collections return 200 with an empty array when nothing matches.

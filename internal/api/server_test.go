@@ -100,9 +100,113 @@ func TestServerRoutingAndMissingProgress(t *testing.T) {
 	}
 	w = httptest.NewRecorder()
 	s.ServeHTTP(w, httptest.NewRequest("OPTIONS", "/v1/health", nil))
-	if w.Code != 204 {
-		t.Fatal(w.Code)
+	if w.Code != 204 || w.Body.Len() != 0 ||
+		w.Header().Get("Access-Control-Allow-Origin") != "*" ||
+		w.Header().Get("Access-Control-Allow-Methods") != "GET, OPTIONS" {
+		t.Fatalf("default preflight: %d %v %q", w.Code, w.Header(), w.Body.String())
 	}
+}
+
+func TestCORSAllowListAndPreflight(t *testing.T) {
+	const allowedOrigin = "https://app.example"
+	s, err := New(Options{
+		Store:              apiStore(t, nil),
+		Network:            "testnet",
+		RPC:                tip{sequence: 10},
+		CORSAllowedOrigins: []string{allowedOrigin},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name       string
+		origin     string
+		wantOrigin string
+	}{
+		{name: "listed origin", origin: allowedOrigin, wantOrigin: allowedOrigin},
+		{name: "unlisted origin", origin: "https://other.example"},
+		{name: "missing origin"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/unknown", nil)
+			if test.origin != "" {
+				req.Header.Set("Origin", test.origin)
+			}
+			w := httptest.NewRecorder()
+			s.ServeHTTP(w, req)
+			if got := w.Header().Get("Access-Control-Allow-Origin"); got != test.wantOrigin {
+				t.Fatalf("Access-Control-Allow-Origin = %q, want %q", got, test.wantOrigin)
+			}
+			if !hasVary(w.Header(), "Origin") {
+				t.Fatalf("Vary does not include Origin: %v", w.Header().Values("Vary"))
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		name        string
+		origin      string
+		wantOrigin  string
+		wantHeaders string
+	}{
+		{
+			name:        "listed origin reflects requested headers",
+			origin:      allowedOrigin,
+			wantOrigin:  allowedOrigin,
+			wantHeaders: "If-None-Match, X-Client-Version",
+		},
+		{name: "unlisted origin gets no CORS grant", origin: "https://other.example"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodOptions, "/v1/contracts", nil)
+			req.Header.Set("Origin", test.origin)
+			req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+			req.Header.Set("Access-Control-Request-Headers", "If-None-Match, X-Client-Version")
+			w := httptest.NewRecorder()
+			s.ServeHTTP(w, req)
+			if w.Code != http.StatusNoContent || w.Body.Len() != 0 {
+				t.Fatalf("preflight = %d, body %q", w.Code, w.Body.String())
+			}
+			if got := w.Header().Get("Access-Control-Allow-Origin"); got != test.wantOrigin {
+				t.Fatalf("Access-Control-Allow-Origin = %q, want %q", got, test.wantOrigin)
+			}
+			if test.wantOrigin != "" {
+				if got := w.Header().Get("Access-Control-Allow-Methods"); got != "GET, OPTIONS" {
+					t.Fatalf("Access-Control-Allow-Methods = %q", got)
+				}
+				if got := w.Header().Get("Access-Control-Allow-Headers"); got != test.wantHeaders {
+					t.Fatalf("Access-Control-Allow-Headers = %q, want %q", got, test.wantHeaders)
+				}
+			} else if got := w.Header().Get("Access-Control-Allow-Headers"); got != "" {
+				t.Fatalf("unlisted origin received Access-Control-Allow-Headers = %q", got)
+			}
+			for _, name := range []string{"Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"} {
+				if !hasVary(w.Header(), name) {
+					t.Fatalf("Vary does not include %s: %v", name, w.Header().Values("Vary"))
+				}
+			}
+		})
+	}
+}
+
+func TestNewRejectsInvalidCORSOrigins(t *testing.T) {
+	for _, origin := range []string{"*", "https://example.test/path", "file:///tmp"} {
+		if _, err := New(Options{CORSAllowedOrigins: []string{origin}}); err == nil {
+			t.Errorf("New accepted invalid origin %q", origin)
+		}
+	}
+}
+
+func hasVary(header http.Header, name string) bool {
+	for _, value := range header.Values("Vary") {
+		for _, token := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(token), name) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func TestUpgradesSSEStreaming(t *testing.T) {

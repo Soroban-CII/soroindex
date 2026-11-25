@@ -16,8 +16,9 @@
 #   and prints each differing file and the `go version -m` difference. The
 #   release job publishes build-a's archives only after that check passes.
 #
-# A new GHCR package is private. Make it public once, under the package's
-# settings.
+# The preflight job requests and cancels an empty GHCR upload before archive
+# builds start, so missing package write access fails fast without publishing
+# an image.
 name: release
 
 on:
@@ -43,8 +44,33 @@ env:
   RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
+  preflight:
+    name: ghcr-preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: tag is vN.N.N
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "tag must be vN.N.N, got $RELEASE_TAG" >&2; exit 1; }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+      - name: test GHCR permission probe
+        run: python3 -m unittest discover -s scripts -p test_check_ghcr_write.py
+      - name: verify GHCR write access before building
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_ghcr_write.py
+
   # Two independent builds of the same tag, each on a fresh runner.
   build:
+    needs: preflight
     strategy:
       fail-fast: false
       matrix:

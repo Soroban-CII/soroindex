@@ -24,6 +24,7 @@ Every flag can come from an environment variable (see [CLI reference](cli.md)):
 | `SEP47IDX_RPC_TIMEOUT`, `SEP47IDX_RPC_CONCURRENCY` | RPC tuning |
 | `SEP47IDX_ADDR` | HTTP listen address (default `:8080`) |
 | `SEP47IDX_RATE_LIMIT` | Requests per minute per peer IP; 0 disables |
+| `SEP47IDX_CORS_ALLOWED_ORIGINS` | Comma-separated exact browser origins; unset allows all |
 | `SEP47IDX_READ_HEADER_TIMEOUT` | Maximum time to read request headers (default 5s) |
 | `SEP47IDX_READ_TIMEOUT` | Maximum time to read request body (default 20s) |
 | `SEP47IDX_WRITE_TIMEOUT` | Maximum time to write response (default 20s) |
@@ -161,6 +162,10 @@ no proxy settings and no CA bundle; `docker history` shows neither.
 
 `.github/workflows/release.yml` builds and pushes `ghcr.io/soroban-cii/soroindex:<tag>`:
 
+- A GHCR write preflight runs before the archive builds. It requests an empty
+  upload using the workflow token and cancels it; it does not push an image tag.
+  If it fails, check that the workflow grants `packages: write` and that the
+  package allows this repository's GitHub Actions workflow to write.
 - Pushing a `vN.N.N` tag builds the archives and the image, creates a **draft**
   GitHub release for a maintainer to review, and pushes the image.
 - For a release that already exists, such as v0.1.0, run it from
@@ -201,4 +206,17 @@ A tree with uncommitted changes records `"source_tree_dirty": true` in
 `BUILD.json` and does not match. Releases made before this check (v0.1.0)
 cannot be reproduced, as explained above.
 
-A new GHCR package starts private. Make it public once, in the package's settings.
+A new GHCR package starts private. To allow the release workflow to push:
+
+1. Keep `packages: write` in the workflow's release and preflight job
+   permissions.
+2. In the container package's **Package settings → Manage Actions access**,
+   add this repository and grant it write access. Repeat this if the package
+   uses granular permissions rather than inheriting repository access.
+3. Check that the organization permits GitHub Actions to create and publish
+   packages. The preflight reports a failure before archive builds if the
+   registry refuses the write scope.
+
+Make the package public in its settings only if public image pulls are
+intended. Visibility does not grant the workflow write permission. See
+[GitHub's package access control documentation](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#ensuring-workflow-access-to-your-package).
