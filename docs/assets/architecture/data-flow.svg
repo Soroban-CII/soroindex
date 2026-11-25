@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 330" role="img" aria-labelledby="title desc">
+  <title id="title">Soroban index data flow</title>
+  <desc id="desc">Stellar RPC feeds sync and ingest, which write the SQLite index. The read-only HTTP API and CLI query the index.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#43536b"/>
+    </marker>
+    <style>
+      .box { fill: #f4f7fb; stroke: #43536b; stroke-width: 2; rx: 12; }
+      .title { fill: #182433; font: 700 20px sans-serif; text-anchor: middle; }
+      .label { fill: #35445a; font: 15px sans-serif; text-anchor: middle; }
+      .arrow { fill: none; stroke: #43536b; stroke-width: 2.5; marker-end: url(#arrow); }
+      .rpc { fill: none; stroke: #687b91; stroke-width: 2; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+      .note { fill: #56657a; font: italic 14px sans-serif; text-anchor: middle; }
+    </style>
+  </defs>
+  <rect class="box" x="30" y="95" width="190" height="120"/>
+  <text class="title" x="125" y="130">Stellar RPC</text>
+  <text class="label" x="125" y="160">getLedgers</text>
+  <text class="label" x="125" y="184">getLedgerEntries</text>
+
+  <rect class="box" x="270" y="95" width="200" height="120"/>
+  <text class="title" x="370" y="130">Sync + ingest</text>
+  <text class="label" x="370" y="160">extract ledger changes</text>
+  <text class="label" x="370" y="184">parse, claim, match</text>
+
+  <rect class="box" x="525" y="95" width="190" height="120"/>
+  <text class="title" x="620" y="130">SQLite index</text>
+  <text class="label" x="620" y="160">one transaction per batch</text>
+  <text class="label" x="620" y="184">current + historical data</text>
+
+  <rect class="box" x="800" y="35" width="190" height="110"/>
+  <text class="title" x="895" y="72">HTTP API</text>
+  <text class="label" x="895" y="100">read-only index</text>
+  <text class="label" x="895" y="123">JSON + event stream</text>
+
+  <rect class="box" x="800" y="190" width="190" height="110"/>
+  <text class="title" x="895" y="227">CLI</text>
+  <text class="label" x="895" y="255">query and inspect</text>
+  <text class="label" x="895" y="278">same indexed data</text>
+
+  <path class="arrow" d="M220 155 H258"/>
+  <path class="arrow" d="M470 155 H513"/>
+  <path class="arrow" d="M715 155 H755 V90 H788"/>
+  <path class="arrow" d="M715 155 H755 V245 H788"/>
+  <path class="rpc" d="M220 120 H238 V25 H895 V35"/>
+  <text class="note" x="560" y="19">live tip check</text>
+  <text class="note" x="1090" y="104">health also reads</text>
+  <text class="note" x="1090" y="125">the live RPC tip</text>
+</svg>
