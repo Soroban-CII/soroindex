@@ -1,0 +1,8 @@
+cff-version: 1.2.0
+title: "soroindex: A public index of Soroban smart contracts"
+authors:
+  - name: "Soroban-CII"
+license: "Apache-2.0"
+repository: "https://github.com/Soroban-CII/soroindex"
+version: "0.1.0"
+date-released: "2026-11-09"
