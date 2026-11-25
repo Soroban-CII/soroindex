@@ -45,11 +45,11 @@ This report is the final source documentation commit after those listed above.
 - Container API startup first failed because container DNS could not reach the public RPC. Supplying named proxy variables, the proxy hostname mapping and a read-only trusted CA mount resolved it; TLS stayed enabled. Ordinary Internet hosts may use the README command directly.
 - The [demo](wave/DEMO.md) records real candidate commands/output: dated Phase 0 rendering, separate declared/inferred queries, gap (27 contracts), actual contract history, and curl stats at ledger 5097816. Rendering did not rerun the mainnet census. Absolute paths identify the actual run; fresh samples can differ.
 
-Stage I changes no Go application logic. Existing G/H unit, race, lint, fuzz, benchmark and security validation is recorded in [the G/H checkpoint](stage-gh-checkpoint.md); it was not relabelled as a fresh Stage I run. Stage I functional validation covers the new packaging and operator utilities. No implementation-mirroring tests were added.
+Stage I changes no Go application logic. Existing G/H unit, race, lint, fuzz, benchmark and security validation is recorded in [the G/H checkpoint](archive/stage-gh-checkpoint.md); it was not relabelled as a fresh Stage I run. Stage I functional validation covers the new packaging and operator utilities. No implementation-mirroring tests were added.
 
 ## Claims and live evidence
 
-- Before writing README, fetched and read the GitHub-selected READMEs of the three leading approved Wave rows (59, 54, 54 Wave-recorded stars). Their source hashes and observed patterns are in [README comparison](wave/README-COMPARISON.md).
+- Before writing README, fetched and read the GitHub-selected READMEs of the three leading approved Wave rows (59, 54, 54 Wave-recorded stars). Their source hashes and observed patterns are in [README comparison](archive/README-COMPARISON.md).
 - Public approved-list searches returned zero for `soroindex` and `ciscokwiz/soroindex`; control `routedock` returned one. Initial proxy 403s were followed by successful HTTP 200 public-page curl reads. The direct Wave API hostname still failed proxy CONNECT. The page's server-rendered JSON supplied the actual live search/list evidence.
 - Anonymous HTTP checks: repository **200**, CI workflow page **200**, documentation site **404**, intended v0.1.0 release page **404**. These are read-only HTTP results, not logged-out browser rendering checks. External badges/prior-art links still require operator browser review.
 - Candidate release binaries and Docker image exist locally. No public image/release, docs deployment, demo video or hosted API is claimed. The application link table states what remains absent.
