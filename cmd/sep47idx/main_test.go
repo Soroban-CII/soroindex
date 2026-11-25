@@ -23,6 +23,7 @@ func TestRun(t *testing.T) {
 		{"version prints version and toolchain", []string{"version"}, exitOK, "sep47idx dev (" + runtime.Version(), ""},
 		{"version rejects positional args", []string{"version", "extra"}, exitError, "", "takes no arguments"},
 		{"version rejects unknown flags", []string{"version", "-x"}, exitError, "", "flag provided but not defined"},
+		{"version prints version as JSON", []string{"version", "--json"}, exitOK, "go_version", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
