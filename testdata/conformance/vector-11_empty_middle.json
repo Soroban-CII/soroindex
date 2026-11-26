@@ -1,0 +1,87 @@
+{
+  "input": {
+    "kind": "vector",
+    "name": "11_empty_middle",
+    "wasm_sha256": "164940fe4946c015cc4ca89521c5e430c5ec8ae8a4f925bc99247359cd97c0b5"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "41,,46"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          },
+          "part": "41",
+          "strict": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          }
+        },
+        {
+          "lenient": {
+            "ok": true,
+            "seps": []
+          },
+          "part": "",
+          "strict": {
+            "error": "ValueError: Invalid SEP identifier: empty value.",
+            "ok": false
+          }
+        },
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              46
+            ]
+          },
+          "part": "46",
+          "strict": {
+            "ok": true,
+            "seps": [
+              46
+            ]
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        41,
+        46
+      ]
+    },
+    "supported_seps_strict": {
+      "error": "ValueError: Invalid SEP identifier: empty value.",
+      "ok": false
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "error": "❌ error: no interface present in provided WASM file",
+      "ok": false
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "41,,46"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

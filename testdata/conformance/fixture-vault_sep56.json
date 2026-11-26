@@ -1,0 +1,366 @@
+{
+  "input": {
+    "kind": "fixture",
+    "name": "vault_sep56",
+    "wasm_sha256": "890a5ecfba9060bfdfd134f538498675f6563bb25e9c6e271594a3bf8f6cf444"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "41,56"
+      ],
+      [
+        "rsver",
+        "1.98.1"
+      ],
+      [
+        "rssdkver",
+        "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+      ],
+      [
+        "rssdk_spec_shaking",
+        "2"
+      ],
+      [
+        "cliver",
+        "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          },
+          "part": "41",
+          "strict": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          }
+        },
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              56
+            ]
+          },
+          "part": "56",
+          "strict": {
+            "ok": true,
+            "seps": [
+              56
+            ]
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        41,
+        56
+      ]
+    },
+    "supported_seps_strict": {
+      "ok": true,
+      "seps": [
+        41,
+        56
+      ]
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "functions": [
+        {
+          "inputs": [
+            "address",
+            "i128"
+          ],
+          "name": "burn",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "i128",
+            "address",
+            "address",
+            "address"
+          ],
+          "name": "mint",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "name",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "inputs": [
+            "i128",
+            "address",
+            "address",
+            "address"
+          ],
+          "name": "redeem",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "symbol",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "i128",
+            "u32"
+          ],
+          "name": "approve",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "balance",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "i128",
+            "address",
+            "address",
+            "address"
+          ],
+          "name": "deposit",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "decimals",
+          "outputs": [
+            "u32"
+          ]
+        },
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "max_mint",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "muxed_address",
+            "i128"
+          ],
+          "name": "transfer",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "i128",
+            "address",
+            "address",
+            "address"
+          ],
+          "name": "withdraw",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "address"
+          ],
+          "name": "allowance",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "i128"
+          ],
+          "name": "burn_from",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "max_redeem",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "max_deposit",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "query_asset",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "max_withdraw",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "i128"
+          ],
+          "name": "preview_mint",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "total_assets",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "total_supply",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "string",
+            "string"
+          ],
+          "name": "__constructor",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "address",
+            "i128"
+          ],
+          "name": "transfer_from",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "i128"
+          ],
+          "name": "preview_redeem",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "i128"
+          ],
+          "name": "preview_deposit",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "i128"
+          ],
+          "name": "preview_withdraw",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "i128"
+          ],
+          "name": "convert_to_assets",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "i128"
+          ],
+          "name": "convert_to_shares",
+          "outputs": [
+            "i128"
+          ]
+        }
+      ],
+      "ok": true
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "41,56"
+        ],
+        [
+          "rsver",
+          "1.98.1"
+        ],
+        [
+          "rssdkver",
+          "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+        ],
+        [
+          "rssdk_spec_shaking",
+          "2"
+        ],
+        [
+          "cliver",
+          "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

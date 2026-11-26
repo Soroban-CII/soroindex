@@ -1,0 +1,54 @@
+{
+  "input": {
+    "kind": "vector",
+    "name": "10_negative",
+    "wasm_sha256": "1cfd651bb9719789ab8926f835a5e0d733d4441d4307ffbd29867c605c561435"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "-1"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": []
+          },
+          "part": "-1",
+          "strict": {
+            "error": "ValueError: Invalid SEP identifier: '-1'.",
+            "ok": false
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": []
+    },
+    "supported_seps_strict": {
+      "error": "ValueError: Invalid SEP identifier: '-1'.",
+      "ok": false
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "error": "❌ error: no interface present in provided WASM file",
+      "ok": false
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "-1"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

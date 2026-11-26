@@ -1,0 +1,71 @@
+{
+  "input": {
+    "kind": "vector",
+    "name": "12_trailing_comma",
+    "wasm_sha256": "b85a212962f16a4dcb6f8f6dd64be8a1e320f95229c39b75220fa6505ef89c49"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "41,"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          },
+          "part": "41",
+          "strict": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          }
+        },
+        {
+          "lenient": {
+            "ok": true,
+            "seps": []
+          },
+          "part": "",
+          "strict": {
+            "error": "ValueError: Invalid SEP identifier: empty value.",
+            "ok": false
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        41
+      ]
+    },
+    "supported_seps_strict": {
+      "error": "ValueError: Invalid SEP identifier: empty value.",
+      "ok": false
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "error": "❌ error: no interface present in provided WASM file",
+      "ok": false
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "41,"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

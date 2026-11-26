@@ -1,0 +1,207 @@
+{
+  "input": {
+    "kind": "fixture",
+    "name": "nft_sep50_partial",
+    "wasm_sha256": "991db166708f875b9ead23a743314acbf8a0bfbeb3dca6ef04fcc9220ef42626"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "50"
+      ],
+      [
+        "rsver",
+        "1.98.1"
+      ],
+      [
+        "rssdkver",
+        "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+      ],
+      [
+        "rssdk_spec_shaking",
+        "2"
+      ],
+      [
+        "cliver",
+        "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              50
+            ]
+          },
+          "part": "50",
+          "strict": {
+            "ok": true,
+            "seps": [
+              50
+            ]
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        50
+      ]
+    },
+    "supported_seps_strict": {
+      "ok": true,
+      "seps": [
+        50
+      ]
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "functions": [
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "mint",
+          "outputs": [
+            "u32"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "name",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "symbol",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "u32",
+            "u32"
+          ],
+          "name": "approve",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "balance",
+          "outputs": [
+            "u32"
+          ]
+        },
+        {
+          "inputs": [
+            "u32"
+          ],
+          "name": "owner_of",
+          "outputs": [
+            "address"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "u32"
+          ],
+          "name": "transfer",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "u32"
+          ],
+          "name": "token_uri",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "inputs": [
+            "u32"
+          ],
+          "name": "get_approved",
+          "outputs": [
+            {
+              "option": {
+                "value_type": "address"
+              }
+            }
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "string",
+            "string",
+            "string"
+          ],
+          "name": "__constructor",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "address",
+            "u32"
+          ],
+          "name": "transfer_from",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address",
+            "address"
+          ],
+          "name": "is_approved_for_all",
+          "outputs": [
+            "bool"
+          ]
+        }
+      ],
+      "ok": true
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "50"
+        ],
+        [
+          "rsver",
+          "1.98.1"
+        ],
+        [
+          "rssdkver",
+          "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+        ],
+        [
+          "rssdk_spec_shaking",
+          "2"
+        ],
+        [
+          "cliver",
+          "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

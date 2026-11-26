@@ -12,6 +12,10 @@
 //	spec, err := sepmeta.DecodeSpec(secs[sepmeta.SectionSpec], sepmeta.DefaultLimits())
 //	fns := sepmeta.Functions(spec)                          // name + type names
 //
+// For a module on disk, [ReadCustomSectionsAt] reads the same sections from
+// an io.ReaderAt, touching only section headers and the requested payloads,
+// so memory scales with those payloads rather than with the module.
+//
 // A declaration is what the contract says, not what it does. SEP-47 leaves
 // claims unverified, and so does this package: compare Functions against the
 // SEP's interface to check the claim, and remember that even a matching

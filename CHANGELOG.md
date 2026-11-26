@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Add a conformance suite against stellar-cli 30.0.1 and the Python
+  stellar-sdk 17.0.1. `scripts/record-conformance.sh` records both tools'
+  output for every fixture and vector under `testdata/conformance/`, and
+  `TestConformanceWithStellarCLIAndPythonSDK` checks `pkg/sepmeta` against
+  it. The eight intentional differences are listed in `docs/how-it-works.md` (#63).
+- Add structure-aware fuzz targets `FuzzDecodeSpecStructured` and
+  `FuzzDecodeMetaStructured`, which build valid spec and meta streams from
+  fuzzer choices and check decode, re-encode, `Functions` and truncation
+  invariants. `DecodeMeta` and `DecodeSpec` now report nesting past
+  `MaxXDRDepth` as `ErrLimit` rather than `ErrMalformed`, and no longer
+  misreport a cut entry as malformed under a small `MaxXDRDepth`, a bug the
+  new spec target found (#64).
+- Add `sepmeta.ReadCustomSectionsAt`, which reads custom sections from an
+  `io.ReaderAt` without loading the module. It returns exactly what
+  `ReadCustomSections` returns for the same bytes, checked by a differential
+  test over every fixture and inside `FuzzReadCustomSections`. On a 1 MiB
+  module it allocates the requested payloads plus under 16 KiB (#62).
 - Report which SEP-41 version a Wasm's interface implements. `rules/history/` adds
   SEP-41 v0.1.0 and v0.3.0, each citing its stellar-protocol commit. Matches carry
   `matched_version` in the API and in the `wasm`, `contract` and `inspect` output.

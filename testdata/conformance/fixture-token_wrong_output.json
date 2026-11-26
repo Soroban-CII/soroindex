@@ -1,0 +1,181 @@
+{
+  "input": {
+    "kind": "fixture",
+    "name": "token_wrong_output",
+    "wasm_sha256": "000141b075ba9026de5968057be779a6fbc8c894f23b5815e1f8d7ed4fec148b"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "41"
+      ],
+      [
+        "rsver",
+        "1.98.1"
+      ],
+      [
+        "rssdkver",
+        "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+      ],
+      [
+        "rssdk_spec_shaking",
+        "2"
+      ],
+      [
+        "cliver",
+        "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          },
+          "part": "41",
+          "strict": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        41
+      ]
+    },
+    "supported_seps_strict": {
+      "ok": true,
+      "seps": [
+        41
+      ]
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "functions": [
+        {
+          "inputs": [
+            "address",
+            "i128"
+          ],
+          "name": "burn",
+          "outputs": []
+        },
+        {
+          "inputs": [],
+          "name": "name",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "symbol",
+          "outputs": [
+            "string"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "i128",
+            "u32"
+          ],
+          "name": "approve",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address"
+          ],
+          "name": "balance",
+          "outputs": [
+            "u128"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "decimals",
+          "outputs": [
+            "u32"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "muxed_address",
+            "i128"
+          ],
+          "name": "transfer",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address",
+            "address"
+          ],
+          "name": "allowance",
+          "outputs": [
+            "i128"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "i128"
+          ],
+          "name": "burn_from",
+          "outputs": []
+        },
+        {
+          "inputs": [
+            "address",
+            "address",
+            "address",
+            "i128"
+          ],
+          "name": "transfer_from",
+          "outputs": []
+        }
+      ],
+      "ok": true
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "41"
+        ],
+        [
+          "rsver",
+          "1.98.1"
+        ],
+        [
+          "rssdkver",
+          "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+        ],
+        [
+          "rssdk_spec_shaking",
+          "2"
+        ],
+        [
+          "cliver",
+          "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}
