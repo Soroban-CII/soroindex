@@ -87,42 +87,42 @@ Wasm ≤ 1048576 bytes; requested section ≤ 262144 bytes; ≤ 10000 sections; 
 
 ## Testnet
 
-Run: 2026-10-07T06:37:37Z, latest ledger 5066292. Parser version 1; rules sep41-v0.5.2.
+Run: 2026-11-25T14:09:28Z, latest ledger 5918424. Parser version 1; rules sep41-v0.5.2.
 
-**Method.** Sample, not a census: Hubble does not cover testnet. The RPC retention window (ledgers 4944777–5065736) was split into 20 equal strata; each was scanned from its start with getLedgers until it gave its share of contracts not seen before. A contract enters the sample when its instance entry is created or updated in a scanned ledger, so active contracts are more likely to be drawn than idle ones. Each sampled contract's current instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.
+**Method.** Sample, not a census: Hubble does not cover testnet. The RPC retention window (ledgers 5797464–5918423) was split into 20 equal strata; each was scanned from its start with getLedgers until it gave its share of contracts not seen before. A contract enters the sample when its instance entry is created or updated in a scanned ledger, so active contracts are more likely to be drawn than idle ones. Each sampled contract's current instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.
 
 ### Contracts
 
 | | Count | Share |
 | --- | ---: | ---: |
-| Contracts counted | 2000 | |
-| Stellar Asset Contracts | 112 | 5.60% |
-| Wasm (direct hash) | 1842 | 92.10% |
-| Wasm by CAP-85 reference | 9 | 0.45% |
-| … distinct references they share | 9 | |
+| Contracts counted | 10 | |
+| Stellar Asset Contracts | 0 | 0.00% |
+| Wasm (direct hash) | 10 | 100.00% |
+| Wasm by CAP-85 reference | 0 | 0.00% |
+| … distinct references they share | 0 | |
 | … references unresolved | 0 | |
-| Instances archived | 37 | 1.85% |
+| Instances archived | 0 | 0.00% |
 | Instance rows that failed to decode | 0 | |
-| Wasm contracts whose code is archived or missing | 76 | |
-| Wasm contracts measured (by-contract denominator) | 1775 | |
+| Wasm contracts whose code is archived or missing | 0 | |
+| Wasm contracts measured (by-contract denominator) | 10 | |
 
 ### Wasm hashes
 
 | | Count |
 | --- | ---: |
-| Unique hashes measured for | 505 |
-| Archived or missing (not fetched) | 26 |
-| Fetched (by-hash denominator) | 479 |
-| … parsed fully / partly / not at all | 479 / 0 / 0 |
-| … run by at least one contract | 479 |
+| Unique hashes measured for | 8 |
+| Archived or missing (not fetched) | 0 |
+| Fetched (by-hash denominator) | 8 |
+| … parsed fully / partly / not at all | 8 / 0 / 0 |
+| … run by at least one contract | 8 |
 
 ### Declarations (`sep` meta)
 
 | | By unique hash | By contract |
 | --- | ---: | ---: |
-| Declares any SEP | 0 / 479 (0.00%) | 0 / 1775 (0.00%) |
+| Declares any SEP | 0 / 8 (0.00%) | 0 / 10 (0.00%) |
 
-95% Wilson interval for the by-contract rate: 0.00% to 0.22%. The interval covers sampling error only; the sample is drawn by activity (see Method), which it does not correct for.
+95% Wilson interval for the by-contract rate: 0.00% to 27.75%. The interval covers sampling error only; the sample is drawn by activity (see Method), which it does not correct for.
 
 Factory deployments make many contracts share one hash, so the two columns can differ a lot.
 
@@ -134,28 +134,28 @@ None found.
 
 ### Interface (`contractspecv0`)
 
-Hashes with a spec section: 479 / 479 (100.00%).
+Hashes with a spec section: 8 / 8 (100.00%).
 
 SEP-41 matcher (rules sep41-v0.5.2), counted over fetched hashes and measured contracts:
 
 | Status | Hashes | Contracts | Of which declare SEP-41 (hashes / contracts) |
 | --- | ---: | ---: | ---: |
-| `match` | 17 | 100 | 0 / 0 |
-| `partial` | 21 | 165 | 0 / 0 |
-| `mismatch` | 441 | 1510 | 0 / 0 |
+| `match` | 2 | 4 | 0 / 0 |
+| `partial` | 1 | 1 | 0 / 0 |
+| `mismatch` | 5 | 5 | 0 / 0 |
 | `no_spec` | 0 | 0 | 0 / 0 |
 
 OK-count histogram (hashes with a spec, by number of the 10 required functions present with accepted types):
 
 | OK | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Hashes | 405 | 24 | 6 | 0 | 6 | 2 | 0 | 0 | 15 | 4 | 17 |
+| Hashes | 2 | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 2 |
 
-**Undeclared gap** (inferred): 17 hashes / 100 contracts match SEP-41's interface and declare nothing.
+**Undeclared gap** (inferred): 2 hashes / 4 contracts match SEP-41's interface and declare nothing.
 
 ### Limits
 
 Wasm ≤ 1048576 bytes; requested section ≤ 262144 bytes; ≤ 10000 sections; XDR depth ≤ 500.
 
-Sample: retention window 4944777–5065736, 20 strata, 19600 ledgers scanned, contracts per stratum [100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100 100], 0 instance entries undecodable.
+Sample: retention window 5797464–5918423, 20 strata, 100 ledgers scanned, contracts per stratum [1 1 1 1 1 1 1 1 1 1], 0 instance entries undecodable.
 

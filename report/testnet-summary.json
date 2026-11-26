@@ -1,12 +1,12 @@
 {
   "network": "testnet",
-  "generated_at": "2026-10-07T06:37:37Z",
-  "latest_ledger": 5066292,
+  "generated_at": "2026-11-25T14:09:28Z",
+  "latest_ledger": 5918424,
   "parser_version": "1",
   "ruleset_versions": [
     "sep41-v0.5.2"
   ],
-  "method": "Sample, not a census: Hubble does not cover testnet. The RPC retention window (ledgers 4944777–5065736) was split into 20 equal strata; each was scanned from its start with getLedgers until it gave its share of contracts not seen before. A contract enters the sample when its instance entry is created or updated in a scanned ledger, so active contracts are more likely to be drawn than idle ones. Each sampled contract's current instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.",
+  "method": "Sample, not a census: Hubble does not cover testnet. The RPC retention window (ledgers 5797464–5918423) was split into 20 equal strata; each was scanned from its start with getLedgers until it gave its share of contracts not seen before. A contract enters the sample when its instance entry is created or updated in a scanned ledger, so active contracts are more likely to be drawn than idle ones. Each sampled contract's current instance was then read with getLedgerEntries. By-hash rates are over the distinct hashes the sampled contracts run.",
   "limits": {
     "MaxWasmBytes": 1048576,
     "MaxSectionBytes": 262144,
@@ -14,46 +14,46 @@
     "MaxXDRDepth": 500
   },
   "contracts": {
-    "total": 2000,
-    "sac": 112,
-    "wasm": 1842,
-    "wasm_ref": 9,
-    "wasm_ref_distinct_refs": 9,
+    "total": 10,
+    "sac": 0,
+    "wasm": 10,
+    "wasm_ref": 0,
+    "wasm_ref_distinct_refs": 0,
     "wasm_ref_unresolved": 0,
-    "archived_instances": 37,
+    "archived_instances": 0,
     "instance_decode_errors": 0,
-    "measured": 1775
+    "measured": 10
   },
   "hashes": {
     "code_entries": 0,
     "code_deleted": 0,
-    "population": 505,
-    "archived": 26,
-    "measured": 479,
-    "parse_ok": 479,
+    "population": 8,
+    "archived": 0,
+    "measured": 8,
+    "parse_ok": 8,
     "parse_partial": 0,
     "parse_error": 0,
-    "used_by_a_contract": 479
+    "used_by_a_contract": 8
   },
   "declares_any": {
     "by_hash": {
       "n": 0,
-      "of": 479,
+      "of": 8,
       "pct": 0
     },
     "by_contract": {
       "n": 0,
-      "of": 1775,
+      "of": 10,
       "pct": 0
     },
     "wilson95_by_contract": {
       "low_pct": 0,
-      "high_pct": 0.21595284962836822
+      "high_pct": 27.753279986288927
     }
   },
   "with_spec_by_hash": {
-    "n": 479,
-    "of": 479,
+    "n": 8,
+    "of": 8,
     "pct": 100
   },
   "per_sep": [],
@@ -61,38 +61,38 @@
   "sep41": {
     "status": {
       "match": {
-        "hashes": 17,
-        "contracts": 100
+        "hashes": 2,
+        "contracts": 4
       },
       "mismatch": {
-        "hashes": 441,
-        "contracts": 1510
+        "hashes": 5,
+        "contracts": 5
       },
       "no_spec": {
         "hashes": 0,
         "contracts": 0
       },
       "partial": {
-        "hashes": 21,
-        "contracts": 165
+        "hashes": 1,
+        "contracts": 1
       }
     },
     "ok_histogram": [
-      405,
-      24,
-      6,
-      0,
-      6,
       2,
+      3,
       0,
       0,
-      15,
-      4,
-      17
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      2
     ],
     "undeclared_gap": {
-      "hashes": 17,
-      "contracts": 100
+      "hashes": 2,
+      "contracts": 4
     },
     "declared_41_by_status": {
       "match": {
@@ -116,38 +116,28 @@
   "used_hashes": {
     "declaring": 0,
     "sep41_status": {
-      "match": 17,
-      "mismatch": 441,
-      "partial": 21
+      "match": 2,
+      "mismatch": 5,
+      "partial": 1
     },
-    "undeclared_gap": 17
+    "undeclared_gap": 2
   },
   "sample": {
-    "OldestLedger": 4944777,
-    "LatestLedger": 5065736,
+    "OldestLedger": 5797464,
+    "LatestLedger": 5918423,
     "Strata": 20,
-    "LedgersScanned": 19600,
+    "LedgersScanned": 100,
     "PerStratum": [
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100,
-      100
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
     ],
     "SkippedEntries": 0
   }
