@@ -1,0 +1,174 @@
+# One segment of the testnet soak (.github/workflows/soak.yml).
+#
+# A job on a GitHub-hosted runner is cancelled at 6 hours, so a 24-hour soak
+# runs as a chain of segments. Each segment resumes the index and the sample
+# log that the previous one uploaded, follows the tip for `duration`, and
+# re-evaluates the thresholds over every sample recorded so far.
+#
+# The repository must already be checked out and Go installed: this is a
+# local composite action.
+name: soak segment
+description: Follow testnet for one soak segment, carrying the index and samples forward.
+
+inputs:
+  segment:
+    description: This segment's number, from 1.
+    required: true
+  previous:
+    description: The previous segment's number, or empty for the first segment.
+    required: false
+    default: ""
+  duration:
+    description: How long this segment follows the tip (Go duration, e.g. 4h48m).
+    required: true
+  rpc-url:
+    description: Stellar RPC URL. The test refuses any network but testnet.
+    required: false
+    default: https://soroban-testnet.stellar.org
+  sample-interval:
+    description: Shortest gap between two recorded samples (Go duration).
+    required: false
+    default: 1m
+  max-lag:
+    description: Fail when a post-catch-up sample is further behind the tip than this, in ledgers.
+    required: false
+    default: "25"
+  max-growth-bytes:
+    description: Fail when memory in one segment grows by more than this many bytes.
+    required: false
+    default: "268435456"
+  max-growth-ratio:
+    description: Fail when memory in one segment grows by more than this factor.
+    required: false
+    default: "2.0"
+  test-timeout:
+    description: -timeout for go test; must exceed duration by a few minutes.
+    required: false
+    default: 5h
+  retention-days:
+    description: How long to keep this segment's samples, report and log.
+    required: false
+    default: "14"
+
+runs:
+  using: composite
+  steps:
+    - name: name this segment's files
+      id: paths
+      shell: bash
+      env:
+        SEGMENT: ${{ inputs.segment }}
+      run: |
+        set -euo pipefail
+        padded="$(printf '%03d' "$SEGMENT")"
+        workspace="${GITHUB_WORKSPACE:?GITHUB_WORKSPACE is required}"
+        soak_dir="${workspace}/soak"
+        {
+          echo "sample_dir=${soak_dir}/samples"
+          echo "samples=${soak_dir}/samples/segment-${padded}.jsonl"
+          echo "report=${soak_dir}/report-${padded}.md"
+          echo "log=${soak_dir}/segment-${padded}.log"
+          echo "db=${soak_dir}/testnet.db"
+        } >> "$GITHUB_OUTPUT"
+        mkdir -p "${soak_dir}/samples"
+    # The index carries over so the chain covers consecutive ledgers: the
+    # loop resumes from the stored last_ledger instead of jumping to the tip.
+    - name: restore the index from the previous segment
+      if: inputs.previous != ''
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: soak-db-${{ inputs.previous }}
+        path: ${{ github.workspace }}/soak
+    # Every earlier segment's samples, so the lag series spans the whole run.
+    - name: restore the samples from every earlier segment
+      if: inputs.previous != ''
+      uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        pattern: soak-samples-*
+        merge-multiple: true
+        path: ${{ github.workspace }}/soak
+    - name: require the restored index
+      if: inputs.previous != ''
+      shell: bash
+      env:
+        SOAK_DB: ${{ steps.paths.outputs.db }}
+      run: |
+        set -euo pipefail
+        test -s "$SOAK_DB"
+    # Read-only against testnet: the test indexes ledgers and submits no
+    # transaction. pipefail keeps the failure while retaining the log.
+    - name: follow testnet for one segment
+      shell: bash
+      env:
+        SEP47IDX_RPC_URL: ${{ inputs.rpc-url }}
+        SEP47IDX_SOAK_DURATION: ${{ inputs.duration }}
+        SEP47IDX_SOAK_SAMPLE_INTERVAL: ${{ inputs.sample-interval }}
+        SEP47IDX_SOAK_MAX_LAG: ${{ inputs.max-lag }}
+        SEP47IDX_SOAK_MAX_MEMORY_GROWTH_BYTES: ${{ inputs.max-growth-bytes }}
+        SEP47IDX_SOAK_MAX_MEMORY_GROWTH_RATIO: ${{ inputs.max-growth-ratio }}
+        SEP47IDX_SOAK_SEGMENT: ${{ inputs.segment }}
+        SEP47IDX_SOAK_SAMPLE_DIR: ${{ steps.paths.outputs.sample_dir }}
+        SEP47IDX_SOAK_DB: ${{ steps.paths.outputs.db }}
+        SEP47IDX_SOAK_REPORT: ${{ steps.paths.outputs.report }}
+        # Only a soak enforces the lag and memory thresholds. The nightly
+        # integration job sets nothing, so it keeps its original pass/fail
+        # conditions and the thresholds are reported there, not applied.
+        SEP47IDX_SOAK_ENFORCE: "true"
+        TEST_TIMEOUT: ${{ inputs.test-timeout }}
+        SEGMENT_LOG: ${{ steps.paths.outputs.log }}
+      run: |
+        set -euo pipefail
+        go test -v -count=1 -tags integration -run '^TestFollowTestnet30Minutes$' \
+          -timeout "$TEST_TIMEOUT" ./internal/sync | tee "$SEGMENT_LOG"
+    - name: verify this segment's outputs
+      shell: bash
+      env:
+        SOAK_DB: ${{ steps.paths.outputs.db }}
+        SOAK_SAMPLES: ${{ steps.paths.outputs.samples }}
+        SOAK_REPORT: ${{ steps.paths.outputs.report }}
+        SOAK_LOG: ${{ steps.paths.outputs.log }}
+      run: |
+        set -euo pipefail
+        for artifact in "$SOAK_DB" "$SOAK_SAMPLES" "$SOAK_REPORT" "$SOAK_LOG"; do
+          if [[ ! -s "$artifact" ]]; then
+            echo "mandatory segment output is missing or empty: $artifact" >&2
+            exit 1
+          fi
+        done
+    - name: add the report to the job summary
+      if: always()
+      shell: bash
+      env:
+        SEGMENT: ${{ inputs.segment }}
+        SEGMENT_REPORT: ${{ steps.paths.outputs.report }}
+      run: |
+        set -euo pipefail
+        if [[ -f "$SEGMENT_REPORT" ]]; then
+          cat "$SEGMENT_REPORT" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "Segment $SEGMENT wrote no report; see its log artifact." >> "$GITHUB_STEP_SUMMARY"
+        fi
+    # if: always() so a failed segment still leaves its samples and log.
+    - name: retain this segment's samples, report and log
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: soak-samples-${{ inputs.segment }}
+        path: |
+          ${{ steps.paths.outputs.samples }}
+          ${{ steps.paths.outputs.report }}
+          ${{ steps.paths.outputs.log }}
+        if-no-files-found: error
+        retention-days: ${{ inputs.retention-days }}
+    # The index is only an input to the next segment, so it is kept briefly.
+    - name: retain the index for the next segment
+      if: always()
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: soak-db-${{ inputs.segment }}
+        path: |
+          ${{ steps.paths.outputs.db }}
+          ${{ steps.paths.outputs.db }}-wal
+          ${{ steps.paths.outputs.db }}-shm
+        if-no-files-found: error
+        retention-days: 3

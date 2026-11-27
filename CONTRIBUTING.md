@@ -38,6 +38,15 @@ GOPROXY=https://proxy.golang.org,direct make test
 
 The required checks are `lint`, `test`, `fuzz-smoke` and `build`. Security and docs workflows provide additional review evidence.
 
+Two workflows run the testnet follow check, which needs the network and so
+carries the `integration` build tag: `integration` follows for 30 minutes
+nightly, and `soak` runs the same test for 24 hours in five chained segments,
+weekly and on dispatch. Both are read-only against testnet. Only the soak
+enforces the lag and memory thresholds (`SEP47IDX_SOAK_ENFORCE`); the nightly
+run reports them and keeps its original pass/fail conditions. MAINTAINING.md
+explains the thresholds, the artifacts and what the segmentation cannot
+prove.
+
 ## Rules for code
 
 - Treat Wasm and XDR from the network as hostile. Check every length against the bytes remaining and a limit before allocating.

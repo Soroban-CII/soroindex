@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add a 24-hour testnet soak (`soak.yml`), weekly and on dispatch, as five
+  chained 4h48m segments because a GitHub-hosted job is cancelled at 6 hours.
+  Each segment resumes the previous segment's index, records lag and RSS as
+  JSONL, and uploads its samples, report and log even when it fails. Lag is
+  judged across the whole chain; memory growth only within a segment, since
+  each segment is a fresh process. `TestFollowTestnet30Minutes` now takes its
+  duration and thresholds from `SEP47IDX_SOAK_*`, so there is one follow test
+  and not two: with nothing set it keeps the nightly 30-minute run and its
+  original pass/fail conditions, and only `SEP47IDX_SOAK_ENFORCE` turns a
+  threshold verdict into a failure. No 24-hour run has been dispatched yet
+  (#138).
+
 - Add a conformance suite against stellar-cli 30.0.1 and the Python
   stellar-sdk 17.0.1. `scripts/record-conformance.sh` records both tools'
   output for every fixture and vector under `testdata/conformance/`, and

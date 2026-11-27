@@ -1,0 +1,275 @@
+# 24-hour testnet soak. The nightly `integration` workflow follows testnet
+# for 30 minutes, which is too short to show slow lag drift or a slow memory
+# leak; this workflow runs the same check for a day and fails on a lag or
+# memory-growth threshold.
+#
+# Why it is split into segments: a job on a GitHub-hosted runner is cancelled
+# at 6 hours (a whole run may last 35 days), so 24 hours cannot be one job.
+# Five chained segments of 4h48m cover 24 hours. Each segment downloads the
+# previous segment's SQLite index and every earlier segment's samples, so the
+# index follows consecutive ledgers across the chain and the lag series spans
+# the whole day.
+#
+# What this proves and what it does not: lag is judged across the whole
+# chain. Memory growth is judged inside one segment only, because each
+# segment is a fresh process, so the resident-set series restarts at each
+# boundary. A green run means every ~4h48m process stayed within the growth
+# limit and lag stayed bounded for 24 hours; it does not prove that a single
+# process is leak-free for 24 hours. For that, run the segment duration you
+# need on a self-hosted runner or locally (MAINTAINING.md).
+#
+# It is read-only against testnet: it indexes ledgers and submits no
+# transaction, needs no key and uses no secret.
+#
+# A failing segment stops the chain, because `needs` skips the rest. Every
+# segment uploads its samples, report and log even when it fails.
+#
+# Only this workflow enforces the thresholds: the composite action sets
+# SEP47IDX_SOAK_ENFORCE, and nothing else does. The nightly integration job
+# records the same samples and prints the same verdicts without being able to
+# fail on them, so adding the soak did not add a way for it to go red.
+name: soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      segment_duration:
+        description: Follow duration per segment (Go duration). Five segments of 4h48m make 24 hours; use a few minutes to check the plumbing.
+        required: false
+        default: 4h48m
+      sample_interval:
+        description: Shortest gap between recorded lag/RSS samples (Go duration).
+        required: false
+        default: 1m
+      max_lag:
+        description: Fail when a post-catch-up sample is further behind the tip than this, in ledgers.
+        required: false
+        default: "25"
+      max_growth_bytes:
+        description: Fail when memory within one segment grows by more than this many bytes.
+        required: false
+        default: "268435456"
+      max_growth_ratio:
+        description: Fail when memory within one segment grows by more than this factor.
+        required: false
+        default: "2.0"
+      test_timeout:
+        description: -timeout for go test; keep it above segment_duration.
+        required: false
+        default: 5h
+  schedule:
+    # 01:11 UTC on Sundays. Scheduled runs use the defaults above.
+    - cron: "11 1 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: soak
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.27.4"
+  GOTOOLCHAIN: local
+
+jobs:
+  # Scheduled runs supply no inputs, so the defaults are resolved once here
+  # and every segment reads them from this job's outputs.
+  settings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      duration: ${{ steps.resolve.outputs.duration }}
+      sample_interval: ${{ steps.resolve.outputs.sample_interval }}
+      max_lag: ${{ steps.resolve.outputs.max_lag }}
+      max_growth_bytes: ${{ steps.resolve.outputs.max_growth_bytes }}
+      max_growth_ratio: ${{ steps.resolve.outputs.max_growth_ratio }}
+      test_timeout: ${{ steps.resolve.outputs.test_timeout }}
+    steps:
+      - name: resolve the soak settings
+        id: resolve
+        shell: bash
+        env:
+          DURATION: ${{ inputs.segment_duration }}
+          SAMPLE_INTERVAL: ${{ inputs.sample_interval }}
+          MAX_LAG: ${{ inputs.max_lag }}
+          MAX_GROWTH_BYTES: ${{ inputs.max_growth_bytes }}
+          MAX_GROWTH_RATIO: ${{ inputs.max_growth_ratio }}
+          TEST_TIMEOUT: ${{ inputs.test_timeout }}
+        run: |
+          set -euo pipefail
+          {
+            echo "duration=${DURATION:-4h48m}"
+            echo "sample_interval=${SAMPLE_INTERVAL:-1m}"
+            echo "max_lag=${MAX_LAG:-25}"
+            echo "max_growth_bytes=${MAX_GROWTH_BYTES:-268435456}"
+            echo "max_growth_ratio=${MAX_GROWTH_RATIO:-2.0}"
+            echo "test_timeout=${TEST_TIMEOUT:-5h}"
+          } >> "$GITHUB_OUTPUT"
+          echo "segment duration ${DURATION:-4h48m} x 5 segments" >> "$GITHUB_STEP_SUMMARY"
+
+  segment-1:
+    needs: settings
+    runs-on: ubuntu-latest
+    # Under the 6-hour job limit, with room for setup and the final checks.
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: ./.github/actions/soak-segment
+        with:
+          segment: "1"
+          duration: ${{ needs.settings.outputs.duration }}
+          sample-interval: ${{ needs.settings.outputs.sample_interval }}
+          max-lag: ${{ needs.settings.outputs.max_lag }}
+          max-growth-bytes: ${{ needs.settings.outputs.max_growth_bytes }}
+          max-growth-ratio: ${{ needs.settings.outputs.max_growth_ratio }}
+          test-timeout: ${{ needs.settings.outputs.test_timeout }}
+
+  segment-2:
+    needs: [settings, segment-1]
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: ./.github/actions/soak-segment
+        with:
+          segment: "2"
+          previous: "1"
+          duration: ${{ needs.settings.outputs.duration }}
+          sample-interval: ${{ needs.settings.outputs.sample_interval }}
+          max-lag: ${{ needs.settings.outputs.max_lag }}
+          max-growth-bytes: ${{ needs.settings.outputs.max_growth_bytes }}
+          max-growth-ratio: ${{ needs.settings.outputs.max_growth_ratio }}
+          test-timeout: ${{ needs.settings.outputs.test_timeout }}
+
+  segment-3:
+    needs: [settings, segment-2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: ./.github/actions/soak-segment
+        with:
+          segment: "3"
+          previous: "2"
+          duration: ${{ needs.settings.outputs.duration }}
+          sample-interval: ${{ needs.settings.outputs.sample_interval }}
+          max-lag: ${{ needs.settings.outputs.max_lag }}
+          max-growth-bytes: ${{ needs.settings.outputs.max_growth_bytes }}
+          max-growth-ratio: ${{ needs.settings.outputs.max_growth_ratio }}
+          test-timeout: ${{ needs.settings.outputs.test_timeout }}
+
+  segment-4:
+    needs: [settings, segment-3]
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: ./.github/actions/soak-segment
+        with:
+          segment: "4"
+          previous: "3"
+          duration: ${{ needs.settings.outputs.duration }}
+          sample-interval: ${{ needs.settings.outputs.sample_interval }}
+          max-lag: ${{ needs.settings.outputs.max_lag }}
+          max-growth-bytes: ${{ needs.settings.outputs.max_growth_bytes }}
+          max-growth-ratio: ${{ needs.settings.outputs.max_growth_ratio }}
+          test-timeout: ${{ needs.settings.outputs.test_timeout }}
+
+  segment-5:
+    needs: [settings, segment-4]
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: ./.github/actions/soak-segment
+        with:
+          segment: "5"
+          previous: "4"
+          duration: ${{ needs.settings.outputs.duration }}
+          sample-interval: ${{ needs.settings.outputs.sample_interval }}
+          max-lag: ${{ needs.settings.outputs.max_lag }}
+          max-growth-bytes: ${{ needs.settings.outputs.max_growth_bytes }}
+          max-growth-ratio: ${{ needs.settings.outputs.max_growth_ratio }}
+          test-timeout: ${{ needs.settings.outputs.test_timeout }}
+
+  # Collects every segment's samples into one artifact and puts the furthest
+  # report in the run summary, whether the chain finished or stopped early.
+  summary:
+    needs: [segment-1, segment-2, segment-3, segment-4, segment-5]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # A chain that failed before its first upload leaves nothing to fetch,
+      # which is not itself a summary failure.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true
+        with:
+          pattern: soak-samples-*
+          merge-multiple: true
+          path: soak
+      - name: summarize the chain
+        shell: bash
+        env:
+          RESULTS: >-
+            1=${{ needs['segment-1'].result }}
+            2=${{ needs['segment-2'].result }}
+            3=${{ needs['segment-3'].result }}
+            4=${{ needs['segment-4'].result }}
+            5=${{ needs['segment-5'].result }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          samples=(soak/samples/segment-*.jsonl)
+          lines=0
+          if (( ${#samples[@]} > 0 )); then
+            lines="$(cat "${samples[@]}" | wc -l)"
+          fi
+          {
+            echo "## Soak chain"
+            echo
+            echo "| segment | result |"
+            echo "| --- | --- |"
+            for pair in $RESULTS; do
+              echo "| ${pair%%=*} | ${pair#*=} |"
+            done
+            echo
+            echo "Samples recorded: ${lines} across ${#samples[@]} segment file(s)."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Zero-padded names sort, so the last report covers the most samples.
+          reports=(soak/report-*.md)
+          if (( ${#reports[@]} > 0 )); then
+            last="${reports[${#reports[@]}-1]}"
+            {
+              echo "Furthest report: \`${last}\`"
+              echo
+              cat "$last"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No segment report was produced; see the segment logs." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: retain the whole sample series
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: soak-series-${{ github.run_id }}
+          path: soak
+          if-no-files-found: warn
+          retention-days: 30

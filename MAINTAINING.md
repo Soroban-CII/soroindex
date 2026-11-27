@@ -54,6 +54,118 @@ A deliberately frozen demo database is not a live-follow success. Never change
 or reset its progress marker to make this check pass. A retention gap requires
 an operator-reviewed backfill/reseed, not skipping missing ledgers.
 
+### Review the 24-hour testnet soak
+
+The nightly `integration` workflow follows testnet for 30 minutes. That is
+too short to show slow lag drift or a slow memory leak, so `soak.yml` runs the
+same check — `TestFollowTestnet30Minutes`, with its duration and thresholds
+read from `SEP47IDX_SOAK_*` — for 24 hours. It runs on a weekly schedule
+(01:11 UTC on Sundays) and from **Actions → soak → Run workflow**. It is
+read-only against testnet: it indexes ledgers, submits no transaction, needs
+no key and uses no secret.
+
+A job on a GitHub-hosted runner is cancelled at 6 hours, so the soak is a
+chain of five segments of 4h48m (24h00m in total), run in order by `needs`.
+Each segment downloads the previous segment's SQLite index and every earlier
+segment's samples, so the index follows consecutive ledgers across the chain
+and the lag series spans the whole day. A failing segment stops the chain; its
+samples, report and log are still uploaded.
+
+The nightly `integration` workflow sets none of these variables, so it still
+follows for 30 minutes against a throwaway index **with the pass/fail
+conditions it had before the soak existed**: the follow must end in
+`DeadlineExceeded`, the index must have advanced, and the final lag must be
+under 10 ledgers. It does now also record samples and evaluate the soak
+thresholds, but only reports them — a violation appears in the log and fails
+nothing, because the thresholds apply only when `SEP47IDX_SOAK_ENFORCE` is
+set, and the soak action is the only thing that sets it. `integration.yml` is
+deliberately left alone. A long local run is the same: setting a 24-hour
+duration does not turn enforcement on by itself, so observing a run and
+gating on one are separate decisions.
+
+The growth ratio does not fail a run on its own. A segment begins with a cold
+process, so the first third of its samples covers warm-up: a 40 MiB resident
+set reaching 90 MiB doubles without leaking, and a bare ratio test would fail
+healthy nightly runs. The ratio applies only once growth has also passed a
+quarter of `max_growth_bytes` — 64 MiB at the default. Lowering
+`max_growth_bytes` after a real soak lowers that floor with it.
+
+Workflow inputs, with their defaults:
+
+| Input | Default | Effect |
+| --- | --- | --- |
+| `segment_duration` | `4h48m` | Follow duration per segment. Five segments make 24 hours. |
+| `sample_interval` | `1m` | Shortest gap between recorded samples. |
+| `max_lag` | `25` | Fail when a post-catch-up sample is further behind the tip, in ledgers. |
+| `max_growth_bytes` | `268435456` | Fail when memory within one segment grows by more bytes. |
+| `max_growth_ratio` | `2.0` | Fail when memory within one segment grows by more than this factor, and growth also passed a quarter of `max_growth_bytes`. |
+| `test_timeout` | `5h` | `go test -timeout`; keep it above `segment_duration`. |
+
+Check the plumbing cheaply before committing a day of runner time: dispatch it
+with `segment_duration=12m` and `test_timeout=20m`. That exercises the whole
+chain, including the artifact hand-off, in about an hour.
+
+Artifacts and where the numbers are:
+
+- `soak-samples-<n>`: that segment's timestamped samples
+  (`soak/samples/segment-00n.jsonl`, one JSON object per line with
+  `at`, `last_ledger`, `latest_ledger`, `lag`, `caught_up`, `memory_bytes`,
+  `memory_source`, `rss_bytes`, `heap_in_use_bytes`), its Markdown report and
+  its `go test` log. Uploaded whether the segment passed or failed.
+- `soak-db-<n>`: the index handed to the next segment. Kept 3 days.
+- `soak-series-<run id>`: every segment's samples and reports in one artifact.
+- Each segment's job summary holds its report; the `summary` job holds the
+  per-segment results and the furthest report.
+
+**What a green run proves, and what it does not.** Lag is judged across the
+whole chain, because it measures the index against the network. Memory growth
+is judged **inside one segment only**: each segment is a fresh process, so the
+resident-set series is discontinuous at every boundary and in-process leak
+detection restarts. A green 24-hour run means lag stayed within `max_lag` for
+24 hours and each ~4h48m process stayed within the growth limits. It does
+**not** prove that a single process is leak-free for 24 hours. GitHub-hosted
+runners cannot run one process for 24 hours at all. To cover that, run one
+24-hour segment on a self-hosted runner, or locally:
+
+```sh
+SEP47IDX_SOAK_DURATION=24h SEP47IDX_SOAK_SAMPLE_INTERVAL=1m \
+SEP47IDX_SOAK_ENFORCE=true \
+SEP47IDX_SOAK_SAMPLE_DIR=/absolute/path/soak/samples \
+SEP47IDX_SOAK_DB=/absolute/path/soak/testnet.db \
+SEP47IDX_SOAK_REPORT=/absolute/path/soak/report-001.md \
+go test -v -count=1 -tags integration -run '^TestFollowTestnet30Minutes$' \
+  -timeout 25h ./internal/sync
+```
+
+The growth limits are starting points, not measurements: no soak has reported
+a plateau yet. After the first full run, read the per-segment `first` and
+`last` memory columns in its report and tighten `max_growth_bytes` to
+something a little above the observed spread, in the same change as the
+evidence.
+
+**Measured so far (26 November 2026).** Only short, network-free verification
+has been run; the 24-hour soak is **outstanding** and needs a maintainer to
+dispatch it.
+
+- `go test ./internal/sync -run TestFollowLoopSamplingEndToEnd -v` drives the
+  real follow loop against a fake ledger source for 300 ms and records 222
+  samples: flat injected RSS gives "every configured threshold was met"; a
+  4 MiB-per-sample rise gives `segment 1 memory (rss) grew from 192937984 to
+  536870912 bytes (+343932928, x2.78) ... above the limit of 67108864 bytes or
+  x2.00`; a frozen index under a moving tip gives `lag exceeded 1 ledgers in 9
+  of 10 samples after catch-up`.
+- `go test ./internal/sync -run 'TestParseSoakConfig|TestEvaluateSoak|TestSoakReportMarkdown|TestLoadSoakSamples|TestSampler|TestEnforcedErr'`
+  covers the duration parsing, the defaults (no variable set keeps the nightly
+  30 minutes and leaves enforcement off) and every threshold branch.
+- `TestEnforcedErrSeparatesNightlyFromSoak` runs one violating series through
+  both modes: nightly reports `segment 1 memory (rss) grew from 343932928 to
+  880803840 bytes (+536870912, x2.56) over 11m0s, above the limit of
+  268435456 bytes or x2.00` and still passes; a soak run fails on the same
+  series with the same message.
+- No testnet lag or RSS figure from a long run exists yet. Do not quote one
+  until a `soak` run produces it; record the run URL, the span, the median and
+  maximum lag and each segment's growth verdict here when it does.
+
 ### Check index against RPC
 
 Run the data-quality checker against the same database and network:
@@ -153,6 +265,8 @@ Sync lag: <timestamp, indexed ledger, RPC tip, lag or exact error>
 Forward progress: <first timestamp + ledger; second timestamp + ledger;
                    elapsed >=60 seconds; delta; pass / investigate / not run>
 Data quality: <network, sample, seed, checked, changed_after_index, archived, differences; or not run>
+Soak: <run URL, segments and results, span, median and max lag, per-segment
+       memory growth verdicts; or not due / not run>
 Issue and PR triage: <links, concrete actions, review deadlines; or nothing to report>
 Standards review: <SEP source SHAs/versions, findings; or not due / not run>
 Dependency review: <versions, updates, check outcomes; or not due / not run>
