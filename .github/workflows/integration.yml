@@ -41,3 +41,51 @@ jobs:
           path: integration.log
           if-no-files-found: warn
           retention-days: 14
+
+  compose-offline-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build local container image
+        run: docker build -t soroindex:local .
+      - name: Start recorded RPC server
+        run: |
+          go build -o /tmp/fakerpc ./scripts/fakerpc
+          /tmp/fakerpc --addr :8545 >/tmp/fakerpc.log 2>&1 &
+          for i in $(seq 1 20); do
+            if curl -s -o /dev/null -X POST -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' http://127.0.0.1:8545; then
+              exit 0
+            fi
+            sleep 0.5
+          done
+          cat /tmp/fakerpc.log
+          exit 1
+      - name: Start docker-compose stack
+        env:
+          SEP47IDX_RPC_URL: http://host.docker.internal:8545
+        run: |
+          docker compose up -d
+      - name: Wait for API health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s -f http://127.0.0.1:8080/v1/health | grep -q '"status":"ok"'; then
+              echo "API is healthy"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Health check timed out"
+          docker compose logs
+          cat /tmp/fakerpc.log || true
+          exit 1
+      - name: Query API endpoints
+        run: |
+          curl -s -f http://127.0.0.1:8080/v1/health | grep '"status":"ok"'
+          curl -s -f http://127.0.0.1:8080/v1/stats
+      - name: Stop compose stack
+        if: always()
+        run: docker compose down -v

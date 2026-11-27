@@ -11,7 +11,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)
 
 export CGO_ENABLED := 0
 
-.PHONY: all test lint fuzz fuzz-smoke build fixtures docs tidy-check rules-check bench bench-10m bench-budget bench-budget-update clean
+.PHONY: all test lint coverage fuzz fuzz-smoke fuzz-nightly build fixtures docs tidy-check rules-check bench bench-10m bench-budget bench-budget-update clean
 
 all: lint test build
 
@@ -37,6 +37,15 @@ fuzz:
 ## fuzz-smoke: the CI variant of fuzz (30s per target)
 fuzz-smoke:
 	$(MAKE) fuzz FUZZTIME=30s
+
+## fuzz-nightly: extended fuzzing for scheduled CI and deep testing
+fuzz-nightly:
+	$(MAKE) fuzz FUZZTIME=10m
+
+## coverage: run tests with race detector and verify per-package coverage thresholds
+coverage:
+	CGO_ENABLED=1 $(GO) test -race -count=1 -coverprofile=coverage.out ./cmd/... ./internal/... ./pkg/...
+	$(GO) run ./scripts/check-coverage -profile coverage.out -thresholds scripts/coverage-thresholds.json
 
 ## bench: p50/p95 for every API query and the materialized alternative on
 ## the deterministic 1M-claim fixture (docs/query-benchmark.md)

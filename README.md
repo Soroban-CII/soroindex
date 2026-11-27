@@ -3,6 +3,7 @@
 A public index of Soroban smart contracts by the SEPs they declare, the interfaces they match, and how both change on upgrade.
 
 [![CI](https://github.com/Soroban-CII/soroindex/actions/workflows/ci.yml/badge.svg)](https://github.com/Soroban-CII/soroindex/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Soroban-CII/soroindex/badge)](https://scorecard.dev/viewer/?repo=github.com/Soroban-CII/soroindex)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Soroban-CII/soroindex/pkg/sepmeta.svg)](https://pkg.go.dev/github.com/Soroban-CII/soroindex/pkg/sepmeta)
 [![Release](https://img.shields.io/github/v/release/Soroban-CII/soroindex)](https://github.com/Soroban-CII/soroindex/releases)

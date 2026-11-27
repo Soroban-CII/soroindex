@@ -1,0 +1,70 @@
+# Docker Compose stack for soroindex sync and serve against a shared volume.
+services:
+  sync:
+    image: ${SOROINDEX_IMAGE:-soroindex:local}
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    restart: unless-stopped
+    read_only: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - soroindex-data:/app/data
+    command:
+      - sync
+      - --network
+      - ${SEP47IDX_NETWORK:-testnet}
+      - --rpc-url
+      - ${SEP47IDX_RPC_URL:-https://soroban-testnet.stellar.org}
+      - --db
+      - /app/data/${SEP47IDX_NETWORK:-testnet}.db
+      - --start-ledger
+      - ${SEP47IDX_START_LEDGER:-1}
+      - --follow
+    healthcheck:
+      test: ["CMD", "/app/sep47idx", "stats", "--network", "${SEP47IDX_NETWORK:-testnet}", "--db", "/app/data/${SEP47IDX_NETWORK:-testnet}.db"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 3s
+
+  serve:
+    image: ${SOROINDEX_IMAGE:-soroindex:local}
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+    restart: unless-stopped
+    read_only: true
+    depends_on:
+      sync:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - soroindex-data:/app/data:ro
+    ports:
+      - "${SEP47IDX_PORT:-8080}:8080"
+    command:
+      - serve
+      - --network
+      - ${SEP47IDX_NETWORK:-testnet}
+      - --rpc-url
+      - ${SEP47IDX_RPC_URL:-https://soroban-testnet.stellar.org}
+      - --db
+      - /app/data/${SEP47IDX_NETWORK:-testnet}.db
+      - --addr
+      - :8080
+      - --wait-for-db
+      - 30s
+    healthcheck:
+      test: ["CMD", "/app/sep47idx", "health", "--url", "http://127.0.0.1:8080/v1/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 6
+      start_period: 3s
+
+volumes:
+  soroindex-data:

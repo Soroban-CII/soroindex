@@ -23,10 +23,12 @@ GOPROXY=https://proxy.golang.org,direct make test
 | Target | What it runs | CI job |
 | --- | --- | --- |
 | `make test` | `go test ./...` | `test` (with `-race`) |
+| `make coverage` | Runs tests with `-race -coverprofile` and verifies per-package thresholds | `test` |
 | `make lint` | `golangci-lint run ./...` (govet, staticcheck, errcheck, gosec, revive) | `lint` |
 | `make rules-check` | Validates `rules/sep-*.json` against `rules/schema.json` | `lint` |
 | `make tidy-check` | Fails if `go.mod`/`go.sum` are not tidy | `lint` |
 | `make fuzz-smoke` | Each fuzz target for 30 s | `fuzz-smoke` |
+| `make fuzz-nightly` | Each fuzz target for 10 minutes | `fuzz` (nightly workflow) |
 | `make fuzz FUZZTIME=10m` | Each fuzz target for 10 minutes | — |
 | `make build` | Static binary, `CGO_ENABLED=0` | `build` (linux/darwin × amd64/arm64) |
 | `make fixtures` | Rebuilds `testdata/wasm` from Rust sources (needs Rust and stellar-cli) | — |
@@ -36,7 +38,15 @@ GOPROXY=https://proxy.golang.org,direct make test
 | `make bench-budget` | `pkg/sepmeta` benchmarks over every fixture; fails if allocs/op or B/op exceeds `pkg/sepmeta/testdata/alloc-budgets.txt` | `bench-budget` (not required) |
 | `make bench-budget-update` | Rewrites the budgets from a fresh run; say why in the commit body | — |
 
-The required checks are `lint`, `test`, `fuzz-smoke` and `build`. Security and docs workflows provide additional review evidence.
+The required checks are `lint`, `test`, `fuzz-smoke` and `build`. Security, scorecard, fuzz, and docs workflows provide additional review evidence.
+
+## Code coverage and thresholds
+
+Coverage is collected in CI during the `test` job and verified by `scripts/check-coverage` against committed minimum statement coverage thresholds in `scripts/coverage-thresholds.json`.
+
+- Every package with tests has a committed minimum threshold starting at current measured values.
+- If a pull request causes any package's coverage to fall below its threshold, the check fails.
+- Run `make coverage` locally to verify coverage across all packages before opening a pull request. No third-party service or authentication token is required.
 
 ## Rules for code
 

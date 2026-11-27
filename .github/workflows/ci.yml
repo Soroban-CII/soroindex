@@ -54,8 +54,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       # -race needs cgo; the CGO_ENABLED=0 property is proven by the build job.
-      - name: go test
-        run: CGO_ENABLED=1 go test -race -count=1 ./...
+      - name: go test and coverage collection
+        run: CGO_ENABLED=1 go test -race -count=1 -coverprofile=coverage.out ./cmd/... ./internal/... ./pkg/...
+      - name: verify per-package coverage thresholds
+        run: go run ./scripts/check-coverage -profile coverage.out -thresholds scripts/coverage-thresholds.json
 
   fuzz-smoke:
     runs-on: ubuntu-latest
