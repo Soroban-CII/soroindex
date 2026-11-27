@@ -1,0 +1,136 @@
+{
+  "input": {
+    "kind": "fixture",
+    "name": "multi_sep",
+    "wasm_sha256": "82e05acf3bcb83adbc7ca8841fae5f7f412fd0cab61aa84015f94da9dc3fb54d"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "41"
+      ],
+      [
+        "sep",
+        "40"
+      ],
+      [
+        "rsver",
+        "1.98.1"
+      ],
+      [
+        "rssdkver",
+        "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+      ],
+      [
+        "rssdk_spec_shaking",
+        "2"
+      ],
+      [
+        "cliver",
+        "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          },
+          "part": "41",
+          "strict": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          }
+        }
+      ],
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              40
+            ]
+          },
+          "part": "40",
+          "strict": {
+            "ok": true,
+            "seps": [
+              40
+            ]
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        41,
+        40
+      ]
+    },
+    "supported_seps_strict": {
+      "ok": true,
+      "seps": [
+        41,
+        40
+      ]
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "functions": [
+        {
+          "inputs": [],
+          "name": "decimals",
+          "outputs": [
+            "u32"
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "resolution",
+          "outputs": [
+            "u32"
+          ]
+        }
+      ],
+      "ok": true
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "41"
+        ],
+        [
+          "sep",
+          "40"
+        ],
+        [
+          "rsver",
+          "1.98.1"
+        ],
+        [
+          "rssdkver",
+          "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+        ],
+        [
+          "rssdk_spec_shaking",
+          "2"
+        ],
+        [
+          "cliver",
+          "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

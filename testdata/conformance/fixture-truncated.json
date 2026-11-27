@@ -1,0 +1,21 @@
+{
+  "input": {
+    "kind": "fixture",
+    "name": "truncated",
+    "wasm_sha256": "fe77887f94603d12a75c813d10a55fe7b1372f2409cf218f59b0002131fe5036"
+  },
+  "py_stellar_sdk": {
+    "error": "InvalidWasmError: Invalid Wasm module: section extends past EOF.",
+    "ok": false
+  },
+  "stellar_cli": {
+    "interface": {
+      "error": "❌ error: unexpected end-of-file (at offset 0x13b1)",
+      "ok": false
+    },
+    "meta": {
+      "error": "❌ error: unexpected end-of-file (at offset 0x13b1)",
+      "ok": false
+    }
+  }
+}

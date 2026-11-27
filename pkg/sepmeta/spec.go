@@ -10,7 +10,8 @@ import (
 // DecodeSpec decodes a contractspecv0 payload: a back-to-back stream of XDR
 // SCSpecEntry values. It follows the same rules as DecodeMeta: entries
 // decoded before an error are returned with it, a trailing entry cut short is
-// ErrTruncated, and bytes that cannot begin any valid entry are ErrMalformed.
+// ErrTruncated, bytes that cannot begin any valid entry are ErrMalformed, and
+// a type nested deeper than lim.MaxXDRDepth is ErrLimit.
 func DecodeSpec(section []byte, lim Limits) ([]xdr.ScSpecEntry, error) {
 	return decodeStream[xdr.ScSpecEntry](section, lim)
 }
