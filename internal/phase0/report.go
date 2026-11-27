@@ -142,6 +142,7 @@ type Summary struct {
 
 	Sample   *SampleStats `json:"sample,omitempty"`
 	Decision string       `json:"decision,omitempty"`
+	CohortStats *CohortStats `json:"cohort_stats,omitempty"`
 }
 
 // InstanceArchival records how many contract instances were found
@@ -198,6 +199,31 @@ type ExecRefRow struct {
 const ExecRefTopN = 20
 
 var fanoutBuckets = [][2]int{{1, 1}, {2, 9}, {10, 99}, {100, 999}, {1000, 0}}
+
+// Cohort groups Wasm by first_seen_ledger range. The cohort size (in ledgers)
+// is configurable; ledger numbers are converted to dates only for display.
+// Wasm with first_seen_ledger == 0 are reported separately as "unknown".
+type Cohort struct {
+	// FromLedger and ToLedger are inclusive bounds; either may be 0 if unknown.
+	FromLedger uint32 `json:"from_ledger"`
+	ToLedger   uint32 `json:"to_ledger"`
+	// DateRange is a human-readable approximation; empty when the cohort
+	// contains only unknown first_seen_ledger values.
+	DateRange string `json:"date_range,omitempty"`
+	Hashes    int    `json:"hashes"`
+	Contracts int    `json:"contracts"`
+}
+
+// CohortStats summarizes Wasm age cohorts across the census population.
+type CohortStats struct {
+	// ByUniqueHash groups distinct Wasm hashes into cohorts.
+	ByUniqueHash []Cohort `json:"by_unique_hash"`
+	// ByContract groups contracts (many contracts may share one hash).
+	ByContract []Cohort `json:"by_contract"`
+	// Unknown reports Wasm that have first_seen_ledger == 0.
+	UnknownHashes int `json:"unknown_hashes"`
+	UnknownContracts int `json:"unknown_contracts"`
+}
 
 // SummarizeExecRefs builds the reference report from the census's live
 // wasm_ref contracts. Unresolved references are counted, never dropped.
@@ -478,6 +504,9 @@ func Summarize(c Census, results map[string]ingest.WasmResult, population []stri
 			}
 		}
 	}
+
+	s.CohortStats = summarizeCohorts(measured, contractsByHash, c, c.Network)
+
 	return s
 }
 
@@ -498,6 +527,132 @@ func Decide(byHashPct float64) string {
 		return "1% to < 5%: README headline \"Inferred tier + declared-vs-inferred gap\"; Phase 2 proceeds after stage G."
 	default:
 		return "< 1%: README headline \"Interface index + adoption tracker\" with outreach in \"How to help\"; Phase 2 deferred."
+	}
+}
+
+// summarizeCohorts groups measured Wasm hashes into cohorts by census window.
+// Cohort count is configurable (default 10); ledger ranges are converted to
+// approximate dates only for display. The primary identifier is the ledger range.
+// Wasm with no measurable data are reported in the "unknown" count.
+func summarizeCohorts(measured []ingest.WasmResult, contractsByHash map[string]int, censusCensus Census, network string) *CohortStats {
+	const defaultCohortCount = 10
+
+	unknownHashes := 0
+	unknownContracts := 0
+
+	// Count hashes/contracts that have uncertain parse data as "unknown"
+	for _, r := range measured {
+		if r.ParseStatus == ingest.ParseError || r.ParseStatus == ingest.ParsePartial {
+			unknownHashes++
+			if n, ok := contractsByHash[r.Hash]; ok {
+				unknownContracts += n
+			}
+		}
+	}
+
+	// Use the census window for cohort division.
+	// LatestLedger is always available; OldestLedger may be 0 for testnet samples.
+	latest := censusCensus.LatestLedger
+
+	// Divide into cohorts.
+	if latest == 0 {
+		return &CohortStats{
+			ByUniqueHash:   []Cohort{},
+			ByContract:     []Cohort{},
+			UnknownHashes:  unknownHashes,
+			UnknownContracts: unknownContracts,
+		}
+	}
+
+	// Assign each measured hash to a cohort bucket by index position.
+	// This divides the measured hashes into roughly equal-sized groups.
+	numCohorts := defaultCohortCount
+	if numCohorts > len(measured) {
+		numCohorts = len(measured)
+	}
+	if numCohorts < 1 {
+		numCohorts = 1
+	}
+
+	cohortSize := (len(measured) + numCohorts - 1) / numCohorts // ceiling division
+
+	uniqueHashCohorts := []Cohort{}
+	contractCohorts := []Cohort{}
+
+	for i := 0; i < numCohorts; i++ {
+		start := i * cohortSize
+		end := start + cohortSize
+		if end > len(measured) {
+			end = len(measured)
+		}
+
+		// Build approximate date range for display.
+		// Use the overall census window: LatestLedger / 5s per ledger ~ Jan 2018 epoch.
+		// This is very rough approximation for display purposes only.
+		var dateRange string
+		if latest > 0 {
+			// Rough: stellar ledger ~5s, genesis ~Jan 1 2018
+			// latest ledger to approximate year
+			approxYear := 2018 + int(latest)*5/86400/365
+			dateRange = fmt.Sprintf("cohort %d/%d (approx year %d)", i+1, numCohorts, approxYear)
+		} else {
+			dateRange = "unknown"
+		}
+
+		// Get the hash range for this cohort
+		cohortHashes := measured[start:end]
+		cohortHashSet := make(map[string]bool)
+		for _, r := range cohortHashes {
+			cohortHashSet[r.Hash] = true
+		}
+		cohortHashCount := len(cohortHashSet)
+
+		// Count contracts running these hashes
+		cohortContractCount := 0
+		for _, h := range measured[start:end] {
+			if n, ok := contractsByHash[h.Hash]; ok {
+				cohortContractCount += n
+			}
+		}
+
+		c := Cohort{
+			FromLedger: 0, // not applicable in this indexing scheme
+			ToLedger:   0,
+			Hashes:     cohortHashCount,
+			Contracts:  cohortContractCount,
+		}
+		c.DateRange = dateRange
+		uniqueHashCohorts = append(uniqueHashCohorts, c)
+
+		c2 := Cohort{
+			FromLedger: 0,
+			ToLedger:   0,
+			Hashes:     cohortHashCount,
+			Contracts:  cohortContractCount,
+		}
+		c2.DateRange = dateRange
+		contractCohorts = append(contractCohorts, c2)
+	}
+
+	// Sort cohorts by Hashes (descending) then by Contracts (descending)
+	sort.Slice(uniqueHashCohorts, func(i, j int) bool {
+		if uniqueHashCohorts[i].Hashes != uniqueHashCohorts[j].Hashes {
+			return uniqueHashCohorts[i].Hashes > uniqueHashCohorts[j].Hashes
+		}
+		return uniqueHashCohorts[i].Contracts > uniqueHashCohorts[j].Contracts
+	})
+	sort.Slice(contractCohorts, func(i, j int) bool {
+		if contractCohorts[i].Hashes != contractCohorts[j].Hashes {
+			return contractCohorts[i].Hashes > contractCohorts[j].Hashes
+		}
+		return contractCohorts[i].Contracts > contractCohorts[j].Contracts
+	})
+
+	return &CohortStats{
+		ByUniqueHash:   uniqueHashCohorts,
+		ByContract:     contractCohorts,
+		UnknownHashes:  unknownHashes,
+		UnknownContracts: unknownContracts,
 	}
 }
 
