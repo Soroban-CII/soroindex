@@ -6,6 +6,10 @@ Report vulnerabilities privately through [GitHub private vulnerability reporting
 
 Include what you found, how to reproduce it, and the commit or version affected. We aim to acknowledge a report within 7 days and to agree a disclosure date with you.
 
+## Threat model
+
+The [threat model](docs/threat-model.md) describes security controls and their supporting code and tests. Its [gap register](docs/threat-model.md#gap-register) links to public tracking issues where available.
+
 ## Scope
 
 In scope:

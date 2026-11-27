@@ -34,6 +34,7 @@ nav:
   - Introduction: index.md
   - Trust tiers: trust-tiers.md
   - How it works: how-it-works.md
+  - Threat model: threat-model.md
   - CLI reference: cli.md
   - HTTP API: api.md
   - For contract authors: contract-authors.md
