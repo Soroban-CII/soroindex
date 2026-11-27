@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add `sep47idx diff <hashA> <hashB>`, which compares two stored Wasm: metadata
+  keys, declared SEPs and anomalies, functions added, removed or changed, and the
+  inferred verdict for each SEP. It reads only stored data, and `--json` sorts
+  every list so two runs print identical bytes. A hash the index does not hold
+  exits 2. A Wasm with a spec section but no stored signatures is reported as
+  needing a re-fetch, not as having lost its functions (#118).
+
 - Add a conformance suite against stellar-cli 30.0.1 and the Python
   stellar-sdk 17.0.1. `scripts/record-conformance.sh` records both tools'
   output for every fixture and vector under `testdata/conformance/`, and

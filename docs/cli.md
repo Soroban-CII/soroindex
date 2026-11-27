@@ -1,6 +1,6 @@
 # CLI reference
 
-The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. Command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2). The `maintenance` captures come from a darwin/arm64 build on 20 November 2026 (Go 1.27.4). The help output and the `inspect` captures come from a darwin/arm64 build on 21 November 2026 (Go 1.27.4).
+The binary is `sep47idx`. Historical outputs below were captured on 7 October 2026. Command captures were refreshed from a Linux build on 9 October 2026 (Go 1.27.2). The `maintenance` captures come from a darwin/arm64 build on 20 November 2026 (Go 1.27.4). The `inspect` captures come from a darwin/arm64 build on 21 November 2026 (Go 1.27.4). The help output and the `diff` captures come from a linux/amd64 build on 25 November 2026 (Go 1.27.4).
 
 Every flag also has an environment variable: `SEP47IDX_` plus the flag name in capitals, dashes as underscores (`--rpc-url` is `SEP47IDX_RPC_URL`). A flag on the command line overrides the variable. Exit codes: `0` ok, `1` error, `2` not found.
 
@@ -11,6 +11,7 @@ usage: sep47idx <command> [flags]
 commands:
   check        compare a seeded sample of stored contracts with live RPC entries
   contract     show a contract's claims and optional full history
+  diff         compare two stored Wasm: metadata, declarations, functions and inferred verdicts
   gap          list contracts that match a SEP's interface but declare nothing (inferred)
   inspect      analyze a local Wasm file offline, as the indexer would
   maintenance  check integrity, refresh query statistics and vacuum while no sync is writing
@@ -422,6 +423,171 @@ $ /workspace/scratch/stage-g/sep47idx wasm 7494c2bb5e9f6dd3f831b078400746b86f748
   "parser_version": "1",
   "as_of_ledger": 5097816
 }
+```
+
+## diff
+
+Compares two stored Wasm. `contract <id> --history` says *that* a contract's
+code changed; `diff` says *how*. It reads only what the index already holds: no
+Wasm is fetched, parsed or executed.
+
+```text
+sep47idx diff <hashA> <hashB> [--json]
+```
+
+Both arguments must be 64 lowercase hex characters, or the command exits 1. A
+hash the index has never seen exits 2 and names the hash. Flags may come before
+or after the hashes.
+
+Output has five sections, and a section with nothing to report is left out:
+
+| Section | Compares |
+| --- | --- |
+| `Metadata` | every `contractmetav0` key. A key can repeat, so values are compared as a set. |
+| `Declared SEPs` | declared-tier claims, by SEP and claim source, with the raw token and anomaly. |
+| `Anomalies` | tokens that produced no claim, keyed by the raw token. |
+| `Functions` | the stored signatures, as added (`+`), removed (`-`) and changed (`~`). |
+| `Verdicts` | the inferred-tier interface match for every SEP matched on either side. |
+
+`+`, `-` and `~` mark an addition, a removal and a change. A function's
+signature already contains `->`, so a changed function reads `was ..., now ...`.
+The verdict list prints every SEP, changed or not, with `~` only on the ones
+that moved; nothing in it is a declaration or a verification.
+
+The captures below come from a database built from the committed golden
+fixtures, where one contract was upgraded from `token_full_sep.wasm` to
+`token_partial.wasm`:
+
+```text
+$ ./sep47idx contract CAIQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAS6B --history --db fixtures.db
+CAIQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAS6B (testnet), as of ledger 140
+100..140  1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96
+SEP-41: declared=true, inferred=match (sep41-v0.5.2), verified=not run, protocol=false
+140..current  2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880
+SEP-41: declared=true, inferred=partial (sep41-v0.5.2), verified=not run, protocol=false
+```
+
+Feeding those two hashes to `diff` shows what the upgrade removed:
+
+```text
+$ ./sep47idx diff 1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96 2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880 --db fixtures.db
+1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96 -> 2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880 (testnet), as of ledger 140
+from 1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96: parse ok, parser 1, spec true, functions stored true
+to   2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880: parse ok, parser 1, spec true, functions stored true
+
+Functions
+  - burn: (Address, i128) -> ()
+  - burn_from: (Address, Address, i128) -> ()
+
+Verdicts (inferred tier; not a claim and not a verification)
+  ~ SEP-41: match (sep41-v0.5.2, 10 functions matched, implements sep41-v0.5.2) -> partial (sep41-v0.5.2, 8 functions matched)
+```
+
+`--json` carries the same comparison. Every list is sorted by key, so two runs
+over the same database print identical bytes:
+
+```text
+$ ./sep47idx diff 1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96 2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880 --db fixtures.db --json
+{
+  "network": "testnet",
+  "as_of_ledger": 140,
+  "from": {
+    "wasm_hash": "1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96",
+    "parse_status": "ok",
+    "parser_version": "1",
+    "has_spec": true,
+    "functions_stored": true,
+    "needs_refetch": false
+  },
+  "to": {
+    "wasm_hash": "2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880",
+    "parse_status": "ok",
+    "parser_version": "1",
+    "has_spec": true,
+    "functions_stored": true,
+    "needs_refetch": false
+  },
+  "identical": false,
+  "metadata": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "declared": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "anomalies": {
+    "added": [],
+    "removed": [],
+    "changed": []
+  },
+  "functions": {
+    "comparable": true,
+    "added": [],
+    "removed": [
+      {
+        "name": "burn",
+        "from": [
+          "(Address, i128) -\u003e ()"
+        ]
+      },
+      {
+        "name": "burn_from",
+        "from": [
+          "(Address, Address, i128) -\u003e ()"
+        ]
+      }
+    ],
+    "changed": []
+  },
+  "inferred_verdicts": [
+    {
+      "sep": 41,
+      "changed": true,
+      "from": {
+        "status": "match",
+        "ruleset_version": "sep41-v0.5.2",
+        "ok_count": 10,
+        "matched_version": "sep41-v0.5.2"
+      },
+      "to": {
+        "status": "partial",
+        "ruleset_version": "sep41-v0.5.2",
+        "ok_count": 8,
+        "matched_version": null
+      }
+    }
+  ]
+}
+```
+
+A hash the index does not hold exits 2:
+
+```text
+$ ./sep47idx diff 1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96 0000000000000000000000000000000000000000000000000000000000000000 --db fixtures.db
+sep47idx diff: 0000000000000000000000000000000000000000000000000000000000000000: not found
+exit=2
+```
+
+The interface comparison uses `wasm.functions_json`, added by migration 0002. A
+Wasm that has a spec section but no stored signatures is reported as needing a
+re-fetch rather than as having lost every function, and `identical` stays false
+because the comparison could not be made. The capture below is the same pair
+against a copy of the database with that one column set to NULL:
+
+```text
+$ ./sep47idx diff 1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96 2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880 --db fixtures-pre0002.db
+1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96 -> 2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880 (testnet), as of ledger 140
+from 1645f559c74fd1adc0fb0b27ed2005e1b272cdfc3a40b55d05e696417c0cae96: parse ok, parser 1, spec true, functions stored true
+to   2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880: parse ok, parser 1, spec true, functions stored false
+
+Functions
+  not compared: 2cf19ac29ba8a9f53eda71c1b15a322d7704db28ed8d98d9e77ea8ce22fa5880: no stored function signatures, so the interface cannot be compared; the Wasm needs a re-fetch (analyzed before migration 0002)
+
+Verdicts (inferred tier; not a claim and not a verification)
+  ~ SEP-41: match (sep41-v0.5.2, 10 functions matched, implements sep41-v0.5.2) -> partial (sep41-v0.5.2, 8 functions matched)
 ```
 
 ## stats

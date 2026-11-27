@@ -6,7 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+
+	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
 
 // ValidateWasmHash accepts only canonical, lowercase SHA-256 hashes.
@@ -60,6 +63,45 @@ type WasmDetail struct {
 	ParseError    *string           `json:"parse_error"`
 	ParserVersion string            `json:"parser_version"`
 	AsOfLedger    uint32            `json:"as_of_ledger"`
+}
+
+// WasmFunctions is a Wasm's stored interface, with the two facts a caller
+// needs to tell "this code declares no functions" apart from "the index does
+// not know its functions". HasSpec says the code carries a contractspecv0
+// section; Stored says functions_json holds the signatures read from it. A
+// Wasm analyzed before migration 0002 has a spec and no signatures, and must
+// be re-fetched rather than reported as having an empty interface.
+type WasmFunctions struct {
+	Functions []sepmeta.FnSig `json:"functions"`
+	HasSpec   bool            `json:"has_spec"`
+	Stored    bool            `json:"stored"`
+}
+
+// FunctionEvidence reads has_spec and functions_json together, so a caller
+// never has to guess why signatures are absent. An unknown hash is
+// ErrNotFound; Store.Functions cannot report that, because it treats a
+// missing row and a missing column alike.
+func (s *Store) FunctionEvidence(ctx context.Context, hash string) (WasmFunctions, error) {
+	var out WasmFunctions
+	if err := ValidateWasmHash(hash); err != nil {
+		return out, err
+	}
+	var raw sql.NullString
+	err := s.DB.QueryRowContext(ctx, `SELECT has_spec,functions_json FROM wasm WHERE hash = ?`, hash).Scan(&out.HasSpec, &raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return out, ErrNotFound
+	}
+	if err != nil {
+		return out, fmt.Errorf("function evidence of %s: %w", hash, err)
+	}
+	if !raw.Valid {
+		return out, nil
+	}
+	if err := json.Unmarshal([]byte(raw.String), &out.Functions); err != nil {
+		return out, fmt.Errorf("functions_json of %s: %w", hash, err)
+	}
+	out.Stored = true
+	return out, nil
 }
 
 // Wasm reads parsing data and a bounded page of live users in one snapshot.
