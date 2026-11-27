@@ -310,7 +310,7 @@ func (ix *Indexer) prepareSeed(ctx context.Context, batch []SeedRow) (seedPrepar
 		if !ok {
 			return p, fmt.Errorf("node returned unrequested key %s", e.Key)
 		}
-		data, err := DecodeLedgerEntryDataBase64(e.XDR, XDRLimits{MaxBase64Len: 16 << 20})
+		data, err := DecodeLedgerEntryDataBase64(e.XDR, ix.XDR.Instance())
 		if err != nil || data.Type != xdr.LedgerEntryTypeContractData {
 			return p, fmt.Errorf("instance of %s: undecodable (%v)", row.ContractID, err)
 		}
@@ -354,7 +354,7 @@ func (ix *Indexer) prepareSeed(ctx context.Context, batch []SeedRow) (seedPrepar
 			return p, err
 		}
 		for _, e := range rr.Entries {
-			data, err := DecodeLedgerEntryDataBase64(e.XDR, XDRLimits{})
+			data, err := DecodeLedgerEntryDataBase64(e.XDR, ix.XDR.ExecRef())
 			if err != nil || data.Type != xdr.LedgerEntryTypeContractData {
 				return p, fmt.Errorf("exec ref %s: undecodable (%v)", e.Key, err)
 			}

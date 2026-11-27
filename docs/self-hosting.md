@@ -29,6 +29,8 @@ Every flag can come from an environment variable (see [CLI reference](cli.md)):
 | `SEP47IDX_WRITE_TIMEOUT` | Maximum time to write response (default 20s) |
 | `SEP47IDX_IDLE_TIMEOUT` | Maximum time to wait for next request on keep-alive (default 60s) |
 | `SEP47IDX_MAX_HEADER_BYTES` | Maximum size of request headers in bytes (default 16384) |
+| `SEP47IDX_MAX_WASM_BYTES`, `SEP47IDX_MAX_SECTION_BYTES`, `SEP47IDX_MAX_SECTIONS` | Parser limits (see below) |
+| `SEP47IDX_MAX_XDR_DEPTH`, `SEP47IDX_MAX_XDR_BASE64_BYTES` | XDR decode limits (see below) |
 
 Stellar's docs list mainnet RPC providers. Several public endpoints answered a 200-key `getLedgerEntries` call correctly on 7 October 2026, among them `https://soroban-rpc.mainnet.stellar.gateway.fm`, which the mainnet census used. Futurenet has a public SDF RPC at `https://rpc-futurenet.stellar.org`.
 
@@ -45,6 +47,47 @@ The server enforces timeouts and header limits to protect against slowloris and 
 | `--max-header-bytes` | `SEP47IDX_MAX_HEADER_BYTES` | 16384 | Maximum combined size of request headers. Oversized headers are rejected. |
 
 All timeouts accept Go duration strings (e.g. `30s`, `1m`). Set to `0` to disable a timeout, but this is not recommended for a public endpoint. Graceful shutdown on SIGTERM/SIGINT waits up to 10 seconds for in-flight requests to complete before forcing connections closed.
+
+### Parser and XDR limits
+
+Wasm modules and XDR from the network are untrusted input. Five limits bound what one input may make the indexer allocate or loop over. They are accepted by the commands that parse: `sync`, `phase0`, `inspect` and `check`. Every size accepts a plain byte count or a suffix (`4MiB`, `512KiB`, `2MB`).
+
+| Flag | Env var | Default | Hard cap | Purpose |
+| --- | --- | --- | --- | --- |
+| `--max-wasm-bytes` | `SEP47IDX_MAX_WASM_BYTES` | 1MiB | 64MiB | Largest Wasm module parsed. Checked before the module is walked, and it also sizes the base64 cap on the `CONTRACT_CODE` entry that carries it, so raising this one value is enough to index a larger module. |
+| `--max-section-bytes` | `SEP47IDX_MAX_SECTION_BYTES` | 256KiB | `--max-wasm-bytes` | Largest `contractmetav0` or `contractspecv0` payload, after repeated sections of one name are joined. Sections the parser does not read are skipped and never counted. |
+| `--max-sections` | `SEP47IDX_MAX_SECTIONS` | 10000 | `--max-wasm-bytes`/2 | How many sections one module may have. A section costs at least two bytes on the wire, so a larger value could never be reached. |
+| `--max-xdr-depth` | `SEP47IDX_MAX_XDR_DEPTH` | 500 | 1500 | XDR nesting depth. The cap is the XDR decoder's own maximum (`DecodeDefaultMaxDepth` in `github.com/stellar/go-xdr/xdr3`); above it, nothing more is accepted and only the recursion grows. |
+| `--max-xdr-base64-bytes` | `SEP47IDX_MAX_XDR_BASE64_BYTES` | 64MiB | 256MiB | Largest base64 XDR string decoded. Ledger metadata is the largest such string, so this bounds it directly; the smaller per-purpose caps (contract code, contract data entries) are clamped by it but not raised to it. The cap is the largest RPC response body the client reads, since no field can be longer than the body carrying it. |
+
+Base64 costs four bytes for every three, so a module above about 48MiB also needs `--max-xdr-base64-bytes` raised past its 64MiB default; below that, `--max-wasm-bytes` alone is enough.
+
+A value of zero, a negative number, an unparseable size, or anything above a hard cap is refused at startup, before the database is opened or a ledger is read:
+
+```text
+$ sep47idx sync --max-wasm-bytes 65MiB --start-ledger 1
+sep47idx sync: --max-wasm-bytes: invalid limit: MaxWasmBytes is 68157440, want at most 67108864 bytes, the hard cap
+$ echo "exit=$?"
+exit=1
+```
+
+The limits a sync ran with are recorded in `sync_state` and printed by `stats`, so an operator can confirm that a change took effect and see what stored data was parsed with. An index synced before this was recorded says so rather than showing the current defaults.
+
+```text
+$ sep47idx stats --db testnet.db
+...
+Limits (recorded by the last sync): wasm 2MiB, section 512KiB, sections 4096, xdr depth 250, xdr base64 32MiB
+```
+
+**The trade-off.** Each limit is the amount of memory and CPU that one hostile or broken input is allowed to ask for, multiplied by `--rpc-concurrency`, because that many modules and responses are in flight at once. Raising `--max-wasm-bytes` to 64MiB with four workers lets a crafted contract push the indexer towards a quarter of a gigabyte of live Wasm buffers; raising `--max-xdr-base64-bytes` does the same for ledger metadata, which is already the largest thing the indexer holds. Nothing in the limits changes what is *trusted*: bytes are still only parsed, never executed, and every length read from untrusted input is still checked against the bytes remaining and against the configured maximum before anything is allocated. What changes is the ceiling on the damage one input can do.
+
+Weigh three things before raising a limit:
+
+- **Is it reachable?** The largest module in the committed mainnet census is 130,278 bytes (`report/mainnet-raw.csv`, 7 October 2026), so the 1MiB default is already about eight times the real maximum. A module cannot exceed the network's own contract-size setting, whatever this flag says.
+- **What is the process's memory budget?** Multiply the new limit by `--rpc-concurrency`, and leave room for the SQLite page cache. A container with a hard memory limit will be killed, not slowed, when it is wrong.
+- **Is the index public?** The API process parses nothing, so raising these limits does not widen the HTTP surface. The exposure is on the host that runs `sync`.
+
+Lowering a limit is safe for the indexer and costs only coverage: a module over `--max-wasm-bytes` is stored with `parse_status = 'error'` and its parse error, so it is counted and visible rather than silently dropped, and it declares nothing. A Wasm that was already analyzed is not parsed again, so lowering a limit does not rewrite rows that are already stored. If you are unsure, lower rather than raise, and read `stats` to see what the last sync used.
 
 ## Seed
 

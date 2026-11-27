@@ -16,11 +16,11 @@ import (
 	"time"
 
 	"github.com/Soroban-CII/soroindex/internal/config"
+	"github.com/Soroban-CII/soroindex/internal/ingest"
 	"github.com/Soroban-CII/soroindex/internal/match"
 	"github.com/Soroban-CII/soroindex/internal/phase0"
 	"github.com/Soroban-CII/soroindex/internal/rpc"
 	"github.com/Soroban-CII/soroindex/internal/store"
-	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 	"github.com/Soroban-CII/soroindex/rules"
 )
 
@@ -39,6 +39,7 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("phase0", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	resolve := config.RegisterCommon(flags)
+	resolveLimits := config.RegisterLimits(flags)
 	hashes := flags.String("hashes", "", "mainnet: Hubble code-hash CSV (Q1 of scripts/hubble-export.sql)")
 	instances := flags.String("instances", "", "mainnet: Hubble instance CSV (Q2)")
 	execRefs := flags.String("exec-refs", "", "mainnet: optional Hubble CAP-85 reference CSV (Q3)")
@@ -62,6 +63,12 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 		return exitOK
 	}
 	cfg, err := resolve()
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	// Validated before any RPC call, so a bad limit cannot waste a census.
+	limits, err := resolveLimits()
 	if err != nil {
 		errorf(stderr, "sep47idx phase0: %v\n", err)
 		return exitError
@@ -111,8 +118,12 @@ func runPhase0(args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 
+	parserLimits := limits.Sepmeta()
 	opts := phase0.Options{Rules: ruleFiles, Matcher: match.Matcher{PartialThreshold: *threshold},
-		Limits: sepmeta.DefaultLimits(), Log: log, Now: time.Now}
+		Limits: parserLimits,
+		XDR: ingest.XDRBudget{MaxBase64Len: limits.MaxXDRBase64Bytes, MaxDepth: parserLimits.MaxXDRDepth,
+			MaxWasmBytes: parserLimits.MaxWasmBytes},
+		Log: log, Now: time.Now}
 	var res phase0.Result
 	switch cfg.Network.Name {
 	case config.Mainnet.Name:

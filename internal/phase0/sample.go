@@ -19,6 +19,10 @@ type SampleConfig struct {
 	// MaxLedgersPerStratum stops a quiet stratum from scanning forever.
 	// Default: the whole stratum.
 	MaxLedgersPerStratum uint32
+	// XDR bounds every base64 XDR string the sample decodes: each ledger's
+	// metadata and each sampled instance entry. RunTestnet sets it from
+	// Options; a zero XDRBudget is the shipped default.
+	XDR ingest.XDRBudget
 }
 
 func (c SampleConfig) withDefaults() SampleConfig {
@@ -51,10 +55,6 @@ type LedgerRange struct {
 }
 
 const maxRetentionRetries = 3
-
-// metaLimits bounds one ledger's metadata. Testnet ledgers measured on
-// 2026-10-07 were about 200 KB of base64; 64 MiB leaves ample room.
-var metaLimits = ingest.XDRLimits{MaxBase64Len: 64 << 20}
 
 // SampleTestnet draws contracts from the RPC retention window. The window is
 // split into equal strata; each stratum is scanned from its start until it
@@ -136,7 +136,7 @@ func SampleTestnet(ctx context.Context, c ingest.RPC, cfg SampleConfig, log *slo
 				}
 				st.LedgersScanned++
 				var m xdr.LedgerCloseMeta
-				if err := ingest.UnmarshalBase64(l.MetadataXDR, &m, metaLimits); err != nil {
+				if err := ingest.UnmarshalBase64(l.MetadataXDR, &m, cfg.XDR.LedgerMeta()); err != nil {
 					return nil, st, fmt.Errorf("ledger %d meta: %w", l.Sequence, err)
 				}
 				f, err := ingest.ExtractContractFacts(m)
@@ -181,8 +181,8 @@ func stratumOffset(span uint32, i, n int) uint32 {
 
 // CurrentInstances fetches each contract's current instance entry. A
 // contract the node does not return, or whose instance TTL has passed, is
-// marked Archived.
-func CurrentInstances(ctx context.Context, c ingest.RPC, ids []string) ([]Contract, uint32, error) {
+// marked Archived. lim bounds each entry before it is decoded.
+func CurrentInstances(ctx context.Context, c ingest.RPC, ids []string, lim ingest.XDRLimits) ([]Contract, uint32, error) {
 	keyToID := map[string]string{}
 	keys := make([]string, 0, len(ids))
 	for _, id := range ids {
@@ -209,7 +209,7 @@ func CurrentInstances(ctx context.Context, c ingest.RPC, ids []string) ([]Contra
 			if e.LiveUntilLedgerSeq != nil && *e.LiveUntilLedgerSeq < res.LatestLedger {
 				continue
 			}
-			data, err := ingest.DecodeLedgerEntryDataBase64(e.XDR, instanceLimits)
+			data, err := ingest.DecodeLedgerEntryDataBase64(e.XDR, lim)
 			if err != nil || data.Type != xdr.LedgerEntryTypeContractData {
 				return nil, 0, fmt.Errorf("instance %s: undecodable (%v)", id, err)
 			}

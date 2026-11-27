@@ -111,6 +111,11 @@ func TestSyncCLIRetentionGapLeavesResumeState(t *testing.T) {
 	if _, err := s.State(context.Background(), store.KeyRPCURL); err == nil {
 		t.Fatal("retention gap wrote rpc_url")
 	}
+	// The limits are recorded with the seed and in each batch transaction,
+	// never before work begins, so a refused run still writes nothing.
+	if _, err := s.State(context.Background(), store.KeyLimits); err == nil {
+		t.Fatal("retention gap wrote limits")
+	}
 }
 func TestSyncCLIRejectsInvalidFlagsBeforeNetwork(t *testing.T) {
 	for _, args := range [][]string{{"--start-ledger", "0"}, {"--start-ledger", "4294967296"}, {"--interval", "0s"}, {"extra"}} {

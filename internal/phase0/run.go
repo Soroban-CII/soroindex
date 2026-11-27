@@ -22,8 +22,13 @@ type Options struct {
 	Rules   []match.RuleFile
 	Matcher match.Matcher
 	Limits  sepmeta.Limits
-	Log     *slog.Logger
-	Now     func() time.Time
+	// XDR bounds every base64 XDR string a run decodes: Hubble exports,
+	// instance entries, reference entries, ledger metadata and contract
+	// code. The phase0 command sets it from the same validated
+	// configuration as Limits; a zero XDRBudget is the shipped default.
+	XDR ingest.XDRBudget
+	Log *slog.Logger
+	Now func() time.Time
 }
 
 // Result is a finished run, ready to write.
@@ -48,17 +53,17 @@ func RunMainnet(ctx context.Context, c ingest.RPC, in MainnetInputs, o Options) 
 	if err != nil {
 		return Result{}, err
 	}
-	contracts, decodeErrs, err := ReadInstances(in.Instances)
+	contracts, decodeErrs, err := ReadInstances(in.Instances, o.XDR.Instance())
 	if err != nil {
 		return Result{}, err
 	}
 	var refs map[[2]string]string
 	if in.ExecRefs != nil {
-		if refs, err = ReadExecRefs(in.ExecRefs); err != nil {
+		if refs, err = ReadExecRefs(in.ExecRefs, o.XDR.ExecRef()); err != nil {
 			return Result{}, err
 		}
 	}
-	if err := ResolveRefs(ctx, c, contracts, refs); err != nil {
+	if err := ResolveRefs(ctx, c, contracts, refs, o.XDR.ExecRef()); err != nil {
 		return Result{}, err
 	}
 	latest, err := c.GetLatestLedger(ctx)
@@ -85,15 +90,16 @@ func RunMainnet(ctx context.Context, c ingest.RPC, in MainnetInputs, o Options) 
 // RunTestnet samples contracts from the RPC retention window, because
 // Hubble does not cover testnet.
 func RunTestnet(ctx context.Context, c ingest.RPC, sc SampleConfig, o Options) (Result, error) {
+	sc.XDR = o.XDR
 	ids, st, err := SampleTestnet(ctx, c, sc, o.Log)
 	if err != nil {
 		return Result{}, err
 	}
-	contracts, latest, err := CurrentInstances(ctx, c, ids)
+	contracts, latest, err := CurrentInstances(ctx, c, ids, o.XDR.Instance())
 	if err != nil {
 		return Result{}, err
 	}
-	if err := ResolveRefs(ctx, c, contracts, nil); err != nil {
+	if err := ResolveRefs(ctx, c, contracts, nil, o.XDR.ExecRef()); err != nil {
 		return Result{}, err
 	}
 	seen := map[string]bool{}
@@ -133,7 +139,7 @@ func finish(ctx context.Context, c ingest.RPC, census Census, population []strin
 	}
 	all := ingest.SortedKeys(want)
 	o.Log.LogAttrs(ctx, slog.LevelInfo, "phase0 fetching code", slog.Int("hashes", len(all)))
-	code, err := ingest.FetchCode(ctx, c, all)
+	code, err := ingest.FetchCode(ctx, c, all, o.XDR)
 	if err != nil {
 		return Result{}, err
 	}

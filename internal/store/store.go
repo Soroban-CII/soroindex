@@ -47,6 +47,12 @@ const (
 	// KeyLedgerCheckpoint is "<ledger>:<hash hex>" for last_ledger, so a
 	// testnet reset is detected by hash, not by ledger numbers alone.
 	KeyLedgerCheckpoint = "ledger_checkpoint"
+	// KeyLimits is the JSON parser and XDR limits the last sync ran with
+	// (config.Limits). It is recorded so a reader can see what the stored
+	// data was parsed with, and so an operator can confirm that a raised
+	// limit took effect. sync_state is a key/value table, so a new key is
+	// data and needs no migration.
+	KeyLimits = "limits"
 )
 
 // Store wraps the database handle.

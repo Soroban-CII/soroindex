@@ -167,7 +167,7 @@ func (ix *Indexer) fill(ctx context.Context, owned map[string]*prefetched, code 
 		}
 	}
 	if len(fetch) > 0 {
-		got, err := FetchCodeWith(ctx, ix.RPC, fetch, ix.workers())
+		got, err := FetchCodeWith(ctx, ix.RPC, fetch, ix.workers(), ix.XDR)
 		for _, h := range fetch {
 			p := owned[h]
 			switch {

@@ -44,6 +44,10 @@ type CheckResult struct {
 type Checker struct {
 	Store *store.Store
 	RPC   RPC
+	// XDR bounds every entry this check decodes. The check command sets it
+	// from the same validated configuration the indexer uses; a zero
+	// XDRBudget is the shipped default.
+	XDR XDRBudget
 }
 
 // Check samples contracts, re-reads their instance and reference entries,
@@ -124,7 +128,7 @@ func (c *Checker) Check(ctx context.Context, o CheckOptions) (CheckResult, error
 			res.Differences = append(res.Differences, Difference{ContractID: s.ID, Field: "archived", Stored: "true", RPC: "false", RPCLedger: e.LastModifiedLedgerSeq})
 			continue
 		}
-		data, err := DecodeLedgerEntryDataBase64(e.XDR, XDRLimits{MaxBase64Len: 1 << 20, MaxDepth: 500})
+		data, err := DecodeLedgerEntryDataBase64(e.XDR, c.XDR.CheckEntry())
 		if err != nil {
 			res.Differences = append(res.Differences, Difference{ContractID: s.ID, Field: "decode", Stored: s.Kind, RPC: err.Error(), RPCLedger: e.LastModifiedLedgerSeq})
 			continue
@@ -155,7 +159,7 @@ func (c *Checker) Check(ctx context.Context, o CheckOptions) (CheckResult, error
 			if s.ExecRefOwner != inst.RefOwner || s.ExecRefTag != inst.RefTag {
 				res.Differences = append(res.Differences, Difference{ContractID: s.ID, Field: "exec_ref", Stored: refString(s.ExecRefOwner, s.ExecRefTag), RPC: refString(inst.RefOwner, inst.RefTag), RPCLedger: e.LastModifiedLedgerSeq})
 			}
-			checkReference(&res, entries, s, inst, last, latest.Sequence, e.LastModifiedLedgerSeq)
+			checkReference(&res, entries, s, inst, last, latest.Sequence, e.LastModifiedLedgerSeq, c.XDR.CheckEntry())
 		}
 	}
 	sort.Slice(res.Differences, func(i, j int) bool {
@@ -170,7 +174,7 @@ func (c *Checker) Check(ctx context.Context, o CheckOptions) (CheckResult, error
 // checkReference compares the hash a wasm_ref contract resolves to. A
 // reference entry changed after the index's last ledger is skipped, because
 // the index has not had a chance to apply that update.
-func checkReference(res *CheckResult, entries map[string]rpc.LedgerEntry, s store.ContractState, inst Instance, last, latest, instLedger uint32) {
+func checkReference(res *CheckResult, entries map[string]rpc.LedgerEntry, s store.ContractState, inst Instance, last, latest, instLedger uint32, lim XDRLimits) {
 	if inst.RefOwner == "" || inst.RefTag == "" {
 		return
 	}
@@ -194,7 +198,7 @@ func checkReference(res *CheckResult, entries map[string]rpc.LedgerEntry, s stor
 		}
 		return
 	}
-	data, err := DecodeLedgerEntryDataBase64(e.XDR, XDRLimits{MaxBase64Len: 1 << 20, MaxDepth: 500})
+	data, err := DecodeLedgerEntryDataBase64(e.XDR, lim)
 	if err != nil || data.Type != xdr.LedgerEntryTypeContractData || data.ContractData == nil {
 		res.Differences = append(res.Differences, Difference{ContractID: s.ID, Field: "decode", Stored: s.WasmHash, RPC: fmt.Sprint(err), RPCLedger: e.LastModifiedLedgerSeq})
 		return

@@ -325,7 +325,10 @@ func TestReadInputsRejectBadFiles(t *testing.T) {
 			_, err := ReadCodeHashes(strings.NewReader("contract_code_hash,deleted\n" + h + ",false\n" + h + ",false\n"))
 			return err
 		}},
-		{"instances missing column", func() error { _, _, err := ReadInstances(strings.NewReader("contract_id\nC\n")); return err }},
+		{"instances missing column", func() error {
+			_, _, err := ReadInstances(strings.NewReader("contract_id\nC\n"), ingest.XDRLimits{})
+			return err
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -336,7 +339,7 @@ func TestReadInputsRejectBadFiles(t *testing.T) {
 	}
 	t.Run("instance id must match its XDR", func(t *testing.T) {
 		row := cid(2) + "," + b64(t, instanceCD(t, cid(1), wasmExec(strings.Repeat("ab", 32)))) + "\n"
-		if _, _, err := ReadInstances(strings.NewReader("contract_id,contract_data_xdr\n" + row)); err == nil {
+		if _, _, err := ReadInstances(strings.NewReader("contract_id,contract_data_xdr\n"+row), ingest.XDRLimits{}); err == nil {
 			t.Fatal("want mismatch error")
 		}
 	})

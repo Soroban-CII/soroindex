@@ -26,10 +26,6 @@ type Code struct {
 	Archived bool // absent from RPC, or its TTL has passed
 }
 
-// codeLimits bounds a ContractCode entry: Soroban caps code at 128 KiB, so
-// 2 MiB of base64 leaves ample room while rejecting anything absurd.
-var codeLimits = XDRLimits{MaxBase64Len: 2 << 20}
-
 // DefaultConcurrency is how many getLedgerEntries calls, and how many Wasm
 // analyses, run at once when the caller does not say. It matches the RPC
 // client's default --rpc-concurrency.
@@ -37,8 +33,8 @@ const DefaultConcurrency = 4
 
 // FetchCode fetches every hash's code with getLedgerEntries, 200 keys per
 // call, with up to DefaultConcurrency calls in flight. See FetchCodeWith.
-func FetchCode(ctx context.Context, c RPC, hashes []string) (map[string]Code, error) {
-	return FetchCodeWith(ctx, c, hashes, DefaultConcurrency)
+func FetchCode(ctx context.Context, c RPC, hashes []string, b XDRBudget) (map[string]Code, error) {
+	return FetchCodeWith(ctx, c, hashes, DefaultConcurrency, b)
 }
 
 // FetchCodeWith fetches every hash's code with getLedgerEntries, 200 keys
@@ -47,7 +43,11 @@ func FetchCode(ctx context.Context, c RPC, hashes []string) (map[string]Code, er
 // or whose liveUntilLedgerSeq is below the latest ledger, is Archived. The
 // first error cancels the calls still waiting and is returned. The RPC
 // client already retries with backoff, so this adds no retry layer.
-func FetchCodeWith(ctx context.Context, c RPC, hashes []string, workers int) (map[string]Code, error) {
+//
+// b bounds each entry's base64 XDR before it is decoded; a zero XDRBudget is
+// the shipped default.
+func FetchCodeWith(ctx context.Context, c RPC, hashes []string, workers int, b XDRBudget) (map[string]Code, error) {
+	codeLimits := b.Code()
 	keys := make([]string, 0, len(hashes))
 	keyToHash := map[string]string{}
 	for _, h := range hashes {

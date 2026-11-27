@@ -54,6 +54,13 @@ func (e *HTTPError) Error() string { return fmt.Sprintf("%s: status %d", ErrHTTP
 // Is makes errors.Is(err, ErrHTTP) true for any *HTTPError.
 func (e *HTTPError) Is(t error) bool { return t == ErrHTTP }
 
+// DefaultMaxResponseBytes is the largest response body the client reads when
+// Config.MaxResponseBytes is zero. It is exported because it also bounds
+// every base64 XDR string the indexer can see: no single field of a response
+// can be longer than the whole body, so an operator-configured XDR string
+// limit is validated against it.
+const DefaultMaxResponseBytes int64 = 256 << 20
+
 // Config holds client settings. Zero fields take the defaults shown.
 type Config struct {
 	URL              string
@@ -98,7 +105,7 @@ func New(cfg Config) (*Client, error) {
 		cfg.MaxBackoff = 10 * time.Second
 	}
 	if cfg.MaxResponseBytes <= 0 {
-		cfg.MaxResponseBytes = 256 << 20
+		cfg.MaxResponseBytes = DefaultMaxResponseBytes
 	}
 	if cfg.MaxJSONDepth <= 0 {
 		cfg.MaxJSONDepth = 64

@@ -26,9 +26,14 @@ type Indexer struct {
 	Rules   []match.RuleFile
 	Matcher match.Matcher
 	Limits  sepmeta.Limits
-	Claims  *claims.Registry
-	Log     *slog.Logger
-	Now     func() time.Time
+	// XDR bounds every base64 XDR string this indexer decodes: contract
+	// code, contract instances and CAP-85 reference entries. The sync
+	// command sets it from the same validated configuration as Limits;
+	// a zero XDRBudget is the shipped default.
+	XDR    XDRBudget
+	Claims *claims.Registry
+	Log    *slog.Logger
+	Now    func() time.Time
 	// Concurrency bounds the worker pool that fetches and analyzes Wasm
 	// (and, when seeding, prepares contract batches). The sync command
 	// sets it from --rpc-concurrency; zero means DefaultConcurrency.
@@ -77,7 +82,7 @@ func (ix *Indexer) EnsureWasm(ctx context.Context, tx *store.Tx, hashes []string
 	if len(fetch) == 0 {
 		return written, nil
 	}
-	code, err := FetchCodeWith(ctx, ix.RPC, fetch, ix.workers())
+	code, err := FetchCodeWith(ctx, ix.RPC, fetch, ix.workers(), ix.XDR)
 	if err != nil {
 		// Queue each failed hash for retry instead of failing the batch.
 		// The batch succeeds; queued hashes are retried later.
@@ -299,7 +304,7 @@ func (ix *Indexer) RetryWasmFetches(ctx context.Context, tx *store.Tx) (success,
 		if q.NextRetryAt > now {
 			continue // not due yet
 		}
-		code, err := FetchCode(ctx, ix.RPC, []string{q.Hash})
+		code, err := FetchCode(ctx, ix.RPC, []string{q.Hash}, ix.XDR)
 		if err != nil {
 			// Update the queue entry with the new error and backoff
 			backoff := time.Duration(30) * time.Second * time.Duration(1<<min(q.AttemptCount, 5))

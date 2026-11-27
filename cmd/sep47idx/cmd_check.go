@@ -29,12 +29,17 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("check", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	resolve := config.RegisterCommon(fs)
+	resolveLimits := config.RegisterLimits(fs)
 	sample := fs.Int("sample", 100, "number of contracts to compare (1..100000)")
 	seed := fs.Int64("seed", 1, "sampling seed; the same seed and database pick the same contracts")
 	if err := fs.Parse(args); err != nil {
 		return readExit("check", err, stderr)
 	}
 	cfg, err := resolve()
+	if err != nil {
+		return readExit("check", err, stderr)
+	}
+	limits, err := resolveLimits()
 	if err != nil {
 		return readExit("check", err, stderr)
 	}
@@ -62,7 +67,8 @@ func runCheck(args []string, stdout, stderr io.Writer) int {
 	if network.Passphrase != cfg.Network.Passphrase {
 		return readExit("check", fmt.Errorf("RPC network does not match %s", cfg.Network.Name), stderr)
 	}
-	res, err := (&ingest.Checker{Store: s, RPC: client}).Check(ctx, ingest.CheckOptions{Sample: *sample, Seed: *seed})
+	budget := ingest.XDRBudget{MaxBase64Len: limits.MaxXDRBase64Bytes, MaxDepth: limits.MaxXDRDepth, MaxWasmBytes: limits.MaxWasmBytes}
+	res, err := (&ingest.Checker{Store: s, RPC: client, XDR: budget}).Check(ctx, ingest.CheckOptions{Sample: *sample, Seed: *seed})
 	if err != nil {
 		return readExit("check", err, stderr)
 	}

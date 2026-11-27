@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -14,10 +15,36 @@ import (
 // statsOutput is the stats JSON: the stored snapshot, plus the RPC tip and
 // lag when --lag asked for them. The two fields are pointers so a snapshot
 // read without --lag says nothing about lag, rather than reporting 0.
+//
+// Limits is the parser and XDR configuration the last sync recorded in
+// sync_state. It is reported here, on the CLI only: the HTTP /v1/stats body
+// is a fixed surface (CLAUDE.md §5.11) and is left untouched. It is nil for
+// an index synced by a binary that recorded nothing, which is honest —
+// nothing in that database says what its data was parsed with.
 type statsOutput struct {
 	store.Statistics
-	LatestLedger *uint32 `json:"latest_ledger,omitempty"`
-	Lag          *uint32 `json:"lag,omitempty"`
+	Limits       *config.Limits `json:"limits,omitempty"`
+	LatestLedger *uint32        `json:"latest_ledger,omitempty"`
+	Lag          *uint32        `json:"lag,omitempty"`
+}
+
+// storedLimits reads the limits the last sync recorded. A database with no
+// record returns (nil, nil): stats then says so, rather than printing the
+// binary's current defaults, which the stored data may never have seen.
+func storedLimits(ctx context.Context, s *store.Store) (*config.Limits, error) {
+	v, err := s.State(ctx, store.KeyLimits)
+	if errors.Is(err, store.ErrNotFound) {
+		// "No record" is a normal outcome, distinct from an error.
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	l, err := config.ParseLimitsJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	return &l, nil
 }
 
 // rpcTip reads the provider's latest ledger after checking that the provider
@@ -68,7 +95,11 @@ func runStats(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return err
 		}
-		out := statsOutput{Statistics: d}
+		limits, err := storedLimits(ctx, s)
+		if err != nil {
+			return err
+		}
+		out := statsOutput{Statistics: d, Limits: limits}
 		if *withLag {
 			latest, err := rpcTip(ctx, cfg)
 			if err != nil {
@@ -85,6 +116,13 @@ func runStats(args []string, stdout, stderr io.Writer) int {
 		}
 		t := d.Adoption
 		_, err = fmt.Fprintf(stdout, "%s: last indexed ledger %d; %d stored contracts, %d archived\nLive: %d Wasm, %d Wasm references (%d unresolved), %d SAC (protocol)\nDeclared: %d/%d measured contracts, %d/%d used hashes\nUndeclared SEP-41 gap (inferred, %s): %d contracts, %d hashes\nAnomalies: %v\n", d.Network, d.LastLedger, d.TotalContracts, d.ArchivedContracts, t.LiveWasm, t.LiveWasmRef, t.WasmRefUnresolved, t.LiveSAC, t.DeclaringContracts, t.MeasuredContracts, t.DeclaringUsedHashes, t.UsedHashes, rulesets[41], t.GapContracts, t.GapUsedHashes, d.Anomalies)
+		if err == nil {
+			if limits != nil {
+				_, err = fmt.Fprintf(stdout, "Limits (recorded by the last sync): %s\n", limits)
+			} else {
+				_, err = fmt.Fprintf(stdout, "Limits: not recorded; this index was synced before the limits were stored\n")
+			}
+		}
 		if err == nil && d.LastProtocol != nil {
 			_, err = fmt.Fprintf(stdout, "Protocol: last indexed ledger closed under protocol %d\n", *d.LastProtocol)
 		}

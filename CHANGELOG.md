@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Make the parser and XDR limits configurable: `--max-wasm-bytes` (1MiB,
+  hard cap 64MiB), `--max-section-bytes` (256KiB, capped by the module size),
+  `--max-sections` (10000, capped by what a module of that size can hold),
+  `--max-xdr-depth` (500, hard cap 1500, the pinned decoder's own maximum) and
+  `--max-xdr-base64-bytes` (64MiB, hard cap 256MiB, the largest RPC response
+  body the client reads), each with a `SEP47IDX_*` variable and a size suffix
+  such as `4MiB`. Values are validated at startup, before any network call or
+  untrusted byte, and a zero is rejected rather than treated as a default. The
+  limits each sync ran with are stored in `sync_state` and reported by
+  `sep47idx stats`; `/v1/stats` is unchanged. Defaults are unchanged, so
+  shipped behaviour is the same (#139).
+
 - Add a conformance suite against stellar-cli 30.0.1 and the Python
   stellar-sdk 17.0.1. `scripts/record-conformance.sh` records both tools'
   output for every fixture and vector under `testdata/conformance/`, and

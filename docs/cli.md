@@ -34,6 +34,36 @@ commands:
 | `--rpc-timeout` | `30s` | Timeout per RPC attempt. |
 | `--rpc-concurrency` | `4` | RPC requests in flight. |
 
+## Parser and XDR limits
+
+`sync`, `phase0`, `inspect` and `check` are the commands that parse untrusted
+Wasm or XDR, so they accept the five limits that bound it. Sizes take a plain
+byte count or a suffix (`4MiB`, `512KiB`, `2MB`). Each has an environment
+variable, and a flag overrides it. A zero, a negative number, an unparseable
+size, or anything above a hard cap is refused at startup, before a database is
+opened or a byte is read.
+
+| Flag | Env var | Default | Hard cap |
+| --- | --- | --- | --- |
+| `--max-wasm-bytes` | `SEP47IDX_MAX_WASM_BYTES` | `1MiB` | `64MiB` |
+| `--max-section-bytes` | `SEP47IDX_MAX_SECTION_BYTES` | `256KiB` | `--max-wasm-bytes` |
+| `--max-sections` | `SEP47IDX_MAX_SECTIONS` | `10000` | `--max-wasm-bytes`/2 |
+| `--max-xdr-depth` | `SEP47IDX_MAX_XDR_DEPTH` | `500` | `1500` |
+| `--max-xdr-base64-bytes` | `SEP47IDX_MAX_XDR_BASE64_BYTES` | `64MiB` | `256MiB` |
+
+Raising `--max-wasm-bytes` raises the base64 cap on the `CONTRACT_CODE` entry
+with it, so one flag is enough to index a larger module. The limits a `sync`
+ran with are recorded in `sync_state` and printed by `stats`. Each cap and the
+memory trade-off are explained in
+[Self-hosting](self-hosting.md#parser-and-xdr-limits).
+
+```text
+$ sep47idx sync --db testnet.db --max-wasm-bytes 65MiB --start-ledger 1
+sep47idx sync: --max-wasm-bytes: invalid limit: MaxWasmBytes is 68157440, want at most 67108864 bytes, the hard cap
+$ echo "exit=$?"
+exit=1
+```
+
 ## phase0
 
 Measures adoption across a network and writes `report/ADOPTION.md`, `<network>-summary.json`, `<network>-raw.csv` and `<network>-contracts.csv`.
@@ -289,8 +319,10 @@ functions. It opens no database and makes no RPC call, so it works offline,
 before a contract is deployed. The file is parsed, never executed.
 
 It calls the same code `sync` uses to analyze and store a Wasm, with the same
-limits (`sepmeta.DefaultLimits`: 1 MiB per module, 256 KiB per section, 10,000
-sections). A file over the 1 MiB module limit exits 1 before it is read in full.
+limits (by default 1 MiB per module, 256 KiB per section, 10,000 sections; see
+[Parser and XDR limits](#parser-and-xdr-limits)). A file over the module limit
+exits 1 before it is read in full, and `--max-wasm-bytes` raises that limit for
+this command as it does for `sync`.
 Malformed Wasm is not an error: it is analyzed and its `parse_status` and
 `parse_error` are printed, as the indexer would store them.
 
@@ -438,6 +470,13 @@ It refuses a provider on another network. It reports `latest_ledger` and
 index is an error, not a negative lag. Without `--lag`, the JSON has no `lag`
 field, so a missing value is never mistaken for lag 0.
 `TestStatsCLILag` in `cmd/sep47idx/cmd_stats_test.go` covers each case.
+
+A `Limits (recorded by the last sync)` line reports the parser and XDR limits
+the last `sync` ran with, read from `sync_state`, with the same values under a
+`limits` key in JSON. An index synced before those limits were recorded prints
+`Limits: not recorded` rather than the binary's current defaults, because
+nothing in that database says what its data was parsed with. The HTTP
+`GET /v1/stats` body is a fixed surface and does not carry them.
 
 ```text
 $ /workspace/scratch/stage-g/sep47idx stats --db /workspace/scratch/stage-g/testnet.db

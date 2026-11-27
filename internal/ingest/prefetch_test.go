@@ -125,7 +125,7 @@ func TestFetchCodeWithBoundsConcurrency(t *testing.T) {
 		t.Run(fmt.Sprintf("%d workers", workers), func(t *testing.T) {
 			l := &latencyRPC{RPC: f, delay: 20 * time.Millisecond}
 			base := runtime.NumGoroutine()
-			got, err := FetchCodeWith(context.Background(), l, hashes, workers)
+			got, err := FetchCodeWith(context.Background(), l, hashes, workers, XDRBudget{})
 			if err != nil || len(got) != 1000 {
 				t.Fatalf("fetched %d: %v", len(got), err)
 			}

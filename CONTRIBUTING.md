@@ -41,6 +41,7 @@ The required checks are `lint`, `test`, `fuzz-smoke` and `build`. Security and d
 ## Rules for code
 
 - Treat Wasm and XDR from the network as hostile. Check every length against the bytes remaining and a limit before allocating.
+- The limits themselves are operator configuration (`internal/config.Limits`, `sepmeta.Limits`, `ingest.XDRBudget`), validated once at startup against hard caps. Do not re-introduce a hard-coded limit at a call site: take it from the `Limits` or `XDRBudget` the caller was given, and keep a zero value meaning "the shipped default".
 - No panics outside `main` setup and tests. Malformed input becomes a recorded error.
 - Every I/O function takes a `context.Context` first, and every RPC call has a timeout.
 - SQL is parameterized. Database writes are idempotent.

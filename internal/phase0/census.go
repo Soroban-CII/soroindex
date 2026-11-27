@@ -112,14 +112,11 @@ func ReadCodeHashes(r io.Reader) ([]CodeHash, error) {
 	}
 }
 
-// instanceLimits bounds a contract_data_xdr value. Instance storage can be
-// large, so the cap is generous but finite.
-var instanceLimits = ingest.XDRLimits{MaxBase64Len: 16 << 20}
-
 // ReadInstances reads Hubble Q2 (contract_id, contract_data_xdr, ...) and
 // decodes each instance's executable. Rows that fail to decode are counted
-// and skipped; the count is reported.
-func ReadInstances(r io.Reader) (contracts []Contract, decodeErrors int, err error) {
+// and skipped; the count is reported. lim bounds each exported XDR value
+// before it is decoded; a zero XDRLimits is the shipped default.
+func ReadInstances(r io.Reader, lim ingest.XDRLimits) (contracts []Contract, decodeErrors int, err error) {
 	cr, cols, err := csvReader(r, "contract_id", "contract_data_xdr")
 	if err != nil {
 		return nil, 0, fmt.Errorf("instances csv: %w", err)
@@ -133,7 +130,7 @@ func ReadInstances(r io.Reader) (contracts []Contract, decodeErrors int, err err
 		if err != nil {
 			return nil, 0, fmt.Errorf("instances csv line %d: %w", line, err)
 		}
-		cd, err := ingest.DecodeContractDataBase64(rec[cols["contract_data_xdr"]], instanceLimits)
+		cd, err := ingest.DecodeContractDataBase64(rec[cols["contract_data_xdr"]], lim)
 		if err != nil {
 			decodeErrors++
 			continue
@@ -158,8 +155,9 @@ func fromInstance(in ingest.Instance) Contract {
 	return Contract{ID: in.ContractID, Kind: in.Kind, WasmHash: in.WasmHash, RefOwner: in.RefOwner, RefTag: in.RefTag, SACAsset: in.SACAsset}
 }
 
-// ReadExecRefs reads Hubble Q3 (contract_id, contract_data_xdr, ...).
-func ReadExecRefs(r io.Reader) (map[[2]string]string, error) {
+// ReadExecRefs reads Hubble Q3 (contract_id, contract_data_xdr, ...). lim
+// bounds each exported XDR value before it is decoded.
+func ReadExecRefs(r io.Reader, lim ingest.XDRLimits) (map[[2]string]string, error) {
 	cr, cols, err := csvReader(r, "contract_id", "contract_data_xdr")
 	if err != nil {
 		return nil, fmt.Errorf("exec refs csv: %w", err)
@@ -173,7 +171,7 @@ func ReadExecRefs(r io.Reader) (map[[2]string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("exec refs csv line %d: %w", line, err)
 		}
-		cd, err := ingest.DecodeContractDataBase64(rec[cols["contract_data_xdr"]], instanceLimits)
+		cd, err := ingest.DecodeContractDataBase64(rec[cols["contract_data_xdr"]], lim)
 		if err != nil {
 			return nil, fmt.Errorf("exec refs csv line %d: %w", line, err)
 		}
@@ -187,8 +185,8 @@ func ReadExecRefs(r io.Reader) (map[[2]string]string, error) {
 
 // ResolveRefs sets WasmHash for every wasm_ref contract. References missing
 // from known are fetched with getLedgerEntries; any still missing, or
-// archived, leave the contract Unresolved.
-func ResolveRefs(ctx context.Context, c ingest.RPC, contracts []Contract, known map[[2]string]string) error {
+// archived, leave the contract Unresolved. lim bounds each fetched entry.
+func ResolveRefs(ctx context.Context, c ingest.RPC, contracts []Contract, known map[[2]string]string, lim ingest.XDRLimits) error {
 	if known == nil {
 		known = map[[2]string]string{}
 	}
@@ -226,7 +224,7 @@ func ResolveRefs(ctx context.Context, c ingest.RPC, contracts []Contract, known 
 				}
 				continue
 			}
-			data, err := ingest.DecodeLedgerEntryDataBase64(e.XDR, instanceLimits)
+			data, err := ingest.DecodeLedgerEntryDataBase64(e.XDR, lim)
 			if err != nil || data.Type != xdr.LedgerEntryTypeContractData {
 				return fmt.Errorf("exec ref entry %s: undecodable (%v)", e.Key, err)
 			}

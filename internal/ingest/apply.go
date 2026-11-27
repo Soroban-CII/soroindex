@@ -134,7 +134,7 @@ func (ix *Indexer) resolveReference(ctx context.Context, tx *store.Tx, owner, ta
 		if e.LastModifiedLedgerSeq > ledger {
 			continue
 		}
-		data, err := DecodeLedgerEntryDataBase64(e.XDR, XDRLimits{})
+		data, err := DecodeLedgerEntryDataBase64(e.XDR, ix.XDR.ExecRef())
 		if err != nil {
 			return "", false, err
 		}

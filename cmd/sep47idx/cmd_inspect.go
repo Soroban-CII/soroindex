@@ -35,6 +35,7 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	asJSON := fs.Bool("json", false, "print JSON (env SEP47IDX_JSON)")
 	require := fs.Int("require-match", 0, "exit 1 unless the inferred status for this SEP is match (env SEP47IDX_REQUIRE_MATCH)")
 	threshold := fs.Float64("partial-threshold", match.DefaultPartialThreshold, "match.partial_threshold, as for sync")
+	resolveLimits := config.RegisterLimits(fs)
 	path, err := parseObject(fs, args)
 	if err == nil {
 		err = config.ApplyEnv(fs, os.LookupEnv)
@@ -45,7 +46,11 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 	if *require < 0 {
 		return readExit("inspect", errors.New("--require-match must be a positive SEP number"), stderr)
 	}
-	lim := sepmeta.DefaultLimits()
+	limits, err := resolveLimits()
+	if err != nil {
+		return readExit("inspect", err, stderr)
+	}
+	lim := limits.Sepmeta()
 	code, err := readWasmFile(path, lim.MaxWasmBytes)
 	if err != nil {
 		return readExit("inspect", err, stderr)

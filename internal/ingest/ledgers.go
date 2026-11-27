@@ -26,7 +26,9 @@ type LedgerSource struct {
 	RPC RPC
 	// Limit is the most ledgers per getLedgers call: 1..200, default 200.
 	Limit uint32
-	// MetaLimits bounds each ledger's metadata; default 64 MiB of base64.
+	// MetaLimits bounds each ledger's metadata, the largest XDR the indexer
+	// decodes. The sync command sets it from the operator's configured
+	// ceiling (XDRBudget.LedgerMeta); zero means DefaultXDRBase64Len.
 	MetaLimits XDRLimits
 }
 
@@ -39,7 +41,7 @@ func (s *LedgerSource) limit() uint32 {
 
 func (s *LedgerSource) metaLimits() XDRLimits {
 	if s.MetaLimits.MaxBase64Len == 0 {
-		return XDRLimits{MaxBase64Len: 64 << 20, MaxDepth: s.MetaLimits.MaxDepth}
+		return XDRLimits{MaxBase64Len: DefaultXDRBase64Len, MaxDepth: s.MetaLimits.MaxDepth}
 	}
 	return s.MetaLimits
 }

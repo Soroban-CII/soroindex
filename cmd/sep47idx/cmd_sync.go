@@ -20,7 +20,6 @@ import (
 	"github.com/Soroban-CII/soroindex/internal/rpc"
 	"github.com/Soroban-CII/soroindex/internal/store"
 	indexsync "github.com/Soroban-CII/soroindex/internal/sync"
-	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 	"github.com/Soroban-CII/soroindex/rules"
 )
 
@@ -39,6 +38,7 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("sync", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	resolve := config.RegisterCommon(flags)
+	resolveLimits := config.RegisterLimits(flags)
 	seed := flags.String("seed", "", "CSV of contract_id[,wasm_hash] to seed from (e.g. the Hubble Q2 export)")
 	allowInvocation := flags.Bool("allow-invocation", false, "run claim sources that simulate contract calls (none ship by default)")
 	recompute := flags.Bool("recompute", false, "re-run the matcher for Wasm whose stored ruleset_version differs from the loaded rules (no network)")
@@ -53,6 +53,14 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 		return exitError
 	}
 	cfg, err := resolve()
+	if err != nil {
+		errorf(stderr, "sep47idx sync: %v\n", err)
+		return exitError
+	}
+	// Limits are validated before the database is opened or a ledger is
+	// read, so an out-of-range value stops the command rather than
+	// surfacing part-way through an ingest.
+	limits, err := resolveLimits()
 	if err != nil {
 		errorf(stderr, "sep47idx sync: %v\n", err)
 		return exitError
@@ -105,14 +113,31 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 	}
 	defer func() { _ = st.Close() }() // close error after a completed seed carries nothing actionable
 
-	reg := claims.Default(sepmeta.DefaultLimits())
+	// The limits this run parses with are recorded next to rpc_url: with the
+	// seed, and in each batch transaction when following ledgers. They are
+	// never written before work begins, so the retention-gap path still
+	// writes nothing (CLAUDE.md §5.9). sync_state is a key/value table, so
+	// a new key is data, not a schema change.
+	limitsJSON, err := limits.JSON()
+	if err != nil {
+		errorf(stderr, "sep47idx sync: %v\n", err)
+		return exitError
+	}
+
+	parserLimits := limits.Sepmeta()
+	budget := ingest.XDRBudget{MaxBase64Len: limits.MaxXDRBase64Bytes, MaxDepth: parserLimits.MaxXDRDepth, MaxWasmBytes: parserLimits.MaxWasmBytes}
+	reg := claims.Default(parserLimits)
 	reg.AllowInvocation = *allowInvocation
 	ix := &ingest.Indexer{Store: st, Rules: ruleFiles, Matcher: match.Matcher{PartialThreshold: *threshold},
-		Limits: sepmeta.DefaultLimits(), Claims: reg, Log: log, Now: time.Now, Concurrency: cfg.Concurrency}
+		Limits: parserLimits, XDR: budget, Claims: reg, Log: log, Now: time.Now, Concurrency: cfg.Concurrency}
 	if client != nil {
 		ix.RPC = client
 		if *seed != "" {
 			if err := st.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
+				errorf(stderr, "sep47idx sync: %v\n", err)
+				return exitError
+			}
+			if err := st.SetState(ctx, store.KeyLimits, limitsJSON); err != nil {
 				errorf(stderr, "sep47idx sync: %v\n", err)
 				return exitError
 			}
@@ -133,11 +158,14 @@ func runSync(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if incremental {
-		loop := indexsync.Loop{Store: st, Source: &ingest.LedgerSource{RPC: client}, Apply: ix.ApplyLedger,
+		loop := indexsync.Loop{Store: st, Source: &ingest.LedgerSource{RPC: client, MetaLimits: budget.LedgerMeta()}, Apply: ix.ApplyLedger,
 			RetryWasmFetches: ix.RetryWasmFetches, Prefetch: ix.PrefetchBatch, Log: log,
 			StartLedger: uint32(*start), Follow: *follow, Interval: *interval} // #nosec G115 -- checked above
 		loop.Apply = func(ctx context.Context, tx *store.Tx, facts ingest.ContractFacts) error {
 			if err := tx.SetState(ctx, store.KeyRPCURL, cfg.RPCURL); err != nil {
+				return err
+			}
+			if err := tx.SetState(ctx, store.KeyLimits, limitsJSON); err != nil {
 				return err
 			}
 			if _, err := tx.State(ctx, store.KeyRulesetVersions); errors.Is(err, store.ErrNotFound) {
