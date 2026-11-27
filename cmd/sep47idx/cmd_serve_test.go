@@ -63,6 +63,7 @@ func TestServeHTTPReadsIndexAndShutsDown(t *testing.T) {
 func TestServeCLIRejectsInvalidConfiguration(t *testing.T) {
 	for _, args := range [][]string{
 		{"serve", "--rate-limit", "-1"},
+		{"serve", "--wait-for-db", "-1s"},
 		{"serve", "extra"},
 		{"serve", "--db", "/missing/index.db"},
 		{"serve", "--network", "mainnet"},
@@ -369,4 +370,30 @@ func TestServeGracefulShutdownCompletesInFlight(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("in-flight request did not complete before shutdown")
 	}
+}
+
+func TestOpenReadOnlyWithWait(t *testing.T) {
+	t.Run("waits until database is created", func(t *testing.T) {
+		db := t.TempDir() + "/delayed.db"
+		go func() {
+			time.Sleep(150 * time.Millisecond)
+			s, err := store.Open(context.Background(), db, store.Options{Passphrase: config.Testnet.Passphrase})
+			if err == nil {
+				_ = s.Close()
+			}
+		}()
+
+		s, err := openReadOnlyWithWait(context.Background(), db, config.Testnet.Passphrase, 2*time.Second)
+		if err != nil {
+			t.Fatalf("expected database to open after waiting, got: %v", err)
+		}
+		_ = s.Close()
+	})
+
+	t.Run("times out when database never appears", func(t *testing.T) {
+		db := t.TempDir() + "/never.db"
+		if _, err := openReadOnlyWithWait(context.Background(), db, config.Testnet.Passphrase, 100*time.Millisecond); err == nil {
+			t.Fatal("expected error on missing database")
+		}
+	})
 }

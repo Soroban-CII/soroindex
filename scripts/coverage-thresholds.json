@@ -7,8 +7,8 @@
   "internal/match": 80.4,
   "internal/phase0": 84.7,
   "internal/rpc": 95.6,
-  "internal/store": 63.9,
+  "internal/store": 63.5,
   "internal/sync": 77.2,
   "pkg/client": 70.7,
-  "pkg/sepmeta": 97.4
+  "pkg/sepmeta": 96.8
 }

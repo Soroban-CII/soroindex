@@ -14,30 +14,38 @@ import (
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
 
-func main() {
-	addr := flag.String("addr", ":8545", "listen address for recorded RPC")
-	flag.Parse()
-
+func marshalLedgerMeta(seq uint32) (string, error) {
 	meta := xdr.LedgerCloseMeta{
 		V: 0,
 		V0: &xdr.LedgerCloseMetaV0{
 			LedgerHeader: xdr.LedgerHeaderHistoryEntry{
 				Header: xdr.LedgerHeader{
-					LedgerSeq: 10,
+					LedgerSeq: xdr.Uint32(seq),
 				},
 			},
 		},
 	}
-	encoded, err := xdr.MarshalBase64(meta)
-	if err != nil {
-		log.Fatalf("marshal meta: %v", err)
-	}
+	return xdr.MarshalBase64(meta)
+}
+
+func main() {
+	addr := flag.String("addr", ":8545", "listen address for recorded RPC")
+	flag.Parse()
+
+	const oldestLedger uint32 = 1
+	const latestLedger uint32 = 10
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID     json.RawMessage `json:"id"`
 			Method string          `json:"method"`
+			Params struct {
+				StartLedger uint32 `json:"startLedger"`
+				Pagination  *struct {
+					Limit uint32 `json:"limit"`
+				} `json:"pagination"`
+			} `json:"params"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -48,14 +56,29 @@ func main() {
 		case "getNetwork":
 			result = rpc.Network{Passphrase: config.Testnet.Passphrase}
 		case "getLatestLedger":
-			result = rpc.LatestLedger{Sequence: 10}
+			result = rpc.LatestLedger{Sequence: latestLedger}
 		case "getLedgers":
+			start := req.Params.StartLedger
+			if start < oldestLedger {
+				start = oldestLedger
+			}
+			limit := uint32(200)
+			if req.Params.Pagination != nil && req.Params.Pagination.Limit > 0 {
+				limit = req.Params.Pagination.Limit
+			}
+			var ledgers []rpc.Ledger
+			for seq, count := start, uint32(0); seq <= latestLedger && count < limit; seq, count = seq+1, count+1 {
+				encoded, err := marshalLedgerMeta(seq)
+				if err != nil {
+					http.Error(w, fmt.Sprintf("marshal meta %d: %v", seq, err), http.StatusInternalServerError)
+					return
+				}
+				ledgers = append(ledgers, rpc.Ledger{Sequence: seq, MetadataXDR: encoded})
+			}
 			result = rpc.LedgersPage{
-				OldestLedger: 1,
-				LatestLedger: 10,
-				Ledgers: []rpc.Ledger{
-					{Sequence: 10, MetadataXDR: encoded},
-				},
+				OldestLedger: oldestLedger,
+				LatestLedger: latestLedger,
+				Ledgers:      ledgers,
 			}
 		default:
 			http.Error(w, fmt.Sprintf("unsupported method %s", req.Method), http.StatusBadRequest)

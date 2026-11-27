@@ -88,22 +88,8 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int, wait
 	if err := cfg.RequireRPC(); err != nil {
 		return nil, nil, err
 	}
-	var s *store.Store
-	deadline := time.Now().Add(waitForDB)
-	for {
-		var err error
-		s, err = store.Open(ctx, cfg.DB, store.Options{Passphrase: cfg.Network.Passphrase, ReadOnly: true})
-		if err == nil {
-			break
-		}
-		if waitForDB > 0 && (errors.Is(err, store.ErrReadOnlyUninitialized) || os.IsNotExist(err) || errors.Is(err, store.ErrNotFound)) && time.Now().Before(deadline) {
-			select {
-			case <-ctx.Done():
-				return nil, nil, ctx.Err()
-			case <-time.After(500 * time.Millisecond):
-				continue
-			}
-		}
+	s, err := openReadOnlyWithWait(ctx, cfg.DB, cfg.Network.Passphrase, waitForDB)
+	if err != nil {
 		return nil, nil, err
 	}
 	cleanup := func() { _ = s.Close() }
@@ -128,6 +114,36 @@ func singleNetworkHandler(ctx context.Context, cfg config.Common, rate int, wait
 		return nil, nil, err
 	}
 	return h, cleanup, nil
+}
+
+func openReadOnlyWithWait(ctx context.Context, dbPath, passphrase string, wait time.Duration) (*store.Store, error) {
+	if wait <= 0 {
+		return store.Open(ctx, dbPath, store.Options{Passphrase: passphrase, ReadOnly: true})
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		var err error
+		if _, statErr := os.Stat(dbPath); statErr == nil {
+			var s *store.Store
+			s, err = store.Open(ctx, dbPath, store.Options{Passphrase: passphrase, ReadOnly: true})
+			if err == nil {
+				return s, nil
+			}
+		} else {
+			err = statErr
+		}
+		retryable := errors.Is(err, store.ErrReadOnlyUninitialized) || errors.Is(err, os.ErrNotExist) || errors.Is(err, store.ErrNotFound)
+		if !retryable || !time.Now().Before(deadline) {
+			return nil, err
+		}
+		timer := time.NewTimer(200 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // multiNetworkHandler opens one read-only store and RPC client per network.

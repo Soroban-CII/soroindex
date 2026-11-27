@@ -209,8 +209,8 @@ A multi-container deployment stack is defined in `compose.yaml` to orchestrate b
 
 ### Security and Architecture
 
-- **Shared Volume:** Both containers coordinate over the `soroindex-data` volume mounted at `/data`.
-- **Read-Only API Mount:** The `serve` API container mounts the data volume as read-only (`/data:ro`), preventing any state modification by the API process.
+- **Shared Volume:** Both containers coordinate over the `soroindex-data` volume mounted at `/app/data`.
+- **Read-Only API Mount:** The `serve` API container mounts the data volume as read-only (`/app/data:ro`), preventing any state modification by the API process.
 - **Read-Only Root Filesystems:** Both containers run with `read_only: true` on their root filesystems and drop privileges to UID `65532:65532`.
 - **Health Checks & Startup Order:** 
   - `sync` performs periodic health checks using `sep47idx stats`.

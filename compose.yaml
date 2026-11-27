@@ -11,7 +11,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - soroindex-data:/data
+      - soroindex-data:/app/data
     command:
       - sync
       - --network
@@ -19,10 +19,12 @@ services:
       - --rpc-url
       - ${SEP47IDX_RPC_URL:-https://soroban-testnet.stellar.org}
       - --db
-      - /data/testnet.db
+      - /app/data/${SEP47IDX_NETWORK:-testnet}.db
+      - --start-ledger
+      - ${SEP47IDX_START_LEDGER:-1}
       - --follow
     healthcheck:
-      test: ["CMD", "/app/sep47idx", "stats", "--network", "testnet", "--db", "/data/testnet.db"]
+      test: ["CMD", "/app/sep47idx", "stats", "--network", "${SEP47IDX_NETWORK:-testnet}", "--db", "/app/data/${SEP47IDX_NETWORK:-testnet}.db"]
       interval: 5s
       timeout: 5s
       retries: 6
@@ -42,7 +44,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - soroindex-data:/data:ro
+      - soroindex-data:/app/data:ro
     ports:
       - "${SEP47IDX_PORT:-8080}:8080"
     command:
@@ -52,7 +54,7 @@ services:
       - --rpc-url
       - ${SEP47IDX_RPC_URL:-https://soroban-testnet.stellar.org}
       - --db
-      - /data/testnet.db
+      - /app/data/${SEP47IDX_NETWORK:-testnet}.db
       - --addr
       - :8080
       - --wait-for-db
