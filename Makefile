@@ -11,7 +11,7 @@ LDFLAGS   := -s -w -X main.version=$(VERSION)
 
 export CGO_ENABLED := 0
 
-.PHONY: all test lint coverage fuzz fuzz-smoke fuzz-nightly build fixtures docs tidy-check rules-check bench bench-10m clean
+.PHONY: all test lint coverage fuzz fuzz-smoke fuzz-nightly build fixtures docs tidy-check rules-check bench bench-10m bench-budget bench-budget-update clean
 
 all: lint test build
 
@@ -59,6 +59,20 @@ bench:
 bench-10m:
 	SEP47IDX_BENCH_HASHES=1000000 SEP47IDX_BENCH_CONTRACTS=1000000 $(GO) test ./internal/store $(BENCH)
 
+## bench-budget: run the pkg/sepmeta allocation benchmarks over every golden
+## fixture and fail if any allocs/op or B/op exceeds its committed budget
+## bench-budget-update: rewrite the budgets from a fresh run (say why in the commit)
+ALLOC_BUDGETS := pkg/sepmeta/testdata/alloc-budgets.txt
+SEPMETA_BENCH_OUT ?= sepmeta-bench.txt
+SEPMETA_BENCH := -run '^$$' -bench '^Benchmark(ReadCustomSections|ReadCustomSectionsAt|DecodeMeta|DecodeSpec|ParseSEP47|Functions)$$' -benchmem -benchtime=1000x -count=1
+bench-budget:
+	$(GO) test ./pkg/sepmeta $(SEPMETA_BENCH) > $(SEPMETA_BENCH_OUT)
+	$(GO) run ./scripts/benchbudget -budgets $(ALLOC_BUDGETS) < $(SEPMETA_BENCH_OUT)
+
+bench-budget-update:
+	$(GO) test ./pkg/sepmeta $(SEPMETA_BENCH) > $(SEPMETA_BENCH_OUT)
+	$(GO) run ./scripts/benchbudget -budgets $(ALLOC_BUDGETS) -write < $(SEPMETA_BENCH_OUT)
+
 ## build: static binary for the host platform
 build:
 	$(GO) build -trimpath -ldflags '$(LDFLAGS)' -o $(BINARY) $(PKG)
@@ -81,5 +95,5 @@ tidy-check:
 	$(GO) mod tidy -diff
 
 clean:
-	rm -f $(BINARY)
+	rm -f $(BINARY) $(SEPMETA_BENCH_OUT)
 	rm -rf site dist

@@ -1,0 +1,231 @@
+{
+  "input": {
+    "kind": "fixture",
+    "name": "oracle_sep40",
+    "wasm_sha256": "03f3a0d83727eb583fe741ef78721b1c12c082e5a0a74df0bd47510158fa0604"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "40"
+      ],
+      [
+        "rsver",
+        "1.98.1"
+      ],
+      [
+        "rssdkver",
+        "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+      ],
+      [
+        "rssdk_spec_shaking",
+        "2"
+      ],
+      [
+        "cliver",
+        "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              40
+            ]
+          },
+          "part": "40",
+          "strict": {
+            "ok": true,
+            "seps": [
+              40
+            ]
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        40
+      ]
+    },
+    "supported_seps_strict": {
+      "ok": true,
+      "seps": [
+        40
+      ]
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "functions": [
+        {
+          "inputs": [],
+          "name": "base",
+          "outputs": [
+            {
+              "udt": {
+                "name": "Asset"
+              }
+            }
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "udt": {
+                "name": "Asset"
+              }
+            },
+            "u64"
+          ],
+          "name": "price",
+          "outputs": [
+            {
+              "option": {
+                "value_type": {
+                  "udt": {
+                    "name": "PriceData"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "assets",
+          "outputs": [
+            {
+              "vec": {
+                "element_type": {
+                  "udt": {
+                    "name": "Asset"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "udt": {
+                "name": "Asset"
+              }
+            },
+            "u32"
+          ],
+          "name": "prices",
+          "outputs": [
+            {
+              "option": {
+                "value_type": {
+                  "vec": {
+                    "element_type": {
+                      "udt": {
+                        "name": "PriceData"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "inputs": [],
+          "name": "decimals",
+          "outputs": [
+            "u32"
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "udt": {
+                "name": "Asset"
+              }
+            }
+          ],
+          "name": "lastprice",
+          "outputs": [
+            {
+              "option": {
+                "value_type": {
+                  "udt": {
+                    "name": "PriceData"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "udt": {
+                "name": "Asset"
+              }
+            },
+            "i128",
+            "u64"
+          ],
+          "name": "set_price",
+          "outputs": []
+        },
+        {
+          "inputs": [],
+          "name": "resolution",
+          "outputs": [
+            "u32"
+          ]
+        },
+        {
+          "inputs": [
+            "address",
+            {
+              "udt": {
+                "name": "Asset"
+              }
+            },
+            "u32",
+            "u32"
+          ],
+          "name": "__constructor",
+          "outputs": []
+        }
+      ],
+      "ok": true
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "40"
+        ],
+        [
+          "rsver",
+          "1.98.1"
+        ],
+        [
+          "rssdkver",
+          "28.0.0#48d506712f964094d14176e2f0b02afcd1054567"
+        ],
+        [
+          "rssdk_spec_shaking",
+          "2"
+        ],
+        [
+          "cliver",
+          "28.0.0#300aaf69ab100536678bdb641428b06f06b318ea"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

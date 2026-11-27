@@ -1,0 +1,62 @@
+{
+  "input": {
+    "kind": "vector",
+    "name": "20_tab_and_newline_ws",
+    "wasm_sha256": "e219a6b11ef106da606a10c4533bacf097d7f305a5af1257ed461e5ec9102000"
+  },
+  "py_stellar_sdk": {
+    "items": [
+      [
+        "sep",
+        "\t41\r"
+      ]
+    ],
+    "ok": true,
+    "parts": [
+      [
+        {
+          "lenient": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          },
+          "part": "\t41\r",
+          "strict": {
+            "ok": true,
+            "seps": [
+              41
+            ]
+          }
+        }
+      ]
+    ],
+    "supported_seps": {
+      "ok": true,
+      "seps": [
+        41
+      ]
+    },
+    "supported_seps_strict": {
+      "ok": true,
+      "seps": [
+        41
+      ]
+    }
+  },
+  "stellar_cli": {
+    "interface": {
+      "error": "❌ error: no interface present in provided WASM file",
+      "ok": false
+    },
+    "meta": {
+      "entries": [
+        [
+          "sep",
+          "\\t41\\r"
+        ]
+      ],
+      "ok": true
+    }
+  }
+}

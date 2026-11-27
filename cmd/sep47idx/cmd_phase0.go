@@ -196,7 +196,12 @@ func verifyPhase0DB(cfg config.Common, out, dbPath string, stdout, stderr io.Wri
 		errorf(stderr, "sep47idx phase0: %v\n", err)
 		return exitError
 	}
-	ok, err := phase0.PrintChecks(stdout, phase0.Verify(s, t))
+	refs, err := st.ExecRefTotals(ctx, !phase0.InstanceArchivalChecked(s))
+	if err != nil {
+		errorf(stderr, "sep47idx phase0: %v\n", err)
+		return exitError
+	}
+	ok, err := phase0.PrintChecks(stdout, phase0.Verify(s, t, refs))
 	if err != nil || !ok {
 		return exitError
 	}

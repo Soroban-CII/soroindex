@@ -16,6 +16,20 @@ In scope:
 
 Out of scope: the deployed contracts the index describes, and third-party RPC providers.
 
+### RPC response limits
+
+Wasm and XDR are bounded by `pkg/sepmeta` limits, but the JSON-RPC envelope around them comes from the same untrusted provider. `internal/rpc` bounds it as follows, and a response that breaks a bound is an error, never a partial result:
+
+| Hostile response | Limit | Behavior | Test (`internal/rpc/hostile_test.go`) |
+| --- | --- | --- | --- |
+| Declared `Content-Length` over the cap | `MaxResponseBytes`, default 256 MiB | `ErrResponseTooLarge` before any of the body is read | `TestHugeDeclaredBodyFailsBeforeRead` |
+| Chunked or mis-declared body over the cap | `MaxResponseBytes` | Reading stops at cap + 1 byte; `ErrResponseTooLarge` | `TestHugeChunkedBodyIsCapped` |
+| Deeply nested arrays or objects | `MaxJSONDepth`, default 64 | `ErrProtocol` from a non-allocating scan before decoding | `TestDeepNestingRejected`, `TestCheckDepth` |
+| Invalid UTF-8 | — | `ErrProtocol`; `encoding/json` would otherwise replace it with U+FFFD | `TestInvalidUTF8Rejected` |
+| Slow trickle | `Timeout` per attempt, default 30s | The attempt fails with a read-body timeout and is retried, up to `MaxAttempts` | `TestSlowTrickleTimesOut` |
+
+Retries do not multiply memory: one attempt's body is released before the next starts, at most `Concurrency` attempts are in flight, and an over-size or malformed response is not retried, because the same request would get the same answer. The worst case held at once is therefore `Concurrency × (MaxResponseBytes + 1)` bytes of body.
+
 ## Status
 
 **This project is unaudited.** It has not had an external security review.

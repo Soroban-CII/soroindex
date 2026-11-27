@@ -2,7 +2,9 @@ package sepmeta
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"math"
 
 	"github.com/stellar/go-stellar-sdk/xdr"
 )
@@ -31,7 +33,8 @@ type MetaEntry struct {
 // before any error, so a partly damaged section still yields what it can.
 //
 // A trailing entry cut short is ErrTruncated; bytes that cannot begin any
-// valid entry are ErrMalformed.
+// valid entry are ErrMalformed. A section over lim.MaxSectionBytes, or an
+// entry nested deeper than lim.MaxXDRDepth, is ErrLimit.
 func DecodeMeta(section []byte, lim Limits) ([]MetaEntry, error) {
 	raw, err := decodeStream[xdr.ScMetaEntry](section, lim)
 	out := make([]MetaEntry, 0, len(raw))
@@ -56,6 +59,15 @@ func decodeStream[T any](section []byte, lim Limits) ([]T, error) {
 		start := len(section) - r.Len()
 		var v T
 		if _, err := xdr.UnmarshalWithOptions(r, &v, decodeOptions(r.Len(), lim)); err != nil {
+			if errors.Is(err, xdr.ErrMaxDecodingDepthReached) {
+				// Nesting deeper than MaxXDRDepth is a configured limit, not
+				// bad bytes: the same entry decodes under a larger limit.
+				// The decoder stops at the first level past the limit, so Got
+				// is Max+1: "deeper than Max", not the entry's full depth.
+				d := int(min(lim.MaxXDRDepth, math.MaxInt32)) // #nosec G115 -- clamped to int32 range
+				le := &LimitError{Limit: "MaxXDRDepth", Max: d, Got: d + 1}
+				return out, fmt.Errorf("entry %d at offset %d: %w", len(out), start, le)
+			}
 			kind := ErrMalformed
 			if completesWithPadding[T](section[start:], lim) {
 				kind = ErrTruncated
@@ -79,12 +91,20 @@ func decodeStream[T any](section []byte, lim Limits) ([]T, error) {
 // value that stops at a word boundary (a zero length, a zero discriminant,
 // an absent optional), while words that are wrong in themselves still fail.
 // Only the error path pays for this.
+//
+// The probe decodes at no less than the default MaxXDRDepth. Zero padding
+// can turn a shallow entry into a deeper one (a zero discriminant selects a
+// function entry, whose ScSymbol name sits a level below an enum's), so under
+// a small configured depth the probe itself would fail and a cut entry would
+// be misreported as malformed. The probe's input is still bounded by size.
 func completesWithPadding[T any](rest []byte, lim Limits) bool {
 	whole := len(rest) - len(rest)%4
 	padded := make([]byte, whole+lim.MaxSectionBytes)
 	copy(padded, rest[:whole])
+	probe := lim
+	probe.MaxXDRDepth = max(lim.MaxXDRDepth, DefaultLimits().MaxXDRDepth)
 	var v T
-	n, err := xdr.UnmarshalWithOptions(bytes.NewReader(padded), &v, decodeOptions(len(padded), lim))
+	n, err := xdr.UnmarshalWithOptions(bytes.NewReader(padded), &v, decodeOptions(len(padded), probe))
 	return err == nil && n > whole
 }
 

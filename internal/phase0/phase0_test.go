@@ -506,8 +506,12 @@ func TestVerifyMatchesSeededStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	refs, err := st.ExecRefTotals(ctx, !InstanceArchivalChecked(res.Summary))
+	if err != nil {
+		t.Fatal(err)
+	}
 	var out strings.Builder
-	ok, err := PrintChecks(&out, Verify(res.Summary, tot))
+	ok, err := PrintChecks(&out, Verify(res.Summary, tot, refs))
 	if err != nil || !ok {
 		t.Fatalf("phase0 and store disagree:\n%s", out.String())
 	}

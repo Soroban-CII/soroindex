@@ -245,8 +245,27 @@ func TestDecodeSpecErrors(t *testing.T) {
 			t.Fatalf("depth 64 under default limit: unexpected err %v", err)
 		}
 		_, err := DecodeSpec(in, Limits{MaxXDRDepth: 16})
-		if err == nil {
-			t.Fatal("depth 64 with MaxXDRDepth 16: want error, got nil")
+		var le *LimitError
+		if !errors.Is(err, ErrLimit) || !errors.As(err, &le) || le.Limit != "MaxXDRDepth" || le.Max != 16 {
+			t.Fatalf("depth 64 with MaxXDRDepth 16: err = %v, want ErrLimit naming MaxXDRDepth 16", err)
+		}
+	})
+	t.Run("an entry cut short is truncated even under a small MaxXDRDepth", func(t *testing.T) {
+		// Regression for testdata/fuzz/FuzzDecodeSpecStructured/7248f90c35232d6b.
+		// An enum entry (kind 3) decodes within depth 2, but the truncation
+		// probe zero-pads the cut to a function entry, which needs depth 3
+		// (its name is an ScSymbol typedef, one level further down).
+		// The probe must not apply the caller's small depth, or the cut is
+		// reported as malformed.
+		enum := []byte{0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 'E', 0, 0, 0, 0, 0, 0, 0}
+		lim := Limits{MaxXDRDepth: 2}
+		if _, err := DecodeSpec(enum, lim); err != nil {
+			t.Fatalf("whole enum entry under depth 2: %v", err)
+		}
+		for cut := 1; cut < len(enum); cut++ {
+			if _, err := DecodeSpec(enum[:cut], lim); !errors.Is(err, ErrTruncated) {
+				t.Fatalf("cut at %d: err = %v, want ErrTruncated", cut, err)
+			}
 		}
 	})
 }

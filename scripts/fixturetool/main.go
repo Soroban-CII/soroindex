@@ -9,14 +9,24 @@
 //
 //	fixturetool strip    -section NAME IN OUT   # drop every custom section NAME
 //	fixturetool truncate -section NAME IN OUT   # cut IN halfway through section NAME
+//	fixturetool metawasm VECTOR.txt OUT         # module whose only section is
+//	                                            # contractmetav0 holding one
+//	                                            # "sep" entry per vector line
+//
+// metawasm wraps a meta vector (testdata/vectors/*.txt) in a minimal module
+// so tools that only read Wasm, such as stellar-cli and the Python SDK, can
+// be run on it by scripts/record-conformance.sh. It encodes the XDR by hand;
+// pkg/sepmeta's conformance test builds the same bytes and checks the hash.
 package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 var header = []byte{0x00, 'a', 's', 'm', 0x01, 0x00, 0x00, 0x00}
@@ -37,6 +47,20 @@ func main() {
 func run(args []string) error {
 	if len(args) < 1 {
 		return errors.New("usage: fixturetool strip|truncate -section NAME IN OUT")
+	}
+	if args[0] == "metawasm" {
+		if len(args) != 3 {
+			return errors.New("usage: fixturetool metawasm VECTOR.txt OUT")
+		}
+		vec, err := os.ReadFile(args[1]) // #nosec G304 G703 -- developer-supplied vector path
+		if err != nil {
+			return err
+		}
+		mod, err := metaWasm(vec)
+		if err != nil {
+			return fmt.Errorf("%s: %w", args[1], err)
+		}
+		return os.WriteFile(args[2], mod, 0o644) // #nosec G306 G703 -- developer-supplied path; public test data
 	}
 	fs := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	name := fs.String("section", "", "custom section name")
@@ -135,4 +159,48 @@ func uleb(b []byte) (v, n int, err error) {
 		}
 	}
 	return 0, 0, errors.New("bad LEB128")
+}
+
+// metaWasm builds a module with one contractmetav0 custom section. Each
+// "\n"-terminated line of vec becomes an SCMetaEntry{SC_META_V0, "sep",
+// line}, the same reading of a vector as pkg/sepmeta's TestVectors.
+func metaWasm(vec []byte) ([]byte, error) {
+	s := string(vec)
+	if !strings.HasSuffix(s, "\n") {
+		return nil, errors.New("last line must end in \\n")
+	}
+	var meta []byte
+	for _, line := range strings.Split(strings.TrimSuffix(s, "\n"), "\n") {
+		meta = append(meta, 0, 0, 0, 0) // SC_META_V0
+		meta = xdrString(meta, "sep")
+		meta = xdrString(meta, line)
+	}
+	const name = "contractmetav0"
+	payload := append(leb(len(name)), name...)
+	payload = append(payload, meta...)
+	out := append([]byte(nil), header...)
+	out = append(out, 0)
+	out = append(out, leb(len(payload))...)
+	return append(out, payload...), nil
+}
+
+// xdrString appends an XDR string: a big-endian u32 length, the bytes, and
+// zero padding to a multiple of four.
+func xdrString(b []byte, s string) []byte {
+	n := uint32(len(s)) // #nosec G115 -- vector lines are far below 4 GiB
+	b = binary.BigEndian.AppendUint32(b, n)
+	b = append(b, s...)
+	return append(b, make([]byte, (4-len(s)%4)%4)...)
+}
+
+func leb(v int) []byte {
+	var out []byte
+	for {
+		c := byte(v & 0x7f)
+		v >>= 7
+		if v == 0 {
+			return append(out, c)
+		}
+		out = append(out, c|0x80)
+	}
 }

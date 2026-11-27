@@ -35,6 +35,41 @@ type Totals struct {
 	GapUsedHashes                  int
 }
 
+// ExecRefTotals counts the CAP-85 references named by live wasm_ref
+// contracts. It is separate from Totals, which /v1/stats serves as-is, so
+// adding it does not change a public response shape.
+type ExecRefTotals struct {
+	Owners     int // distinct owner contracts
+	References int // distinct (owner, tag) pairs
+	// Unresolved references resolve to no hash: the entry is missing or
+	// archived. The store does not keep the two apart (a missing entry is
+	// recorded as archived), so phase0 compares their sum.
+	Unresolved int
+}
+
+// ExecRefTotals computes ExecRefTotals; countArchivedInstances is as for
+// Totals.
+func (s *Store) ExecRefTotals(ctx context.Context, countArchivedInstances bool) (ExecRefTotals, error) {
+	live := "c.archived = 0"
+	if countArchivedInstances {
+		live = "c.archived IN (0, 1)"
+	}
+	var t ExecRefTotals
+	for _, st := range []struct {
+		dst *int
+		q   string
+	}{
+		{&t.Owners, `SELECT count(DISTINCT exec_ref_owner) FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref'`},
+		{&t.References, `SELECT count(*) FROM (SELECT DISTINCT exec_ref_owner, exec_ref_tag FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref')`},
+		{&t.Unresolved, `SELECT count(*) FROM (SELECT DISTINCT exec_ref_owner, exec_ref_tag FROM contracts c WHERE ` + live + ` AND kind = 'wasm_ref' AND current_wasm_hash IS NULL)`},
+	} {
+		if err := s.DB.QueryRowContext(ctx, st.q).Scan(st.dst); err != nil {
+			return ExecRefTotals{}, fmt.Errorf("exec ref totals: %w", err)
+		}
+	}
+	return t, nil
+}
+
 // Totals computes the numbers for one ruleset version of SEP-41. With
 // countArchivedInstances, contracts whose instance entry is archived count
 // as live: use it to compare with a census that could not see instance TTLs

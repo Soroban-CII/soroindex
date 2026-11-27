@@ -28,12 +28,15 @@ func (c Check) OK() bool { return c.Phase0 == c.Store }
 // contracts by kind, measured contracts, and hashes some measured contract
 // runs. Phase 0's other by-hash numbers include code no contract runs, which
 // a seed never stores.
-func Verify(s Summary, t store.Totals) []Check {
+func Verify(s Summary, t store.Totals, r store.ExecRefTotals) []Check {
 	out := []Check{
 		{"live SAC contracts", s.Contracts.SAC, t.LiveSAC},
 		{"live wasm contracts", s.Contracts.Wasm, t.LiveWasm},
 		{"live wasm_ref contracts", s.Contracts.WasmRef, t.LiveWasmRef},
 		{"unresolved wasm_ref", s.Contracts.WasmRefUnresolved, t.WasmRefUnresolved},
+		{"wasm_ref owner contracts", execRefs(s).Owners, r.Owners},
+		{"wasm_ref distinct references", s.Contracts.WasmRefDistinct, r.References},
+		{"wasm_ref references unresolved", execRefs(s).Missing + execRefs(s).Archived, r.Unresolved},
 		{"measured contracts", s.Contracts.Measured, t.MeasuredContracts},
 		{"hashes run by a measured contract", s.Hashes.UsedByContract, t.UsedHashes},
 		{"contracts declaring any SEP", s.DeclaresAny.ByContract.N, t.DeclaringContracts},
@@ -47,6 +50,13 @@ func Verify(s Summary, t store.Totals) []Check {
 			Check{"SEP-41 " + st + ", used hashes", s.UsedHashes.SEP41[st], t.SEP41ByUsedHash[st]})
 	}
 	return out
+}
+
+func execRefs(s Summary) ExecRefReport {
+	if s.ExecRefs == nil {
+		return ExecRefReport{}
+	}
+	return *s.ExecRefs
 }
 
 // PrintChecks writes the comparison as a table and reports whether every

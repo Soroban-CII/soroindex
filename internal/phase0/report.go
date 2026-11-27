@@ -136,6 +136,10 @@ type Summary struct {
 	// the census population). Nil when not measured.
 	InstanceArchival *InstanceArchival `json:"instance_archival,omitempty"`
 
+	// ExecRefs reports CAP-85 executable references: how many contracts
+	// each one upgrades at once. Nil when no contract runs by reference.
+	ExecRefs *ExecRefReport `json:"exec_refs,omitempty"`
+
 	Sample   *SampleStats `json:"sample,omitempty"`
 	Decision string       `json:"decision,omitempty"`
 }
@@ -147,6 +151,124 @@ type InstanceArchival struct {
 	Of       int    `json:"of"`
 	Ledger   uint32 `json:"ledger"`
 	Source   string `json:"source"`
+}
+
+// ExecRefReport summarizes CAP-85 executable references. One update to a
+// reference entry upgrades every contract that names it, so the fan-out
+// shows where a single change has the widest effect. References are named
+// only by on-chain data (owner contract ID and tag), never by project.
+type ExecRefReport struct {
+	Owners     int `json:"owners"`     // distinct owner contracts
+	References int `json:"references"` // distinct (owner, tag) pairs named by a contract
+	Contracts  int `json:"contracts"`  // wasm_ref contracts counted (live instances)
+	Resolved   int `json:"resolved"`   // references resolved to a Wasm hash
+	Missing    int `json:"missing"`    // unresolved: entry not found
+	Archived   int `json:"archived"`   // unresolved: entry archived
+	// Fanout buckets references by how many contracts each one upgrades.
+	Fanout []FanoutBucket `json:"fanout"`
+	// Top lists the references with the most contracts, largest first, up
+	// to ExecRefTopN; ties break by owner, then tag.
+	Top []ExecRefRow `json:"top"`
+}
+
+// FanoutBucket counts references whose contract count is in [Min, Max]
+// (Max 0 means no upper bound).
+type FanoutBucket struct {
+	Min        int `json:"min"`
+	Max        int `json:"max"`
+	References int `json:"references"`
+	Contracts  int `json:"contracts"`
+}
+
+// ExecRefRow is one reference and what it currently resolves to. Declared
+// SEPs come from the resolved Wasm's meta; SEP41 is the inferred matcher
+// status. Both are empty for an unresolved reference, which claims nothing.
+type ExecRefRow struct {
+	Owner     string `json:"owner"`
+	Tag       string `json:"tag"`
+	Contracts int    `json:"contracts"`
+	Status    string `json:"status"` // resolved | missing | archived
+	WasmHash  string `json:"wasm_hash,omitempty"`
+	Declared  []int  `json:"declared_seps"`
+	SEP41     string `json:"sep41_inferred,omitempty"`
+}
+
+// ExecRefTopN bounds ExecRefReport.Top so the report stays readable on a
+// network with many references; the buckets still cover all of them.
+const ExecRefTopN = 20
+
+var fanoutBuckets = [][2]int{{1, 1}, {2, 9}, {10, 99}, {100, 999}, {1000, 0}}
+
+// SummarizeExecRefs builds the reference report from the census's live
+// wasm_ref contracts. Unresolved references are counted, never dropped.
+func SummarizeExecRefs(contracts []Contract, results map[string]ingest.WasmResult) *ExecRefReport {
+	refs := map[[2]string]*ExecRefRow{}
+	owners := map[string]bool{}
+	rep := &ExecRefReport{}
+	for _, ct := range contracts {
+		if ct.Kind != ingest.KindWasmRef || ct.Archived {
+			continue
+		}
+		rep.Contracts++
+		k := [2]string{ct.RefOwner, ct.RefTag}
+		a := refs[k]
+		if a == nil {
+			a = &ExecRefRow{Owner: ct.RefOwner, Tag: ct.RefTag, Declared: []int{}}
+			switch {
+			case !ct.Unresolved:
+				a.Status, a.WasmHash = "resolved", ct.WasmHash
+				r := results[ct.WasmHash]
+				a.Declared = append(a.Declared, r.Claims.SEPs...)
+				if m, ok := r.MatchFor(41); ok {
+					a.SEP41 = string(m.Status)
+				}
+			case ct.RefArchived:
+				a.Status = "archived"
+			default:
+				a.Status = "missing"
+			}
+			refs[k] = a
+			owners[ct.RefOwner] = true
+		}
+		a.Contracts++
+	}
+	if rep.Contracts == 0 {
+		return nil
+	}
+	rep.Owners, rep.References = len(owners), len(refs)
+	rows := make([]ExecRefRow, 0, len(refs))
+	for _, a := range refs {
+		rows = append(rows, *a)
+		switch a.Status {
+		case "resolved":
+			rep.Resolved++
+		case "archived":
+			rep.Archived++
+		default:
+			rep.Missing++
+		}
+	}
+	for _, b := range fanoutBuckets {
+		fb := FanoutBucket{Min: b[0], Max: b[1]}
+		for _, r := range rows {
+			if r.Contracts >= b[0] && (b[1] == 0 || r.Contracts <= b[1]) {
+				fb.References++
+				fb.Contracts += r.Contracts
+			}
+		}
+		rep.Fanout = append(rep.Fanout, fb)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Contracts != rows[j].Contracts {
+			return rows[i].Contracts > rows[j].Contracts
+		}
+		if rows[i].Owner != rows[j].Owner {
+			return rows[i].Owner < rows[j].Owner
+		}
+		return rows[i].Tag < rows[j].Tag
+	})
+	rep.Top = rows[:min(len(rows), ExecRefTopN)]
+	return rep
 }
 
 // Summarize computes the report numbers for a census and its analyzed Wasm.
@@ -187,6 +309,7 @@ func Summarize(c Census, results map[string]ingest.WasmResult, population []stri
 		}
 	}
 	s.Contracts.WasmRefDistinct = len(refs)
+	s.ExecRefs = SummarizeExecRefs(c.Contracts, results)
 
 	// Hashes.
 	s.Hashes.CodeEntries = len(c.CodeHashes)

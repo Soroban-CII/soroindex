@@ -7,9 +7,31 @@ A Soroban contract's Wasm carries two custom sections the index reads:
 - `contractmetav0`: key/value meta entries. SEP-47 uses the key `sep`, with a comma-separated list of SEP numbers. Several `sep` entries are normal: each Rust module may add its own, and SEP-47 joins them.
 - `contractspecv0`: the interface. Every function with its parameter and return types.
 
-`pkg/sepmeta` reads both. It treats the bytes as hostile: every length is checked against the bytes remaining and a configured limit before anything is allocated, and malformed input is an error, never a crash. Four fuzz targets ran 10 minutes each on 7 October 2026 without a failure. The index never executes Wasm.
+`pkg/sepmeta` reads both. It treats the bytes as hostile: every length is checked against the bytes remaining and a configured limit before anything is allocated, and malformed input is an error, never a crash. Four fuzz targets ran 10 minutes each on 7 October 2026 without a failure. On 25 November 2026 `FuzzReadCustomSections`, which now also checks `ReadCustomSectionsAt` against `ReadCustomSections`, ran 10 minutes (22,888,448 executions), and two structure-aware targets that build valid spec and meta streams ran 10 minutes each (`FuzzDecodeSpecStructured`: 9,756,093 executions; `FuzzDecodeMetaStructured`: 11,615,694). None failed. The first 30 seconds of `FuzzDecodeSpecStructured` found one misclassification, fixed before those runs; its input is committed under `pkg/sepmeta/testdata/fuzz/`. The index never executes Wasm.
 
 Tokens that do not follow SEP-47's format are kept, not dropped: `041` and `SEP-41` count as 41 in the default lenient mode, with a `leading_zero` or `prefixed_token` anomaly recorded. `abc`, empty tokens, and values over 4 KiB produce no SEP and are recorded as anomalies.
+
+### Agreement with stellar-cli and the Python SDK
+
+Two other tools read SEP-47 data: `stellar contract info meta` and `stellar contract info interface` in stellar-cli, and `ContractMeta.supported_seps()` in the Python stellar-sdk. stellar-cli prints meta entries and the interface but does not parse SEP numbers. `scripts/record-conformance.sh` runs stellar-cli 30.0.1 and stellar-sdk 17.0.1 (Python 3.13.14) on all 15 golden fixtures and all 20 meta vectors, and commits their output under `testdata/conformance/`. `TestConformanceWithStellarCLIAndPythonSDK` then compares `pkg/sepmeta` with those recordings. Plain `go test` needs neither tool.
+
+All three agree on the meta entries of every input and on the function signatures of every fixture. On the 15 fixtures the SEP lists match Python's exactly. The differences below are intentional. The test fails if an unlisted difference appears, or if a listed one no longer occurs. Recorded on 25 November 2026. stellar-cli 28.0.0, the version that builds the fixtures, gave byte-identical recordings.
+
+| ID | Example | Other tool | sepmeta | Why sepmeta differs |
+| --- | --- | --- | --- | --- |
+| `leading-zero` | `041` | Python returns 41, in strict mode too | Lenient: 41 with `leading_zero`. Strict: dropped | SEP-47 numbers have no leading zeros. Strict mode follows the text, and lenient mode records the deviation. |
+| `prefixed-token` | `SEP-41`, `sep41`, `SEP-041` | Python skips the token (strict mode raises) | Lenient: 41 with `prefixed_token`. Strict: dropped | The author's intent is clear. The declared tier is informative and shows the anomaly next to the SEP (CLAUDE.md §5.2). |
+| `unicode-digits` | `٤١` (Arabic-Indic digits) | Python returns 41, because `str.isdecimal()` accepts any Unicode decimal digit | Dropped as `non_numeric` | SEP-47 numbers are ASCII decimal. Reading other scripts' digits would credit a contract with a SEP it never wrote in the specified form, so sepmeta claims less. |
+| `oversized-digits` | `1234567` | Python returns 1234567 | Dropped as `oversized` | No SEP number has more than 6 digits. The cap keeps hostile meta from creating arbitrary SEP numbers. |
+| `oversized-value` | a 5,000-byte value `41,41,…` | Python splits it and returns 41 | One `oversized` token, no SEP | A value over 4 KiB is not split at all, so a hostile contract cannot make the parser do unbounded work. |
+| `strict-raises` | `41,,46`, `abc`, `SEP-41` | Python's strict mode raises `ValueError` for the whole contract | Strict: drops the bad token and keeps 41 and 46, with an anomaly | An index must record every contract. One bad token must not hide the valid ones, and the anomaly keeps it visible. |
+| `cli-escapes` | a tab, `41`, a carriage return; `٤١` | stellar-cli JSON prints the escape text `\t41\r` and `\xd9\xa4\xd9\xa1` (a backslash, then letters) | The raw bytes | Display only. The CLI escapes control and non-ASCII bytes. The decoded values are identical. |
+| `cli-absent-section` | `no_meta.wasm`, every vector's interface | stellar-cli exits with `no meta present` or `no interface present` | No entries and no error | A missing section is a normal state for a contract, not a failure. |
+
+To regenerate the recordings after adding a fixture or vector, or after bumping a tool version in the script:
+
+    STELLAR_CLI=/path/to/stellar-30.0.1/stellar ./scripts/record-conformance.sh
+    go test ./pkg/sepmeta -run Conformance -v
 
 ## Where a contract's code comes from
 

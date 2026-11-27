@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 )
 
 // Sentinel errors.
@@ -30,7 +31,8 @@ var (
 	// ErrResponseTooLarge means a response body exceeded MaxResponseBytes.
 	ErrResponseTooLarge = errors.New("rpc response too large")
 	// ErrProtocol means the response was not a valid JSON-RPC reply to the
-	// request: bad JSON, a mismatched id, or neither result nor error.
+	// request: bad JSON, invalid UTF-8, nesting deeper than MaxJSONDepth, a
+	// mismatched id, or neither result nor error.
 	ErrProtocol = errors.New("rpc protocol error")
 )
 
@@ -60,7 +62,8 @@ type Config struct {
 	MaxAttempts      int           // including the first; default 6
 	BaseBackoff      time.Duration // default 250ms
 	MaxBackoff       time.Duration // default 10s
-	MaxResponseBytes int64         // default 256 MiB
+	MaxResponseBytes int64         // default 256 MiB; checked against Content-Length before reading
+	MaxJSONDepth     int           // max nesting of objects and arrays; default 64
 	HTTPClient       *http.Client  // default: a client with no overall timeout (Timeout applies per attempt)
 	Logger           *slog.Logger  // default: slog.Default()
 }
@@ -96,6 +99,9 @@ func New(cfg Config) (*Client, error) {
 	}
 	if cfg.MaxResponseBytes <= 0 {
 		cfg.MaxResponseBytes = 256 << 20
+	}
+	if cfg.MaxJSONDepth <= 0 {
+		cfg.MaxJSONDepth = 64
 	}
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = &http.Client{}
@@ -215,12 +221,28 @@ func (c *Client) attempt(ctx context.Context, method string, id uint64, body []b
 		return resp.StatusCode >= 500, 0, he
 	}
 
+	// A declared length over the cap fails before any of the body is read.
+	// An undeclared or false length is still stopped by the LimitReader, so
+	// at most MaxResponseBytes+1 bytes are ever held for one attempt. Too
+	// large is not retried: the same request would get the same answer.
+	if resp.ContentLength > c.cfg.MaxResponseBytes {
+		return false, 0, fmt.Errorf("%w: Content-Length %d over %d bytes", ErrResponseTooLarge, resp.ContentLength, c.cfg.MaxResponseBytes)
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, c.cfg.MaxResponseBytes+1))
 	if err != nil {
+		// Includes a body that trickles past the per-attempt timeout.
 		return true, 0, fmt.Errorf("read body: %w", err)
 	}
 	if int64(len(raw)) > c.cfg.MaxResponseBytes {
 		return false, 0, fmt.Errorf("%w: over %d bytes", ErrResponseTooLarge, c.cfg.MaxResponseBytes)
+	}
+	// encoding/json silently replaces invalid UTF-8 with U+FFFD; reject it
+	// instead so no altered string reaches the index.
+	if !utf8.Valid(raw) {
+		return false, 0, fmt.Errorf("%w: body is not valid UTF-8", ErrProtocol)
+	}
+	if err := checkDepth(raw, c.cfg.MaxJSONDepth); err != nil {
+		return false, 0, err
 	}
 
 	var r response
@@ -240,6 +262,37 @@ func (c *Client) attempt(ctx context.Context, method string, id uint64, body []b
 		return false, 0, fmt.Errorf("%w: decode %s result: %w", ErrProtocol, method, err)
 	}
 	return false, 0, nil
+}
+
+// checkDepth rejects JSON whose objects and arrays nest deeper than max. It
+// scans bytes once without allocating, skipping string contents, so a
+// hostile body cannot make the decoder recurse deeply. Malformed JSON is
+// left for json.Unmarshal to report.
+func checkDepth(raw []byte, maxDepth int) error {
+	depth, inStr, esc := 0, false, false
+	for _, b := range raw {
+		switch {
+		case inStr:
+			switch {
+			case esc:
+				esc = false
+			case b == '\\':
+				esc = true
+			case b == '"':
+				inStr = false
+			}
+		case b == '"':
+			inStr = true
+		case b == '{' || b == '[':
+			depth++
+			if depth > maxDepth {
+				return fmt.Errorf("%w: JSON nested deeper than %d", ErrProtocol, maxDepth)
+			}
+		case b == '}' || b == ']':
+			depth--
+		}
+	}
+	return nil
 }
 
 // parseRetryAfter reads a Retry-After header given in seconds. HTTP-date

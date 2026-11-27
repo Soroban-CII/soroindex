@@ -1,0 +1,54 @@
+# Allocation budgets for pkg/sepmeta (make bench-budget). The parser runs on
+# every Wasm the network deploys, so an allocation regression slows seeding
+# long before review notices it. This job fails when a benchmark's allocs/op
+# or B/op exceeds pkg/sepmeta/testdata/alloc-budgets.txt.
+#
+# It is deliberately NOT a required check (scripts/repo-settings.sh requires
+# only lint, test, fuzz-smoke and build) until the budgets have proven stable
+# across Go patch releases and runners. ns/op is reported in the job summary
+# but never compared: timing on shared runners is noise.
+name: bench
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same exact pin as ci.yml; allocation counts are only comparable on one toolchain.
+  GO_VERSION: "1.27.4"
+  GOTOOLCHAIN: local
+
+jobs:
+  bench-budget:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: runner
+        run: |
+          {
+            echo "### sepmeta benchmarks"
+            echo
+            echo "- date: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- $(go version)"
+            echo "- runner: $(nproc) vCPU, $(lscpu | sed -n 's/^Model name: *//p')"
+            echo "- commit: ${GITHUB_SHA}"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: allocation budgets
+        run: make bench-budget
+      - name: raw results
+        if: always()
+        run: cat sepmeta-bench.txt

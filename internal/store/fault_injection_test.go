@@ -41,7 +41,7 @@ func dumpAll(t *testing.T, s *Store) string {
 	}
 	var b strings.Builder
 	for _, n := range names {
-		rows, err := s.DB.Query(`SELECT * FROM "` + n + `" ORDER BY 1`) // #nosec G202
+		rows, err := s.DB.Query(`SELECT * FROM "` + n + `" ORDER BY 1`) // #nosec G202 -- table names come from sqlite_master, not input
 		if err != nil {
 			t.Fatal(err)
 		}

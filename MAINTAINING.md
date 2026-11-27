@@ -98,6 +98,12 @@ when a review will take longer than expected.
    source dates, ledger, coverage, archive counts, denominators and partial-read
    limitations. Review generated `report/ADOPTION.md` before committing it.
    `phase0 --render-only` only renders stored summaries and is not a fresh census.
+   The testnet half is automated: `.github/workflows/adoption-report.yml` runs on
+   the 1st of each month (and from **Actions → adoption-report → Run workflow**),
+   regenerates `report/testnet-*` and `report/ADOPTION.md`, and opens a PR with a
+   before/after table of headline numbers. It never pushes to `main`, fails
+   without a PR if the RPC is unavailable, and opens no PR when nothing changed.
+   Review and merge that PR; mainnet still needs the Hubble export by hand.
 4. Reassess the Stage J gate using the newly measured share of live Wasm hashes
    declaring any SEP. The recorded 7 October 2026 measurement is 0.60%; verified
    execution remains deferred below 1%. Reaching the gate requires an explicit

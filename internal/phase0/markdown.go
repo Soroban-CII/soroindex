@@ -52,6 +52,10 @@ func RenderAdoption(sums []Summary) string {
 		p("| Wasm contracts whose code is archived or missing | %d | |\n", s.Contracts.Wasm+s.Contracts.WasmRef-s.Contracts.WasmRefUnresolved-s.Contracts.Measured)
 		p("| Wasm contracts measured (by-contract denominator) | %d | |\n\n", s.Contracts.Measured)
 
+		if e := s.ExecRefs; e != nil {
+			renderExecRefs(p, e)
+		}
+
 		p("### Wasm hashes\n\n| | Count |\n| --- | ---: |\n")
 		if s.Hashes.CodeEntries > 0 {
 			p("| Code entries in census | %d |\n| … marked deleted | %d |\n", s.Hashes.CodeEntries, s.Hashes.CodeDeleted)
@@ -119,6 +123,42 @@ func RenderAdoption(sums []Summary) string {
 		}
 	}
 	return b.String()
+}
+
+func renderExecRefs(p func(string, ...any), e *ExecRefReport) {
+	p("### Executable references (CAP-85)\n\n")
+	p("Updating one reference entry upgrades every contract that names it, with no change to their own instances. ")
+	p("References are identified by owner contract and tag only, as they appear on chain.\n\n")
+	p("| | Count |\n| --- | ---: |\n")
+	p("| Owner contracts | %d |\n| References (owner, tag) | %d |\n| Contracts running by reference | %d |\n", e.Owners, e.References, e.Contracts)
+	p("| … references resolved | %d |\n| … references unresolved: entry missing | %d |\n| … references unresolved: entry archived | %d |\n\n", e.Resolved, e.Missing, e.Archived)
+	p("Fan-out: how many contracts one reference update would upgrade.\n\n| Contracts per reference | References | Contracts |\n| --- | ---: | ---: |\n")
+	for _, b := range e.Fanout {
+		rng := fmt.Sprintf("%d–%d", b.Min, b.Max)
+		switch {
+		case b.Max == 0:
+			rng = fmt.Sprintf("≥ %d", b.Min)
+		case b.Min == b.Max:
+			rng = fmt.Sprint(b.Min)
+		}
+		p("| %s | %d | %d |\n", rng, b.References, b.Contracts)
+	}
+	p("\nLargest references (up to %d). Declared SEPs are from the resolved Wasm's meta; SEP-41 is the inferred interface status. ", ExecRefTopN)
+	p("An unresolved reference claims nothing.\n\n")
+	p("| Owner | Tag | Contracts | Status | Declared SEPs | SEP-41 (inferred) |\n| --- | --- | ---: | --- | --- | --- |\n")
+	for _, r := range e.Top {
+		decl := "–"
+		if len(r.Declared) > 0 {
+			decl = joinInts(r.Declared)
+			decl = strings.ReplaceAll(decl, " | ", ", ")
+		}
+		inf := "–"
+		if r.SEP41 != "" {
+			inf = "`" + r.SEP41 + "`"
+		}
+		p("| `%s` | `%s` | %d | %s | %s | %s |\n", r.Owner, strings.ReplaceAll(strings.ReplaceAll(r.Tag, "|", "\\|"), "`", "'"), r.Contracts, r.Status, decl, inf)
+	}
+	p("\n")
 }
 
 func order(n string) int {
