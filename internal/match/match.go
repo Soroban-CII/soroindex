@@ -2,7 +2,9 @@ package match
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 
 	"github.com/Soroban-CII/soroindex/pkg/sepmeta"
 )
@@ -51,18 +53,17 @@ type Result struct {
 
 // Matcher holds the tunable cutoff between partial and mismatch.
 type Matcher struct {
-	// PartialThreshold is the fraction of required functions that must be
-	// OK for "partial" rather than "mismatch". Zero means the default, 0.5.
 	PartialThreshold float64
-	// Rulesets maps SEP numbers to their RuleFiles, used when evaluating
-	// requires dependencies. May be nil when not available.
-	Rulesets map[int]RuleFile
+	Rulesets         map[int]RuleFile
+	TypeTable        sepmeta.TypeTable
 }
 
-// Match compares a spec's functions with a rule file using the default
-// threshold. See Matcher.Match.
 func Match(fns []sepmeta.FnSig, r RuleFile) Result {
 	return Matcher{Rulesets: map[int]RuleFile{}}.Match(fns, r)
+}
+
+func MatchWithTypes(fns []sepmeta.FnSig, types sepmeta.TypeTable, r RuleFile) Result {
+	return Matcher{Rulesets: map[int]RuleFile{}, TypeTable: types}.Match(fns, r)
 }
 
 // NoSpec is the result for a Wasm that has no spec section at all.
@@ -123,12 +124,12 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 			}
 			return false
 		case len(got) > 1:
-			res.Mismatched = append(res.Mismatched, mismatch(rule, got[0], "duplicate", optional))
+			res.Mismatched = append(res.Mismatched, m.mismatch(rule, got[0], "duplicate", optional, r))
 			return false
 		}
-		variants, ok := fits(rule, got[0])
+		variants, ok := m.fits(rule, got[0], r)
 		if !ok {
-			res.Mismatched = append(res.Mismatched, mismatch(rule, got[0], "types", optional))
+			res.Mismatched = append(res.Mismatched, m.mismatch(rule, got[0], "types", optional, r))
 			return false
 		}
 		for k, v := range variants {
@@ -180,15 +181,128 @@ func (m Matcher) Match(fns []sepmeta.FnSig, r RuleFile) Result {
 	return res
 }
 
-func fits(rule FnRule, sig sepmeta.FnSig) (map[string]string, bool) {
-	if len(sig.Inputs) != len(rule.Inputs) || !equal(sig.Outputs, rule.Output) {
+var udtPattern = regexp.MustCompile(`udt:([A-Za-z0-9_]+)`)
+
+func (m Matcher) resolveSpecUDT(name string, visited map[string]bool) string {
+	if visited[name] {
+		return "cycle:" + name
+	}
+	visited[name] = true
+	defer delete(visited, name)
+
+	if m.TypeTable == nil {
+		return "udt:" + name
+	}
+	def, ok := m.TypeTable[name]
+	if !ok {
+		return "udt:" + name
+	}
+	switch def.Kind {
+	case sepmeta.UDTKindStruct:
+		parts := make([]string, len(def.Fields))
+		for i, f := range def.Fields {
+			parts[i] = m.expandType(f.Type, visited)
+		}
+		return "struct(" + strings.Join(parts, ",") + ")"
+	case sepmeta.UDTKindUnion:
+		parts := make([]string, len(def.Cases))
+		for i, c := range def.Cases {
+			caseParts := make([]string, len(c.Types))
+			for j, t := range c.Types {
+				caseParts[j] = m.expandType(t, visited)
+			}
+			parts[i] = "tuple(" + strings.Join(caseParts, ",") + ")"
+		}
+		return "union(" + strings.Join(parts, ",") + ")"
+	case sepmeta.UDTKindEnum:
+		return "enum(" + name + ")"
+	case sepmeta.UDTKindErrorEnum:
+		return "error_enum(" + name + ")"
+	default:
+		return "udt:" + name
+	}
+}
+
+func (m Matcher) expandType(t string, visited map[string]bool) string {
+	return udtPattern.ReplaceAllStringFunc(t, func(match string) string {
+		name := strings.TrimPrefix(match, "udt:")
+		return m.resolveSpecUDT(name, visited)
+	})
+}
+
+func resolveRuleUDT(name string, r RuleFile, visited map[string]bool) string {
+	if visited[name] {
+		return "cycle:" + name
+	}
+	visited[name] = true
+	defer delete(visited, name)
+
+	if r.Types == nil {
+		return "udt:" + name
+	}
+	def, ok := r.Types[name]
+	if !ok {
+		return "udt:" + name
+	}
+	switch def.Kind {
+	case "struct":
+		parts := make([]string, len(def.Fields))
+		for i, alts := range def.Fields {
+			parts[i] = expandRuleType(alts[0], r, visited)
+		}
+		return "struct(" + strings.Join(parts, ",") + ")"
+	case "union":
+		parts := make([]string, len(def.Cases))
+		for i, alts := range def.Cases {
+			caseParts := make([]string, len(alts))
+			for j, t := range alts {
+				caseParts[j] = expandRuleType(t, r, visited)
+			}
+			parts[i] = "tuple(" + strings.Join(caseParts, ",") + ")"
+		}
+		return "union(" + strings.Join(parts, ",") + ")"
+	case "enum":
+		return "enum(" + name + ")"
+	case "error_enum":
+		return "error_enum(" + name + ")"
+	default:
+		return "udt:" + name
+	}
+}
+
+func expandRuleType(t string, r RuleFile, visited map[string]bool) string {
+	return udtPattern.ReplaceAllStringFunc(t, func(match string) string {
+		name := strings.TrimPrefix(match, "udt:")
+		return resolveRuleUDT(name, r, visited)
+	})
+}
+
+func (m Matcher) matchType(ruleType string, specType string, r RuleFile) bool {
+	ruleExpanded := expandRuleType(ruleType, r, map[string]bool{})
+	specExpanded := m.expandType(specType, map[string]bool{})
+	if ruleExpanded != ruleType || specExpanded != specType {
+		return ruleExpanded == specExpanded
+	}
+	return ruleType == specType
+}
+
+func (m Matcher) fits(rule FnRule, sig sepmeta.FnSig, r RuleFile) (map[string]string, bool) {
+	if len(sig.Inputs) != len(rule.Inputs) {
 		return nil, false
+	}
+	if len(sig.Outputs) != len(rule.Output) {
+		return nil, false
+	}
+	for i := range sig.Outputs {
+		if !m.matchType(rule.Output[i], sig.Outputs[i], r) {
+			return nil, false
+		}
 	}
 	variants := map[string]string{}
 	for i, alts := range rule.Inputs {
 		found := false
 		for _, a := range alts {
-			if sig.Inputs[i] == a {
+			if m.matchType(a, sig.Inputs[i], r) {
 				found = true
 				break
 			}
@@ -203,14 +317,28 @@ func fits(rule FnRule, sig sepmeta.FnSig) (map[string]string, bool) {
 	return variants, true
 }
 
-func mismatch(rule FnRule, got sepmeta.FnSig, reason string, optional bool) Mismatch {
-	exp := Signature{Inputs: []string{}, Outputs: append([]string{}, rule.Output...)}
-	for _, alts := range rule.Inputs {
-		exp.Inputs = append(exp.Inputs, alts[0])
+func (m Matcher) mismatch(rule FnRule, got sepmeta.FnSig, reason string, optional bool, r RuleFile) Mismatch {
+	exp := Signature{Inputs: []string{}, Outputs: []string{}}
+	for _, out := range rule.Output {
+		expanded := expandRuleType(out, r, map[string]bool{})
+		exp.Outputs = append(exp.Outputs, expanded)
 	}
+	for _, alts := range rule.Inputs {
+		expanded := expandRuleType(alts[0], r, map[string]bool{})
+		exp.Inputs = append(exp.Inputs, expanded)
+	}
+
+	act := Signature{Inputs: []string{}, Outputs: []string{}}
+	for _, in := range got.Inputs {
+		act.Inputs = append(act.Inputs, m.expandType(in, map[string]bool{}))
+	}
+	for _, out := range got.Outputs {
+		act.Outputs = append(act.Outputs, m.expandType(out, map[string]bool{}))
+	}
+
 	return Mismatch{
 		Fn: rule.Fn, Reason: reason, Optional: optional, Expected: exp,
-		Actual: Signature{Inputs: nonNil(got.Inputs), Outputs: nonNil(got.Outputs)},
+		Actual: act,
 	}
 }
 

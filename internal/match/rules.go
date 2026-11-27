@@ -21,17 +21,21 @@ var ErrInvalidRules = errors.New("invalid rule file")
 
 // RuleFile is one SEP's interface rules (rules/sep-NNNN.json).
 type RuleFile struct {
-	SEP            int      `json:"sep"`
-	RulesetVersion string   `json:"ruleset_version"`
-	Source         string   `json:"source"`
-	Required       []FnRule `json:"required"`
-	Optional       []FnRule `json:"optional"`
-	Requires       []int    `json:"requires"` // other SEP numbers this SEP requires to match
+	SEP            int                `json:"sep"`
+	RulesetVersion string             `json:"ruleset_version"`
+	Source         string             `json:"source"`
+	Required       []FnRule           `json:"required"`
+	Optional       []FnRule           `json:"optional"`
+	Types          map[string]UDTRule `json:"types,omitempty"`
+	Requires       []int              `json:"requires,omitempty"`
 }
 
-// FnRule describes one function. Inputs has one element per parameter, each
-// listing the types accepted at that position; Output is empty for a
-// function that returns nothing.
+type UDTRule struct {
+	Kind   string     `json:"kind"`
+	Fields [][]string `json:"fields,omitempty"`
+	Cases  [][]string `json:"cases,omitempty"`
+}
+
 type FnRule struct {
 	Fn     string     `json:"fn"`
 	Inputs [][]string `json:"inputs"`
@@ -112,6 +116,39 @@ func (r RuleFile) validate() error {
 			if !typeRe.MatchString(t) {
 				return fmt.Errorf("%s: output type %q invalid", f.Fn, t)
 			}
+		}
+	}
+	for name, udt := range r.Types {
+		if !fnNameRe.MatchString(name) {
+			return fmt.Errorf("type name %q invalid", name)
+		}
+		switch udt.Kind {
+		case "struct":
+			for i, alts := range udt.Fields {
+				if len(alts) == 0 {
+					return fmt.Errorf("%s: field %d accepts no type", name, i)
+				}
+				dup := map[string]bool{}
+				for _, t := range alts {
+					if !typeRe.MatchString(t) || dup[t] {
+						return fmt.Errorf("%s: field %d type %q invalid or repeated", name, i, t)
+					}
+					dup[t] = true
+				}
+			}
+		case "union":
+			for i, alts := range udt.Cases {
+				dup := map[string]bool{}
+				for _, t := range alts {
+					if !typeRe.MatchString(t) || dup[t] {
+						return fmt.Errorf("%s: case %d type %q invalid or repeated", name, i, t)
+					}
+					dup[t] = true
+				}
+			}
+		case "enum", "error_enum":
+		default:
+			return fmt.Errorf("type %s: unknown kind %q", name, udt.Kind)
 		}
 	}
 	return nil

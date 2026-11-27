@@ -27,6 +27,123 @@ func sep41(t *testing.T) RuleFile {
 	return RuleFile{}
 }
 
+func TestMatchStructuralUDT(t *testing.T) {
+	ruleJSON := `{
+		"sep": 40,
+		"ruleset_version": "sep40-v0.1.0",
+		"source": "stellar/stellar-protocol sep-0040.md test version with long source description",
+		"types": {
+			"PriceData": {
+				"kind": "struct",
+				"fields": [["i128"], ["u64"]]
+			},
+			"Asset": {
+				"kind": "union",
+				"cases": [["Address"], ["Symbol"]]
+			}
+		},
+		"required": [
+			{"fn": "price", "inputs": [["udt:Asset"], ["u64"]], "output": ["Option<udt:PriceData>"]},
+			{"fn": "base", "inputs": [], "output": ["udt:Asset"]}
+		],
+		"optional": []
+	}`
+	r, err := ParseRuleFile([]byte(ruleJSON))
+	if err != nil {
+		t.Fatalf("ParseRuleFile: %v", err)
+	}
+
+	t.Run("same-structure different-name matches", func(t *testing.T) {
+		fns := []sepmeta.FnSig{
+			fn("price", []string{"udt:CustomAsset", "u64"}, "Option<udt:CustomPriceData>"),
+			fn("base", nil, "udt:CustomAsset"),
+		}
+		typeTable := sepmeta.TypeTable{
+			"CustomPriceData": sepmeta.UDTDef{
+				Name: "CustomPriceData",
+				Kind: sepmeta.UDTKindStruct,
+				Fields: []sepmeta.StructField{
+					{Name: "amount", Type: "i128"},
+					{Name: "time", Type: "u64"},
+				},
+			},
+			"CustomAsset": sepmeta.UDTDef{
+				Name: "CustomAsset",
+				Kind: sepmeta.UDTKindUnion,
+				Cases: []sepmeta.UnionCase{
+					{Name: "StellarType", Types: []string{"Address"}},
+					{Name: "OtherType", Types: []string{"Symbol"}},
+				},
+			},
+		}
+		res := MatchWithTypes(fns, typeTable, r)
+		if res.Status != StatusMatch || res.OKCount != 2 || len(res.Missing) != 0 || len(res.Mismatched) != 0 {
+			t.Fatalf("expected match, got %+v", res)
+		}
+	})
+
+	t.Run("same-name different-structure mismatches and reports structure", func(t *testing.T) {
+		fns := []sepmeta.FnSig{
+			fn("price", []string{"udt:Asset", "u64"}, "Option<udt:PriceData>"),
+			fn("base", nil, "udt:Asset"),
+		}
+		typeTable := sepmeta.TypeTable{
+			"PriceData": sepmeta.UDTDef{
+				Name: "PriceData",
+				Kind: sepmeta.UDTKindStruct,
+				Fields: []sepmeta.StructField{
+					{Name: "price", Type: "u128"},
+					{Name: "timestamp", Type: "u64"},
+				},
+			},
+			"Asset": sepmeta.UDTDef{
+				Name: "Asset",
+				Kind: sepmeta.UDTKindUnion,
+				Cases: []sepmeta.UnionCase{
+					{Name: "Stellar", Types: []string{"Address"}},
+					{Name: "Other", Types: []string{"Symbol"}},
+				},
+			},
+		}
+		res := MatchWithTypes(fns, typeTable, r)
+		if res.Status != StatusPartial || res.OKCount != 1 || len(res.Mismatched) != 1 {
+			t.Fatalf("expected partial match with 1 mismatch, got %+v", res)
+		}
+		mm := res.Mismatched[0]
+		if mm.Fn != "price" || mm.Reason != "types" {
+			t.Errorf("mismatch fn=%s reason=%s, want price types", mm.Fn, mm.Reason)
+		}
+		if len(mm.Expected.Outputs) != 1 || mm.Expected.Outputs[0] != "Option<struct(i128,u64)>" {
+			t.Errorf("Expected.Outputs = %v, want Option<struct(i128,u64)>", mm.Expected.Outputs)
+		}
+		if len(mm.Actual.Outputs) != 1 || mm.Actual.Outputs[0] != "Option<struct(u128,u64)>" {
+			t.Errorf("Actual.Outputs = %v, want Option<struct(u128,u64)>", mm.Actual.Outputs)
+		}
+	})
+
+	t.Run("matches oracle_sep40 with rule declaring PriceData and Asset", func(t *testing.T) {
+		wasmBytes, err := os.ReadFile("../../testdata/wasm/oracle_sep40.wasm")
+		if err != nil {
+			t.Fatal(err)
+		}
+		secs, err := sepmeta.ReadCustomSections(wasmBytes, []string{sepmeta.SectionSpec}, sepmeta.DefaultLimits())
+		if err != nil {
+			t.Fatal(err)
+		}
+		spec, err := sepmeta.DecodeSpec(secs[sepmeta.SectionSpec], sepmeta.DefaultLimits())
+		if err != nil {
+			t.Fatal(err)
+		}
+		fns := sepmeta.Functions(spec)
+		tt := sepmeta.Types(spec)
+
+		res := MatchWithTypes(fns, tt, r)
+		if res.Status != StatusMatch || res.OKCount != 2 {
+			t.Fatalf("expected match on oracle_sep40, got %+v", res)
+		}
+	})
+}
+
 // fixtureFns returns Functions() of a golden Wasm, or ok=false if it has no spec.
 func fixtureFns(t *testing.T, name string) ([]sepmeta.FnSig, bool) {
 	t.Helper()
@@ -391,6 +508,11 @@ func TestParseRuleFileRejects(t *testing.T) {
 		{"two outputs", strings.Replace(good, `"output":[]`, `"output":["u32","u32"]`, 1)},
 		{"missing inputs", strings.Replace(good, `"inputs":[["u32"]],`, ``, 1)},
 		{"duplicate function", strings.Replace(good, `"optional":[]`, `"optional":[{"fn":"x","inputs":[],"output":[]}]`, 1)},
+		{"bad udt name", strings.Replace(good, `"optional":[]`, `"optional":[],"types":{"bad name!":{"kind":"struct","fields":[["u32"]]}}`, 1)},
+		{"unknown udt kind", strings.Replace(good, `"optional":[]`, `"optional":[],"types":{"Foo":{"kind":"unknown"}}`, 1)},
+		{"udt field accepts nothing", strings.Replace(good, `"optional":[]`, `"optional":[],"types":{"Foo":{"kind":"struct","fields":[[]]}}`, 1)},
+		{"udt field invalid type", strings.Replace(good, `"optional":[]`, `"optional":[],"types":{"Foo":{"kind":"struct","fields":[["invalid type!"]]}}`, 1)},
+		{"udt case invalid type", strings.Replace(good, `"optional":[]`, `"optional":[],"types":{"Foo":{"kind":"union","cases":[["invalid type!"]]}}`, 1)},
 	}
 	if _, err := ParseRuleFile([]byte(good)); err != nil {
 		t.Fatalf("baseline rule rejected: %v", err)

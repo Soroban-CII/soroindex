@@ -34,6 +34,11 @@
       "type": "array",
       "items": { "$ref": "#/$defs/fn" }
     },
+    "types": {
+      "description": "User-defined types declared by the SEP for structural matching.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/udt" }
+    },
     "requires": {
       "description": "Other SEP numbers that this SEP requires to match. A composite result is \"match\" only when the SEP and every required SEP match. Cycles are rejected at rule-file load time.",
       "type": "array",
@@ -72,6 +77,32 @@
           "type": "array",
           "maxItems": 1,
           "items": { "$ref": "#/$defs/type" }
+        }
+      }
+    },
+    "udt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["struct", "union", "enum", "error_enum"]
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/type" }
+          }
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/type" }
+          }
         }
       }
     }

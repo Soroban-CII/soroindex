@@ -21,7 +21,8 @@ A rule file lists the functions a SEP requires, by type. The matcher compares a 
 
 - Each element of `inputs` is one parameter: the list of types accepted at that position. `transfer.to` accepts `MuxedAddress` (added in SEP-41 v0.4.0) or the older `Address`.
 - Types use canonical names: `Address`, `MuxedAddress`, `i128`, `u32`, `String`, `Option<T>`, `Vec<T>`, `Map<K,V>`, `Result<T,E>`, `(A,B)`, `BytesN<32>`, and `udt:<Name>` for user-defined types.
-- Only types and their order are compared, never parameter names.
+- Rule files can define user-defined types in an optional top-level `types` object, declaring a type once by structure (struct fields, union cases) to match functions structurally regardless of the type name used by the contract.
+- Only types and their order are compared, never parameter names or struct field names.
 - `ruleset_version` changes whenever the rules change. `sep47idx sync --recompute` then re-matches stored Wasm without fetching anything.
 
 - The first type at each position is the type the SEP text names. Later types are accepted for compatibility with earlier versions of the SEP.
